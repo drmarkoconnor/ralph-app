@@ -526,7 +526,7 @@ export default function DragDropCards() {
 			<div
 				className={`rounded-xl overflow-hidden shadow-md border ${
 					isDealer ? 'border-amber-500' : styles.border
-				} ${styles.bg} ${highlight} w-60`}>
+				} ${styles.bg} ${highlight} w-64`}>
 				<div
 					className={`w-full ${
 						isDealer
@@ -561,7 +561,7 @@ export default function DragDropCards() {
 					}}
 					onDragLeave={() => setActiveBucket(null)}
 					onDrop={(e) => onDrop(e, id)}
-					className={`min-h-[200px] p-2 flex flex-col gap-1 items-stretch justify-start`}>
+					className={`h-64 p-3 flex flex-col gap-2 items-stretch justify-center`}>
 					{rowOrder.map((suit) => {
 						const suitCards = sortByPbnRank(
 							bucketCards[id].filter((c) => c.suit === suit)
@@ -570,9 +570,9 @@ export default function DragDropCards() {
 						return (
 							<div
 								key={`${id}-${suit}`}
-								className="flex items-center gap-2 min-h-[28px]">
+								className="flex items-center gap-3 flex-1">
 								<div
-									className={`w-6 text-center text-xl leading-none ${suitColor}`}>
+									className={`w-8 text-center text-2xl leading-none ${suitColor}`}>
 									{suit === 'Clubs'
 										? '♣'
 										: suit === 'Diamonds'
@@ -596,20 +596,20 @@ export default function DragDropCards() {
 	// Renders a suit row as a sequence of draggable rank spans; shows '-' when void
 	function suiteRowContent(suitCards, bucketId) {
 		if (!suitCards || suitCards.length === 0) {
-			return <span className="text-[12px] text-gray-500">-</span>
+			return <span className="text-base md:text-lg text-gray-500">-</span>
 		}
 		return (
-			<div className="flex flex-row flex-wrap items-center gap-1">
+			<div className="flex flex-row flex-wrap items-center gap-2 text-base md:text-lg leading-none">
 				{suitCards.map((card) => (
 					<span
 						key={card.id}
 						draggable
 						onDragStart={(e) => onDragStartBucket(e, card, bucketId)}
 						onDragEnd={onDragEnd}
-						className="text-[12px] font-semibold text-gray-900 px-0.5 select-none cursor-grab active:cursor-grabbing">
+						className="font-semibold text-gray-900 px-1 select-none cursor-grab active:cursor-grabbing">
 						{card.rank}
-					</span>
-				))}
+						</span>
+					))}
 			</div>
 		)
 	}
