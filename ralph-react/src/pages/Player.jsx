@@ -13,11 +13,6 @@ function parsePBN(text) {
 		const line = raw.trim()
 		if (!line && inAuction) {
 			inAuction = false
-			continue
-		}
-		if (!line && inPlay) {
-			inPlay = false
-			continue
 		}
 		const m = line.match(/^\[([^\s]+)\s+"([^"]*)"\]/)
 		if (!m) {
@@ -65,109 +60,106 @@ function parsePBN(text) {
 }
 
 // Convert a Deal string (e.g., "N:AKQJ.T98.. ...") to seat cards map {N,E,S,W: Card[]}
-function dealToHands(dealStr) {
-	const [dealer, rest] = dealStr.split(':')
-	const orderMap = {
-		N: ['N', 'E', 'S', 'W'],
-		E: ['E', 'S', 'W', 'N'],
-		S: ['S', 'W', 'N', 'E'],
-		W: ['W', 'N', 'E', 'S'],
+function AuctionView({ dealer, calls, finalContract }) {
+	if (!dealer || !calls?.length) return null
+	const seats = ['N', 'E', 'S', 'W']
+	const startIdx = seats.indexOf(dealer)
+	const seatFor = (i) => seats[(startIdx + i) % 4]
+	const seatColor = (s) =>
+		s === 'N' || s === 'S'
+			? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+			: 'bg-rose-50 text-rose-800 border-rose-200'
+	const contractColor = (c) => {
+		if (!c) return 'bg-gray-200 text-gray-800'
+		const up = c.toUpperCase()
+		if (up.includes('NT')) return 'bg-slate-800 text-white'
+		if (up.endsWith('S')) return 'bg-gray-900 text-white'
+		if (up.endsWith('H')) return 'bg-red-600 text-white'
+		if (up.endsWith('D')) return 'bg-amber-500 text-white'
+		if (up.endsWith('C')) return 'bg-green-600 text-white'
+		return 'bg-gray-200 text-gray-800'
 	}
-	const seats = orderMap[dealer]
-	const parts = rest.trim().split(/\s+/)
-	const hands = { N: [], E: [], S: [], W: [] }
-	// Helper to expand ranks including T → 10
-	const expand = (token) =>
-		token === '-' ? [] : token.split('').map((ch) => (ch === 'T' ? '10' : ch))
-	// Parse suits SHDC order
-	for (let i = 0; i < 4; i++) {
-		const seat = seats[i]
-		const [sp, he, di, cl] = parts[i].split('.')
-		const suits = [sp, he, di, cl]
-		const suitNames = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
-		suitNames.forEach((sName, idx) => {
-			expand(suits[idx]).forEach((rank) => {
-				hands[seat].push({
-					rank,
-					suit: sName,
-					symbol: suitSymbol(sName),
-					id: `${seat}-${sName}-${rank}-${Math.random().toString(36).slice(2)}`,
-				})
-			})
-		})
-	}
-	return hands
-}
-
-// Parse PBN Play lines into a flat list of card moves (suit/rank), ignoring seat labels.
-function parsePlayMoves(playLeader, lines) {
-	if (!lines?.length) return []
-	const norm = (t) => t.trim().toUpperCase()
-	const toSuit = (s) =>
-		s === 'S'
-			? 'Spades'
-			: s === 'H'
-			? 'Hearts'
-			: s === 'D'
-			? 'Diamonds'
-			: s === 'C'
-			? 'Clubs'
-			: null
-	const toRank = (r) => (r === 'T' ? '10' : r)
-	const cardRe = /^([SHDC])([AKQJT2-9]|10)$/i
-	const moves = []
-	for (const raw of lines) {
-		const line = norm(raw)
-		// Strip any optional "Seat:" prefix before tokens
-		const afterColon = line.includes(':')
-			? line.split(':').slice(1).join(':').trim()
-			: line
-		const tokens = afterColon.split(/\s+/).filter(Boolean)
-		for (const tok of tokens) {
-			const m = tok.match(cardRe)
-			if (!m) continue
-			const suit = toSuit(m[1])
-			const rank = toRank(m[2])
-			if (suit && rank) moves.push({ suit, rank })
+	// Truncate auction to final contract + trailing three passes
+	const isPass = (c) => /^P(ASS)?$/i.test(c)
+	const isBid = (c) => /^(?:[1-7](?:C|D|H|S|NT))(?:X{1,2})?$/i.test(c)
+	let trimmed = [...calls]
+	trimmed = trimmed.filter((c) => isPass(c) || isBid(c))
+	let finalIdx = -1
+	for (let i = 0; i < trimmed.length; i++) {
+		if (
+			isBid(trimmed[i]) &&
+			isPass(trimmed[i + 1]) &&
+			isPass(trimmed[i + 2]) &&
+			isPass(trimmed[i + 3])
+		) {
+			finalIdx = i
+			break
 		}
 	}
-	return moves
+	const showCalls = finalIdx >= 0 ? trimmed.slice(0, finalIdx + 4) : trimmed
+	const showFinal = finalIdx >= 0 ? trimmed[finalIdx] : finalContract
+	return (
+		<div className="mb-3 text-xs text-gray-700">
+			<div className="font-semibold mb-1">Auction</div>
+			<div className="flex flex-wrap items-center gap-1">
+				{showCalls.map((call, i) => (
+					<span
+						key={`call-${i}`}
+						className={`inline-flex items-center gap-1 px-1 py-0.5 rounded border ${seatColor(
+							seatFor(i)
+						)}`}>
+						<span className="opacity-70">{seatFor(i)}:</span>
+						<span className="font-semibold">{call}</span>
+					</span>
+				))}
+				{showFinal ? (
+					<span
+						className={`ml-2 inline-flex items-center px-2 py-0.5 rounded ${contractColor(
+							showFinal
+						)}`}>
+						Final: {showFinal}
+					</span>
+				) : null}
+			</div>
+		</div>
+	)
 }
-
-function suitSymbol(name) {
-	return name === 'Spades'
-		? '♠'
-		: name === 'Hearts'
-		? '♥'
-		: name === 'Diamonds'
-		? '♦'
-		: '♣'
-}
-
 export default function Player() {
-	const [deals, setDeals] = useState([])
-	const [index, setIndex] = useState(0)
-	const [hideDefenders, setHideDefenders] = useState(true)
-	const [showSuitTally, setShowSuitTally] = useState(true)
-	const [showHcpWhenHidden, setShowHcpWhenHidden] = useState(false)
+	// Controlled stepper index (how many cards from playMoves applied)
+	const [playIdx, setPlayIdx] = useState(0)
+	// File input and UI controls
 	const fileRef = useRef(null)
 	const [selectedName, setSelectedName] = useState('')
 	const [exampleMsg, setExampleMsg] = useState('')
+	const [hideDefenders, setHideDefenders] = useState(false)
+	const [showSuitTally, setShowSuitTally] = useState(false)
+	const [showHcpWhenHidden, setShowHcpWhenHidden] = useState(false)
 
-	const current = deals[index]
+	// Deals and current selection
+	const [deals, setDeals] = useState([])
+	const [index, setIndex] = useState(0)
+	const current = deals[index] || null
+
+	// Derived: parsed hands and play moves
 	const hands = useMemo(() => {
-		if (!current) return null
-		return dealToHands(current.deal)
-	}, [current])
+		if (!current?.deal) return null
+		try {
+			return dealToHands(current.deal)
+		} catch (e) {
+			console.error('Failed to parse Deal:', e)
+			return null
+		}
+	}, [current?.deal])
 
-	// Parsed play moves from PBN play section (card tokens only)
 	const playMoves = useMemo(() => {
 		if (!current?.play?.length) return []
-		return parsePlayMoves(current.playLeader || null, current.play)
-	}, [current])
-
-	// Controlled stepper index (how many cards from playMoves applied)
-	const [playIdx, setPlayIdx] = useState(0)
+		try {
+			return parsePlayMoves(current?.playLeader, current.play)
+		} catch (e) {
+			console.error('Failed to parse Play:', e)
+			return []
+		}
+	}, [current?.playLeader, current?.play])
 
 	// Interactive state: remaining hands and played cards per seat
 	const [remaining, setRemaining] = useState(null)
@@ -255,7 +247,11 @@ export default function Player() {
 				if (isDeclarerSide(winner, dec)) declTricks++
 				else defTricks++
 				nextSeat = winner
-				trickArr.length = 0
+				// Pause on completed trick at boundary index (i === maxK - 1)
+				// So learners can reflect before the trick clears
+				if (i < maxK - 1) {
+					trickArr.length = 0
+				}
 			}
 		}
 
@@ -425,15 +421,16 @@ export default function Player() {
 					/>
 				) : null}
 
-				{current?.play?.length ? (
-					<PlayStepper
-						hasPlay={!!current.play?.length}
-						lines={current.play}
-						idx={playIdx}
-						onPrev={() => applyMovesTo(playIdx - 1)}
-						onNext={() => applyMovesTo(playIdx + 1)}
-					/>
-				) : null}
+				{/* Current Trick panel with integrated stepper controls */}
+				<CurrentTrick
+					trick={trick}
+					turnSeat={turnSeat}
+					hasPlay={!!current?.play?.length}
+					lines={current?.play || []}
+					idx={playIdx}
+					onPrev={() => applyMovesTo(playIdx - 1)}
+					onNext={() => applyMovesTo(playIdx + 1)}
+				/>
 
 				{/* Player layout or pre-upload options */}
 				{remaining ? (
@@ -525,8 +522,7 @@ function PlayerLayout({
 							/>
 						))}
 					</div>
-					{/* Current trick display */}
-					<CurrentTrick trick={trick} turnSeat={turnSeat} />
+					{/* Current trick now displayed above with integrated controls */}
 				</div>
 				{/* Right margin: scoreboard */}
 				<div className="w-52 hidden md:flex flex-col gap-2">
@@ -742,25 +738,86 @@ function SeatPanel({
 	)
 }
 
-function CurrentTrick({ trick, turnSeat }) {
-	// Display across as N, E, W, S (swap S and W compared to prior)
-	const order = ['N', 'E', 'W', 'S']
-	const items = trick
-	// Simple trick count approximation (number of cards played div 4 is completed tricks)
-	const tricksPlayed = Math.floor(
-		(13 * 4 - (items.length ? 52 - items.length : 52)) / 4
-	) // placeholder visual only
+function ScorePanel({
+	tricksDecl,
+	tricksDef,
+	neededToSet,
+	contract,
+	declarer,
+}) {
 	return (
-		<div className="mt-2 rounded-lg border bg-white p-3 min-h-[116px] w-full max-w-[820px]">
+		<div className="rounded-lg border bg-white p-3">
+			<div className="text-xs text-gray-600 mb-1">Scoreboard</div>
+			<div className="text-sm text-gray-800">
+				Declarer: <span className="font-semibold">{declarer || '-'}</span>
+			</div>
+			<div className="text-sm text-gray-800 mb-1">
+				Contract: <span className="font-semibold">{contract || '-'}</span>
+			</div>
+			<div className="text-sm text-gray-800">
+				Declarer tricks: <span className="font-semibold">{tricksDecl}</span>
+			</div>
+			<div className="text-sm text-gray-800">
+				Defender tricks: <span className="font-semibold">{tricksDef}</span>
+			</div>
+			<div className="text-sm text-gray-800">
+				Defenders to defeat:{' '}
+				<span className="font-semibold">{neededToSet || '-'}</span>
+				{typeof neededToSet === 'number' && neededToSet > 0 ? (
+					<span className="text-gray-600">{` (remaining ${Math.max(
+						0,
+						neededToSet - tricksDef
+					)})`}</span>
+				) : null}
+			</div>
+		</div>
+	)
+}
+
+function CurrentTrick({
+	trick,
+	turnSeat,
+	hasPlay,
+	lines = [],
+	idx = 0,
+	onPrev,
+	onNext,
+}) {
+	const order = ['N', 'E', 'W', 'S']
+	const items = Array.isArray(trick) ? trick : []
+	const safeIdx = Math.min(
+		Math.max(0, idx),
+		Math.max(0, (lines?.length || 0) - 1)
+	)
+	const helper =
+		hasPlay && lines?.length
+			? `Step ${safeIdx + 1}/${lines.length}: ${lines[safeIdx]}`
+			: 'Manual play'
+	const completed = hasPlay ? Math.floor(safeIdx / 4) : 0
+	return (
+		<div className="mt-2 rounded-lg border bg-white p-3 w-full max-w-[820px]">
 			<div className="text-xs text-gray-600 mb-2 flex items-center justify-between">
 				<span>Current Trick</span>
-				<span className="text-[11px] text-gray-500">
-					Tricks played:{' '}
-					<span className="font-semibold text-gray-700">
-						{Math.max(0, Math.floor((13 * 4 - 52 + items.length) / 4))}
-					</span>
-				</span>
+				<div className="flex items-center gap-2">
+					{hasPlay ? (
+						<>
+							<button
+								onClick={onPrev}
+								disabled={safeIdx === 0}
+								className="px-2 py-0.5 rounded border text-xs disabled:opacity-40">
+								Prev
+							</button>
+							<button
+								onClick={onNext}
+								disabled={safeIdx >= lines.length - 1}
+								className="px-2 py-0.5 rounded border text-xs disabled:opacity-40">
+								Next
+							</button>
+						</>
+					) : null}
+				</div>
 			</div>
+			<div className="text-[11px] text-gray-600 mb-2">{helper}</div>
 			{/* Labels row */}
 			<div className="flex items-center justify-center gap-4 mb-1">
 				{order.map((seat) => {
@@ -804,173 +861,15 @@ function CurrentTrick({ trick, turnSeat }) {
 					)
 				})}
 			</div>
-		</div>
-	)
-}
-
-function ScorePanel({
-	tricksDecl,
-	tricksDef,
-	neededToSet,
-	contract,
-	declarer,
-}) {
-	return (
-		<div className="rounded-lg border bg-white p-3">
-			<div className="text-xs text-gray-600 mb-1">Scoreboard</div>
-			<div className="text-sm text-gray-800">
-				Declarer: <span className="font-semibold">{declarer || '-'}</span>
-			</div>
-			<div className="text-sm text-gray-800 mb-1">
-				Contract: <span className="font-semibold">{contract || '-'}</span>
-			</div>
-			<div className="text-sm text-gray-800">
-				Declarer tricks: <span className="font-semibold">{tricksDecl}</span>
-			</div>
-			<div className="text-sm text-gray-800">
-				Defender tricks: <span className="font-semibold">{tricksDef}</span>
-			</div>
-			<div className="text-sm text-gray-800">
-				Defenders need to set:{' '}
-				<span className="font-semibold">
-					{Math.max(0, neededToSet - tricksDef)}
-				</span>
+			<div className="mt-2 text-[11px] text-gray-500">
+				Completed tricks:{' '}
+				<span className="font-semibold">{Math.max(0, completed)}</span>
 			</div>
 		</div>
 	)
 }
 
-function SuitTally({ tally }) {
-	const suits = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
-	const color = (s) =>
-		s === 'Hearts' || s === 'Diamonds' ? 'text-red-600' : 'text-black'
-	return (
-		<div className="rounded-lg border bg-white p-2 text-xs">
-			<div className="font-semibold text-gray-600 mb-1">Played by suit</div>
-			<div className="flex flex-col gap-1">
-				{suits.map((s) => (
-					<div key={`tally-${s}`} className="flex items-center gap-2">
-						<span className={`${color(s)} w-4 text-center`}>
-							{suitSymbol(s)}
-						</span>
-						<div className="flex-1 flex flex-wrap gap-1">
-							{(tally[s] || []).length ? (
-								tally[s].map((c) => (
-									<span
-										key={c.id}
-										className="inline-flex items-center justify-center text-[10px] px-1 py-0.5 rounded border bg-white">
-										{c.rank}
-									</span>
-								))
-							) : (
-								<span className="text-[10px] text-gray-400">none</span>
-							)}
-						</div>
-					</div>
-				))}
-			</div>
-		</div>
-	)
-}
-
-function AuctionView({ dealer, calls, finalContract }) {
-	if (!dealer || !calls?.length) return null
-	const seats = ['N', 'E', 'S', 'W']
-	const startIdx = seats.indexOf(dealer)
-	const seatFor = (i) => seats[(startIdx + i) % 4]
-	const seatColor = (s) =>
-		s === 'N' || s === 'S'
-			? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-			: 'bg-rose-50 text-rose-800 border-rose-200'
-	const contractColor = (c) => {
-		if (!c) return 'bg-gray-200 text-gray-800'
-		const up = c.toUpperCase()
-		if (up.includes('NT')) return 'bg-slate-800 text-white'
-		if (up.endsWith('S')) return 'bg-gray-900 text-white'
-		if (up.endsWith('H')) return 'bg-red-600 text-white'
-		if (up.endsWith('D')) return 'bg-amber-500 text-white'
-		if (up.endsWith('C')) return 'bg-green-600 text-white'
-		return 'bg-gray-200 text-gray-800'
-	}
-	// Truncate auction to final contract + trailing three passes
-	const isPass = (c) => /^P(ASS)?$/i.test(c)
-	const isBid = (c) => /^(?:[1-7](?:C|D|H|S|NT))(?:X{1,2})?$/i.test(c)
-	let trimmed = [...calls]
-	// Remove any tokens that look like card play (e.g., 'S: A', etc.) — we only expect bids/passes here
-	trimmed = trimmed.filter((c) => isPass(c) || isBid(c))
-	let finalIdx = -1
-	for (let i = 0; i < trimmed.length; i++) {
-		if (
-			isBid(trimmed[i]) &&
-			isPass(trimmed[i + 1]) &&
-			isPass(trimmed[i + 2]) &&
-			isPass(trimmed[i + 3])
-		) {
-			finalIdx = i
-			break
-		}
-	}
-	const showCalls = finalIdx >= 0 ? trimmed.slice(0, finalIdx + 4) : trimmed
-	const showFinal = finalIdx >= 0 ? trimmed[finalIdx] : finalContract
-	return (
-		<div className="mb-3 text-xs text-gray-700">
-			<div className="font-semibold mb-1">Auction</div>
-			<div className="flex flex-wrap items-center gap-1">
-				{showCalls.map((call, i) => (
-					<span
-						key={`call-${i}`}
-						className={`inline-flex items-center gap-1 px-1 py-0.5 rounded border ${seatColor(
-							seatFor(i)
-						)}`}>
-						<span className="opacity-70">{seatFor(i)}:</span>
-						<span className="font-semibold">{call}</span>
-					</span>
-				))}
-				{showFinal ? (
-					<span
-						className={`ml-2 inline-flex items-center px-2 py-0.5 rounded ${contractColor(
-							showFinal
-						)}`}>
-						Final: {showFinal}
-					</span>
-				) : null}
-			</div>
-		</div>
-	)
-}
-
-function PlayStepper({ hasPlay, lines, idx, onPrev, onNext }) {
-	if (!hasPlay || !lines?.length) return null
-	const safeIdx = Math.min(Math.max(0, idx), lines.length - 1)
-	const step = lines[safeIdx]
-	const commentary = `Step ${safeIdx + 1}/${
-		lines.length
-	}: ${step}. Teacher note: discuss why this choice is reasonable.`
-	return (
-		<div className="mb-3 rounded-lg border bg-white p-3">
-			<div className="flex items-center justify-between mb-2">
-				<div className="text-xs font-semibold text-gray-800">
-					Step through the play (from PBN)
-				</div>
-				<div className="flex items-center gap-2">
-					<button
-						onClick={onPrev}
-						disabled={safeIdx === 0}
-						className="px-2 py-0.5 rounded border text-xs disabled:opacity-40">
-						Prev
-					</button>
-					<button
-						onClick={onNext}
-						disabled={safeIdx >= lines.length - 1}
-						className="px-2 py-0.5 rounded border text-xs disabled:opacity-40">
-						Next
-					</button>
-				</div>
-			</div>
-			<div className="text-xs text-gray-700">{commentary}</div>
-		</div>
-	)
-}
+// (Removed duplicate AuctionView and old PlayStepper here; single AuctionView is defined above)
 
 function PreUploadGrid({ onChooseFile, exampleMsg, setExampleMsg }) {
 	const examples = [
@@ -1099,6 +998,71 @@ function rankValue(rank) {
 	return map[rank] || 0
 }
 
+// Convert a PBN Deal string to seat hands
+function dealToHands(dealStr) {
+	// Example deal: "N:AKQJ.T98..  ..." four seat segments in SHDC order per seat
+	const m = dealStr.match(/^([NESW]):(.+)$/)
+	if (!m) throw new Error('Bad Deal string')
+	const start = m[1]
+	const rest = m[2].trim()
+	const seats = ['N','E','S','W']
+	const startIdx = seats.indexOf(start)
+	const segs = rest.split(/\s+/)
+	if (segs.length !== 4) throw new Error('Deal must have 4 seat segments')
+	const seatMap = {}
+	for (let i=0;i<4;i++) {
+		const seat = seats[(startIdx + i) % 4]
+		const seg = segs[i]
+		const [s, h, d, c] = seg.split('.').map(x => x || '')
+		const parseSuit = (suitName, str) => Array.from(str).map((ch) => ({
+			id: `${seat}-${suitName}-${ch}-${Math.random().toString(36).slice(2,7)}`,
+			suit: suitName,
+			rank: ch === 'T' ? '10' : ch,
+		}))
+		const cards = [
+			...parseSuit('Spades', s),
+			...parseSuit('Hearts', h),
+			...parseSuit('Diamonds', d),
+			...parseSuit('Clubs', c),
+		]
+		seatMap[seat] = cards
+	}
+	return seatMap
+}
+
+// Parse PBN Play lines like "S: A" or combined tokens
+function parsePlayMoves(playLeader, lines) {
+	// Flatten tokens like "S: A" into suit/rank pairs in leader-rotation order
+	const moves = []
+	for (const line of lines) {
+		const parts = line.split(/\s+/).filter(Boolean)
+		for (let i=0;i<parts.length;i++) {
+			const tok = parts[i]
+			const m = tok.match(/^([SHDC]):$/i)
+			if (m && parts[i+1]) {
+				moves.push({ suit: suitName(m[1]), rank: normalizeRank(parts[i+1]) })
+				i++
+			} else {
+				const m2 = tok.match(/^([SHDC]):([AKQJT2-9])$/i)
+				if (m2) moves.push({ suit: suitName(m2[1]), rank: normalizeRank(m2[2]) })
+			}
+		}
+	}
+	return moves
+}
+
+function suitName(letter) {
+	const L = String(letter).toUpperCase()
+	return L === 'S' ? 'Spades' : L === 'H' ? 'Hearts' : L === 'D' ? 'Diamonds' : 'Clubs'
+}
+function normalizeRank(r) {
+	return r === 'T' ? '10' : r.toUpperCase()
+}
+
+function suitSymbol(suit) {
+	return suit === 'Spades' ? '♠' : suit === 'Hearts' ? '♥' : suit === 'Diamonds' ? '♦' : '♣'
+}
+
 // High-card point value helper (A=4, K=3, Q=2, J=1; others 0)
 function hcpValue(rank) {
 	if (rank === 'A') return 4
@@ -1157,9 +1121,8 @@ function neededToSet(contract) {
 	if (!contract) return 0
 	const level = parseInt(contract, 10)
 	if (!level) return 0
-	const target = 6 + level
-	const defendersNeed = 13 - target + 1
-	return defendersNeed
+	// Defenders need 8 - level total tricks to defeat the contract
+	return Math.max(0, 8 - level)
 }
 
 function seatFullName(id) {
