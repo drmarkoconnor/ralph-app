@@ -608,8 +608,8 @@ export default function DragDropCards() {
 						onDragEnd={onDragEnd}
 						className="font-semibold text-gray-900 px-1 select-none cursor-grab active:cursor-grabbing">
 						{card.rank}
-						</span>
-					))}
+					</span>
+				))}
 			</div>
 		)
 	}
