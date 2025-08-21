@@ -6,12 +6,13 @@ import App from './App.jsx'
 import Instructions from './pages/Instructions.jsx'
 
 const router = createBrowserRouter([
-  { path: '/', element: <App /> },
-  { path: '/instructions', element: <Instructions /> },
+	{ path: '/', element: <App /> },
+	{ path: '/instructions', element: <Instructions /> },
 ])
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>,
+	<StrictMode>
+		<RouterProvider router={router} />
+	</StrictMode>
 )
+

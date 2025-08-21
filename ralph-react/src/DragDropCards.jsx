@@ -36,21 +36,21 @@ function dealerForBoard(boardNo) {
 function vulnerabilityForBoard(boardNo) {
 	const cycle = [
 		'None', // 1
-		'NS',   // 2
-		'EW',   // 3
-		'All',  // 4
-		'NS',   // 5
-		'EW',   // 6
-		'All',  // 7
+		'NS', // 2
+		'EW', // 3
+		'All', // 4
+		'NS', // 5
+		'EW', // 6
+		'All', // 7
 		'None', // 8
-		'EW',   // 9
-		'All',  // 10
+		'EW', // 9
+		'All', // 10
 		'None', // 11
-		'NS',   // 12
-		'All',  // 13
+		'NS', // 12
+		'All', // 13
 		'None', // 14
-		'NS',   // 15
-		'EW',   // 16
+		'NS', // 15
+		'EW', // 16
 	]
 	return cycle[(boardNo - 1) % 16]
 }
@@ -186,6 +186,11 @@ export default function DragDropCards() {
 	const [selected, setSelected] = useState(() => new Set())
 	const [savedHands, setSavedHands] = useState([]) // array of {N,E,S,W}
 	const [startBoard, setStartBoard] = useState(1)
+	const pbnPreview = useMemo(() => {
+		if (savedHands.length === 0)
+			return '// PBN preview will appear here after you save at least one hand.'
+		return buildPBN(savedHands, startBoard)
+	}, [savedHands, startBoard])
 
 	const remaining = cards.length
 	const selectedCount = useMemo(() => selected.size, [selected])
@@ -323,10 +328,17 @@ export default function DragDropCards() {
 					className={`w-full h-full bg-[#FFF8E7] flex flex-col items-center justify-center ${suitClass}`}>
 					<div
 						style={{ fontFamily: 'Apple Chancery, Snell Roundhand, cursive' }}
-						className={`${largeCenter ? 'text-2xl' : 'text-base'} leading-none italic`}>
+						className={`${
+							largeCenter ? 'text-2xl' : 'text-base'
+						} leading-none italic`}>
 						A
 					</div>
-						<div className={`${largeCenter ? 'text-2xl' : 'text-base'} leading-none`}>{card.symbol}</div>
+					<div
+						className={`${
+							largeCenter ? 'text-2xl' : 'text-base'
+						} leading-none`}>
+						{card.symbol}
+					</div>
 				</div>
 			)
 		}
@@ -334,8 +346,15 @@ export default function DragDropCards() {
 		return (
 			<div
 				className={`w-full h-full bg-[#FFF8E7] flex flex-col items-center justify-center ${suitClass}`}>
-				<div className={`${largeCenter ? 'text-2xl' : 'text-lg'} leading-none font-extrabold`}>{card.rank}</div>
-				<div className={`${largeCenter ? 'text-2xl' : 'text-lg'} leading-none`}>{card.symbol}</div>
+				<div
+					className={`${
+						largeCenter ? 'text-2xl' : 'text-lg'
+					} leading-none font-extrabold`}>
+					{card.rank}
+				</div>
+				<div className={`${largeCenter ? 'text-2xl' : 'text-lg'} leading-none`}>
+					{card.symbol}
+				</div>
 			</div>
 		)
 	}
@@ -375,13 +394,15 @@ export default function DragDropCards() {
 						</div>
 					))}
 				</div>
-				<div className="px-3 pb-2 text-[10px] text-gray-700 font-semibold text-right">HCP: {hcp}</div>
+				<div className="px-3 pb-2 text-[10px] text-gray-700 font-semibold text-right">
+					HCP: {hcp}
+				</div>
 			</div>
 		)
 	}
 
 	return (
-	<div className="flex flex-col items-center w-full max-w-[1100px] mx-auto gap-2 h-screen overflow-hidden px-2 py-2">
+		<div className="flex flex-col items-center w-full max-w-[1100px] mx-auto gap-2 h-screen overflow-hidden px-2 py-2">
 			{/* Deck row */}
 			<div className="flex flex-wrap gap-1 mb-2 justify-center">
 				{cards.map((card) => {
@@ -431,17 +452,24 @@ export default function DragDropCards() {
 				</button>
 			</div>
 
-			{/* Buckets in a single row: N, E, S, W */}
-			<div className="flex flex-row flex-wrap items-start justify-center gap-2 w-full">
-				<Bucket id="N" />
-				<Bucket id="E" />
-				<Bucket id="S" />
-				<Bucket id="W" />
+			{/* Buckets in a single row: N, E, S, W with right-side PBN preview */}
+			<div className="w-full flex items-start justify-between gap-2">
+				<div className="flex flex-row flex-wrap items-start justify-start gap-2">
+					<Bucket id="N" />
+					<Bucket id="E" />
+					<Bucket id="S" />
+					<Bucket id="W" />
+				</div>
+				<pre className="hidden md:block whitespace-pre-wrap text-[10px] leading-tight bg-gray-50 border border-gray-200 rounded p-2 w-64 h-[240px] overflow-auto">
+					{pbnPreview}
+				</pre>
 			</div>
 
 			{/* Toolbar in a single row */}
 			<div className="flex flex-wrap items-center justify-center gap-2 w-full mt-1">
-				<span className="font-modern text-[11px] text-gray-700 mr-2">Selected: {selectedCount} • Remaining: {remaining}</span>
+				<span className="font-modern text-[11px] text-gray-700 mr-2">
+					Selected: {selectedCount} • Remaining: {remaining}
+				</span>
 				<button
 					className="px-2 py-1.5 rounded bg-purple-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={handleRandomComplete}
@@ -483,7 +511,17 @@ export default function DragDropCards() {
 					disabled={savedHands.length === 0}>
 					Email
 				</button>
-				<span className="text-[10px] text-gray-600">Saved: {savedHands.length}</span>
+				<span className="text-[10px] text-gray-600">
+					Saved: {savedHands.length}
+				</span>
+			</div>
+
+			<div className="w-full flex items-center justify-center mt-1">
+				<a
+					href="/instructions"
+					className="text-[11px] text-sky-600 hover:underline">
+					Read full instructions →
+				</a>
 			</div>
 		</div>
 	)

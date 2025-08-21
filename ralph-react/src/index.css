@@ -1,6 +1,12 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Minimal base resets so Tailwind classes show clearly */
-html, body, #root { height: 100%; }
-body { margin: 0; }
+html,
+body,
+#root {
+	height: 100%;
+}
+body {
+	margin: 0;
+}
 
