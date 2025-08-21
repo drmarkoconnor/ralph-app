@@ -12,7 +12,7 @@ export default function Instructions() {
 			<div className="w-full max-w-3xl">
 				<div className="flex items-center justify-between mb-4">
 					<h1 className="text-3xl font-bold text-gray-800">
-						Ralph's Picker — Instructions
+						Bristol Bridge Club's PBN Picker — Instructions
 					</h1>
 					<Link to="/" className="text-sm text-sky-600 hover:underline">
 						← Back to app
@@ -22,10 +22,10 @@ export default function Instructions() {
 				<section className="mb-6">
 					<h2 className="text-xl font-semibold text-gray-800 mb-2">Overview</h2>
 					<p className="text-sm text-gray-700 leading-6">
-						Ralph's Picker helps you build and manage bridge deals. You can
-						select, drag, and distribute cards into the four seats (North, East,
-						South, West), save complete deals, and export them as PBN files
-						ready for Dealer4 and other PBN consumers.
+						Bristol Bridge Club's PBN Picker helps you build and manage bridge
+						deals. You can select, drag, and distribute cards into the four
+						seats (North, East, South, West), save complete deals, and export
+						them as PBN files ready for Dealer4 and other PBN consumers.
 					</p>
 				</section>
 
@@ -63,8 +63,9 @@ export default function Instructions() {
 							Each bucket shows the High Card Points (HCP) total at the bottom.
 						</li>
 						<li>
-							To remove a card from a seat, use Reset Board and re-place as
-							needed (future versions may add per-card removal).
+							Per-card removal: drag a card out of a seat and drop it on the
+							deck row to return it to the deck. You can also drag a card
+							directly between seats.
 						</li>
 					</ul>
 				</section>
@@ -76,7 +77,10 @@ export default function Instructions() {
 							Random Complete fills remaining cards randomly into seats up to 13
 							each.
 						</li>
-						<li>Clear Selection deselects currently selected deck cards.</li>
+						<li>
+							Clear Selection deselects currently selected deck cards (the
+							button only appears when you have a selection).
+						</li>
 						<li>
 							Reset Board clears all seats and returns all cards to the deck.
 						</li>
@@ -110,6 +114,12 @@ export default function Instructions() {
 							Use Download PBN to save a .pbn file; Copy PBN places the text on
 							your clipboard; Email opens an email draft.
 						</li>
+
+						<li>
+							Hints: a checkbox in the top-right toggles hover hints/tooltips on
+							buttons and card actions. When dragging from a seat, a "Drop here
+							to return to deck" helper appears above the deck.
+						</li>
 					</ul>
 				</section>
 
@@ -137,8 +147,8 @@ export default function Instructions() {
 						Enhancement requests:{' '}
 						<a
 							className="text-sky-600 hover:underline"
-							href="mailto:mark@oconnor.example">
-							mark@oconnor.example
+							href="mailto:dr.mark.oconnor@googlemail.com">
+							dr.mark.oconnor@googlemail.com
 						</a>
 					</div>
 				</footer>

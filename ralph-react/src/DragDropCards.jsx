@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 const suits = [
 	{ name: 'Spades', symbol: '♠' },
@@ -81,11 +81,11 @@ const BUCKET_STYLES = {
 	},
 	W: {
 		title: 'WEST',
-		bg: 'bg-amber-50',
-		border: 'border-amber-300',
-		headerBg: 'bg-amber-100',
-		headerText: 'text-amber-800',
-		ring: 'ring-amber-300',
+		bg: 'bg-emerald-50',
+		border: 'border-emerald-300',
+		headerBg: 'bg-emerald-100',
+		headerText: 'text-emerald-700',
+		ring: 'ring-emerald-300',
 	},
 }
 
@@ -178,19 +178,66 @@ function buildPBN(hands, startBoard = 1) {
 	return out
 }
 
+function buildSinglePBN(hand, boardNo, dateStr) {
+	const dealer = dealerForBoard(boardNo)
+	const vul = vulnerabilityForBoard(boardNo)
+	const orderMap = {
+		N: ['N', 'E', 'S', 'W'],
+		E: ['E', 'S', 'W', 'N'],
+		S: ['S', 'W', 'N', 'E'],
+		W: ['W', 'N', 'E', 'S'],
+	}
+	const order = orderMap[dealer]
+	const handsStr = order.map((seat) => formatSeatPBN(hand[seat])).join(' ')
+	const deal = `${dealer}:${handsStr}`
+	const crlf = '\r\n'
+	return (
+		`[Event "Club Session"]${crlf}` +
+		`[Site "Local"]${crlf}` +
+		`[Date "${dateStr}"]${crlf}` +
+		`[Board "${boardNo}"]${crlf}` +
+		`[Dealer "${dealer}"]${crlf}` +
+		`[Vulnerable "${vul}"]${crlf}` +
+		`[Deal "${deal}"]${crlf}${crlf}`
+	)
+}
+
 export default function DragDropCards() {
 	const [cards, setCards] = useState(initialCards)
 	const [bucketCards, setBucketCards] = useState({ N: [], E: [], S: [], W: [] })
 	const [draggedCard, setDraggedCard] = useState(null)
+	const [dragSource, setDragSource] = useState(null)
 	const [activeBucket, setActiveBucket] = useState(null)
 	const [selected, setSelected] = useState(() => new Set())
 	const [savedHands, setSavedHands] = useState([]) // array of {N,E,S,W}
 	const [startBoard, setStartBoard] = useState(1)
-	const pbnPreview = useMemo(() => {
-		if (savedHands.length === 0)
-			return '// PBN preview will appear here after you save at least one hand.'
-		return buildPBN(savedHands, startBoard)
+	const [showPreview, setShowPreview] = useState(false)
+	const [previewIndex, setPreviewIndex] = useState(0)
+	const [copyState, setCopyState] = useState('idle') // idle | ok | err
+	const [hintsEnabled, setHintsEnabled] = useState(true)
+	const copyTimerRef = useRef(null)
+	const { slides } = useMemo(() => {
+		const today = new Date()
+		const y = today.getFullYear()
+		const m = String(today.getMonth() + 1).padStart(2, '0')
+		const d = String(today.getDate()).padStart(2, '0')
+		const dateStr = `${y}.${m}.${d}`
+		return {
+			slides: savedHands.map((hand, i) =>
+				buildSinglePBN(hand, startBoard + i, dateStr)
+			),
+		}
 	}, [savedHands, startBoard])
+
+	useEffect(() => {
+		if (previewIndex > Math.max(0, slides.length - 1)) {
+			setPreviewIndex(Math.max(0, slides.length - 1))
+		}
+	}, [slides.length, previewIndex])
+
+	useEffect(() => {
+		document.title = "Bristol Bridge Club's PBN Picker"
+	}, [])
 
 	const remaining = cards.length
 	const selectedCount = useMemo(() => selected.size, [selected])
@@ -213,17 +260,52 @@ export default function DragDropCards() {
 		setSelected(new Set())
 	}
 
-	const onDragStart = (card) => setDraggedCard(card)
+	const onDragStartDeck = (card) => {
+		setDraggedCard(card)
+		setDragSource('deck')
+	}
+
+	const onDragStartBucket = (card, bucket) => {
+		setDraggedCard(card)
+		setDragSource(bucket)
+	}
+
 	const onDrop = (bucket) => {
 		setActiveBucket(null)
-		if (draggedCard && bucketCards[bucket].length < 13) {
-			setBucketCards((prev) => ({
-				...prev,
-				[bucket]: [...prev[bucket], draggedCard],
-			}))
-			setCards((prev) => prev.filter((c) => c.id !== draggedCard.id))
-			setDraggedCard(null)
+		if (!draggedCard) return
+		if (dragSource === 'deck') {
+			if (bucketCards[bucket].length < 13) {
+				setBucketCards((prev) => ({
+					...prev,
+					[bucket]: [...prev[bucket], draggedCard],
+				}))
+				setCards((prev) => prev.filter((c) => c.id !== draggedCard.id))
+			}
+		} else if (SEATS.includes(dragSource)) {
+			if (dragSource !== bucket && bucketCards[bucket].length < 13) {
+				setBucketCards((prev) => {
+					const from = dragSource
+					return {
+						...prev,
+						[from]: prev[from].filter((c) => c.id !== draggedCard.id),
+						[bucket]: [...prev[bucket], draggedCard],
+					}
+				})
+			}
 		}
+		setDraggedCard(null)
+		setDragSource(null)
+	}
+
+	const onDropToDeck = () => {
+		if (!draggedCard || !SEATS.includes(dragSource)) return
+		setBucketCards((prev) => ({
+			...prev,
+			[dragSource]: prev[dragSource].filter((c) => c.id !== draggedCard.id),
+		}))
+		setCards((prev) => [...prev, draggedCard])
+		setDraggedCard(null)
+		setDragSource(null)
 	}
 
 	const sendSelectedTo = (bucket) => {
@@ -301,16 +383,24 @@ export default function DragDropCards() {
 		const pbn = buildPBN(savedHands, startBoard)
 		try {
 			await navigator.clipboard.writeText(pbn)
-			// Optional: toast
-		} catch {}
+			if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+			setCopyState('ok')
+			copyTimerRef.current = setTimeout(() => setCopyState('idle'), 2000)
+		} catch {
+			if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+			setCopyState('err')
+			copyTimerRef.current = setTimeout(() => setCopyState('idle'), 2000)
+		}
 	}
 
 	const handleEmailPBN = () => {
 		if (savedHands.length === 0) return
 		const pbn = buildPBN(savedHands, startBoard)
-		const subject = encodeURIComponent("PBN hands from Ralph's Picker")
+		const subject = encodeURIComponent(
+			"PBN hands from Bristol Bridge Club's PBN Picker"
+		)
 		const body = encodeURIComponent(pbn)
-		window.location.href = `mailto:?subject=${subject}&body=${body}`
+		window.location.href = `mailto:dr.mark.oconnor@googlemail.com?subject=${subject}&body=${body}`
 	}
 
 	const CARD_DECK =
@@ -363,6 +453,12 @@ export default function DragDropCards() {
 		const styles = BUCKET_STYLES[id]
 		const isFull = bucketCards[id].length >= 13
 		const highlight = activeBucket === id ? `ring-2 ${styles.ring}` : ''
+		const nextBoardNo = startBoard + savedHands.length
+		const vul = vulnerabilityForBoard(nextBoardNo)
+		const seatIsVul =
+			vul === 'All' ||
+			(vul === 'NS' && (id === 'N' || id === 'S')) ||
+			(vul === 'EW' && (id === 'E' || id === 'W'))
 		const sortedCards = SUIT_ORDER.flatMap((s) =>
 			sortByPbnRank(bucketCards[id].filter((c) => c.suit === s))
 		)
@@ -373,8 +469,15 @@ export default function DragDropCards() {
 				<div
 					className={`w-full ${styles.headerBg} ${styles.headerText} font-extrabold text-[11px] tracking-widest uppercase px-2 py-1.5 flex items-center justify-between`}>
 					<span>{styles.title}</span>
-					<span className="text-[10px] opacity-80">
-						{bucketCards[id].length}/13
+					<span className="flex items-center gap-1">
+						{seatIsVul && (
+							<span className="text-[9px] font-bold text-red-700 bg-red-100 border border-red-200 rounded px-1 py-0.5">
+								V
+							</span>
+						)}
+						<span className="text-[10px] opacity-80">
+							{bucketCards[id].length}/13
+						</span>
 					</span>
 				</div>
 				<div
@@ -389,7 +492,11 @@ export default function DragDropCards() {
 						<span className="text-[10px] text-gray-400">Drag cards here</span>
 					)}
 					{sortedCards.map((card) => (
-						<div key={card.id} className={`${CARD_BASE}`}>
+						<div
+							key={card.id}
+							draggable
+							onDragStart={() => onDragStartBucket(card, id)}
+							className={`${CARD_BUCKET}`}>
 							{renderFace(card, false)}
 						</div>
 					))}
@@ -402,22 +509,51 @@ export default function DragDropCards() {
 	}
 
 	return (
-		<div className="flex flex-col items-center w-full max-w-[1100px] mx-auto gap-2 h-screen overflow-hidden px-2 py-2">
+		<div className="flex flex-col items-center w-full max-w-[1100px] mx-auto gap-2 min-h-screen px-2 py-2">
+			{/* Top-right hints toggle */}
+			<div className="w-full flex justify-end">
+				<label className="text-[11px] text-gray-600 flex items-center gap-1 select-none">
+					<input
+						type="checkbox"
+						checked={hintsEnabled}
+						onChange={(e) => setHintsEnabled(e.target.checked)}
+					/>
+					Hints
+				</label>
+			</div>
+
+			{/* Deck drop hint when dragging from a bucket */}
+			{SEATS.includes(dragSource) && hintsEnabled && (
+				<div className="w-full text-center mb-1">
+					<span className="inline-block text-[11px] text-gray-700 px-2 py-1 bg-gray-50 border border-dashed border-gray-400 rounded">
+						Drop here to return to deck
+					</span>
+				</div>
+			)}
+
 			{/* Deck row */}
-			<div className="flex flex-wrap gap-1 mb-2 justify-center">
+			<div
+				className="flex flex-wrap gap-1 mb-2 justify-center"
+				onDragOver={(e) => {
+					if (SEATS.includes(dragSource)) e.preventDefault()
+				}}
+				onDrop={onDropToDeck}>
 				{cards.map((card) => {
 					const isSelected = selected.has(card.id)
 					return (
 						<div
 							key={card.id}
 							draggable
-							onDragStart={() => onDragStart(card)}
+							onDragStart={() => onDragStartDeck(card)}
 							onClick={() => toggleSelect(card.id)}
 							className={`${CARD_DECK} ${
 								isSelected
 									? 'ring-4 ring-yellow-300 scale-105'
 									: 'hover:scale-105'
-							}`}>
+							}`}
+							title={
+								hintsEnabled ? 'Click to select, drag to a seat' : undefined
+							}>
 							{renderFace(card, true)}
 						</div>
 					)
@@ -429,40 +565,101 @@ export default function DragDropCards() {
 				<button
 					className="px-3 py-2 rounded bg-sky-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('N')}
-					disabled={selectedCount === 0 || bucketCards.N.length >= 13}>
+					disabled={selectedCount === 0 || bucketCards.N.length >= 13}
+					title={
+						hintsEnabled ? 'Send selected deck cards to North' : undefined
+					}>
 					Send North
 				</button>
 				<button
 					className="px-3 py-2 rounded bg-amber-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('W')}
-					disabled={selectedCount === 0 || bucketCards.W.length >= 13}>
+					disabled={selectedCount === 0 || bucketCards.W.length >= 13}
+					title={hintsEnabled ? 'Send selected deck cards to West' : undefined}>
 					Send West
 				</button>
 				<button
 					className="px-3 py-2 rounded bg-rose-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('E')}
-					disabled={selectedCount === 0 || bucketCards.E.length >= 13}>
+					disabled={selectedCount === 0 || bucketCards.E.length >= 13}
+					title={hintsEnabled ? 'Send selected deck cards to East' : undefined}>
 					Send East
 				</button>
 				<button
 					className="px-3 py-2 rounded bg-emerald-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('S')}
-					disabled={selectedCount === 0 || bucketCards.S.length >= 13}>
+					disabled={selectedCount === 0 || bucketCards.S.length >= 13}
+					title={
+						hintsEnabled ? 'Send selected deck cards to South' : undefined
+					}>
 					Send South
 				</button>
 			</div>
 
-			{/* Buckets in a single row: N, E, S, W with right-side PBN preview */}
-			<div className="w-full flex items-start justify-between gap-2">
-				<div className="flex flex-row flex-wrap items-start justify-start gap-2">
+			{/* Buckets in a single row: N, E, S, W */}
+			<div className="w-full flex items-start justify-center gap-2">
+				<div className="flex flex-row flex-wrap items-start justify-center gap-2">
 					<Bucket id="N" />
 					<Bucket id="E" />
 					<Bucket id="S" />
 					<Bucket id="W" />
 				</div>
-				<pre className="hidden md:block whitespace-pre-wrap text-[10px] leading-tight bg-gray-50 border border-gray-200 rounded p-2 w-64 h-[240px] overflow-auto">
-					{pbnPreview}
-				</pre>
+			</div>
+
+			{/* Legend for vulnerability marker */}
+			<div className="w-full flex items-center justify-center mt-1 mb-1">
+				<span className="text-[10px] text-gray-600">
+					Legend:{' '}
+					<span className="inline-block text-[9px] font-bold text-red-700 bg-red-100 border border-red-200 rounded px-1 py-0.5">
+						V
+					</span>{' '}
+					= Vulnerable on next board
+				</span>
+			</div>
+
+			{/* Pop-out PBN preview carousel under buckets (two-line scroll) */}
+			<div className="w-full">
+				<div className="flex items-center justify-center gap-2 mb-1">
+					<button
+						className="px-2 py-1 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300"
+						onClick={() => setShowPreview((v) => !v)}>
+						{showPreview ? 'Hide PBN' : 'Show PBN'}
+					</button>
+					{showPreview && (
+						<>
+							<button
+								className="px-2 py-1 rounded bg-white text-gray-800 text-xs border border-gray-300 disabled:opacity-40"
+								onClick={() => setPreviewIndex((i) => Math.max(0, i - 1))}
+								disabled={previewIndex === 0 || slides.length <= 1}>
+								Prev
+							</button>
+							<div className="text-[10px] text-gray-600">
+								{slides.length > 0
+									? `Board ${startBoard + previewIndex} of ${
+											startBoard + slides.length - 1
+									  }`
+									: 'No boards saved'}
+							</div>
+							<button
+								className="px-2 py-1 rounded bg-white text-gray-800 text-xs border border-gray-300 disabled:opacity-40"
+								onClick={() =>
+									setPreviewIndex((i) => Math.min(slides.length - 1, i + 1))
+								}
+								disabled={
+									previewIndex >= slides.length - 1 || slides.length <= 1
+								}>
+								Next
+							</button>
+						</>
+					)}
+				</div>
+				{showPreview && (
+					<pre className="whitespace-pre-wrap text-[10px] leading-tight bg-gray-50 border border-gray-200 rounded p-2 w-full h-10 overflow-y-auto">
+						{slides.length > 0
+							? slides[previewIndex]
+							: '// Save a hand to preview PBN'}
+					</pre>
+				)}
 			</div>
 
 			{/* Toolbar in a single row */}
@@ -473,48 +670,80 @@ export default function DragDropCards() {
 				<button
 					className="px-2 py-1.5 rounded bg-purple-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={handleRandomComplete}
-					disabled={remaining === 0}>
+					disabled={remaining === 0}
+					title={
+						hintsEnabled
+							? 'Randomly deal remaining deck cards to seats'
+							: undefined
+					}>
 					Random Complete
 				</button>
-				<button
-					className="px-2 py-1.5 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300"
-					onClick={clearSelection}
-					disabled={selectedCount === 0}>
-					Clear Selection
-				</button>
+				{selectedCount > 0 && (
+					<button
+						className="px-2 py-1.5 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300"
+						onClick={clearSelection}
+						title={
+							hintsEnabled
+								? 'Deselect currently selected deck cards'
+								: undefined
+						}>
+						Clear Selection
+					</button>
+				)}
 				<button
 					className="px-2 py-1.5 rounded bg-gray-800 text-white text-xs hover:opacity-90"
-					onClick={resetBoard}>
+					onClick={resetBoard}
+					title={
+						hintsEnabled
+							? 'Clear all seats and return all cards to deck'
+							: undefined
+					}>
 					Reset Board
 				</button>
 				<button
 					className="px-2 py-1.5 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={saveCurrentHand}
-					disabled={!complete}>
+					disabled={!complete}
+					title={hintsEnabled ? 'Save this 52-card distribution' : undefined}>
 					Save Hand
 				</button>
 				<button
 					className="px-2 py-1.5 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={handleGeneratePBN}
-					disabled={savedHands.length === 0}>
+					disabled={savedHands.length === 0}
+					title={hintsEnabled ? 'Download saved deals as PBN' : undefined}>
 					Download PBN
 				</button>
 				<button
-					className="px-2 py-1.5 rounded bg-teal-500 text-white text-[10px] hover:opacity-90 disabled:opacity-40"
+					className={`px-2 py-1.5 rounded text-white text-[10px] hover:opacity-90 disabled:opacity-40 ${
+						copyState === 'ok'
+							? 'bg-green-600'
+							: copyState === 'err'
+							? 'bg-rose-600'
+							: 'bg-teal-500'
+					}`}
 					onClick={handleCopyPBN}
-					disabled={savedHands.length === 0}>
-					Copy
+					disabled={savedHands.length === 0}
+					title={hintsEnabled ? 'Copy PBN to clipboard' : undefined}>
+					{copyState === 'ok'
+						? 'Copied!'
+						: copyState === 'err'
+						? 'Copy failed'
+						: 'Copy'}
 				</button>
 				<button
 					className="px-2 py-1.5 rounded bg-teal-500 text-white text-[10px] hover:opacity-90 disabled:opacity-40"
 					onClick={handleEmailPBN}
-					disabled={savedHands.length === 0}>
+					disabled={savedHands.length === 0}
+					title={hintsEnabled ? 'Email PBN' : undefined}>
 					Email
 				</button>
 				<span className="text-[10px] text-gray-600">
 					Saved: {savedHands.length}
 				</span>
 			</div>
+
+			{/* Mobile preview handled by unified preview section above */}
 
 			<div className="w-full flex items-center justify-center mt-1">
 				<a
