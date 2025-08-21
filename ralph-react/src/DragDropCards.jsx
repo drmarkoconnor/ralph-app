@@ -233,6 +233,8 @@ export default function DragDropCards() {
 	const remaining = cards.length
 	const selectedCount = useMemo(() => selected.size, [selected])
 	const complete = SEATS.every((s) => bucketCards[s].length === 13)
+	const nextBoardNo = startBoard + savedHands.length
+	const currentDealer = dealerForBoard(nextBoardNo)
 
 	const toggleSelect = (id) => {
 		setSelected((prev) => {
@@ -432,6 +434,15 @@ export default function DragDropCards() {
 		window.location.href = `mailto:dr.mark.oconnor@googlemail.com?subject=${subject}&body=${body}`
 	}
 
+	// Explicit dealer selection: aligns startBoard so the next board's dealer equals the chosen seat
+	const setDealerExplicit = (seat) => {
+		const idx = SEATS.indexOf(seat)
+		if (idx === -1) return
+		const currentMod = (startBoard + savedHands.length - 1) % 4
+		const delta = (idx - currentMod + 4) % 4
+		setStartBoard(startBoard + delta)
+	}
+
 	const CARD_DECK =
 		'rounded-lg shadow-md cursor-pointer select-none transition-all duration-150 font-serif w-[48px] h-[72px] flex flex-col items-center justify-center border border-neutral-300 bg-[#FFF8E7]'
 	const CARD_BUCKET =
@@ -473,18 +484,27 @@ export default function DragDropCards() {
 		const highlight = activeBucket === id ? `ring-2 ${styles.ring}` : ''
 		const nextBoardNo = startBoard + savedHands.length
 		const vul = vulnerabilityForBoard(nextBoardNo)
+		const dealer = dealerForBoard(nextBoardNo)
+		const isDealer = dealer === id
 		const seatIsVul =
 			vul === 'All' ||
 			(vul === 'NS' && (id === 'N' || id === 'S')) ||
 			(vul === 'EW' && (id === 'E' || id === 'W'))
-		const sortedCards = SUIT_ORDER.flatMap((s) =>
-			sortByPbnRank(bucketCards[id].filter((c) => c.suit === s))
-		)
+
+		const rowOrder = ['Clubs', 'Diamonds', 'Hearts', 'Spades']
 		const hcp = hcpOfCards(bucketCards[id])
+
 		return (
-			<div className={`rounded-xl overflow-hidden shadow-md border ${styles.border} ${styles.bg} ${highlight} w-56`}>
-				<div className={`w-full ${styles.headerBg} ${styles.headerText} font-extrabold text-[11px] tracking-widest uppercase px-2 py-1.5 flex items-center justify-between`}>
-					<span>{styles.title}</span>
+			<div className={`rounded-xl overflow-hidden shadow-md border ${isDealer ? 'border-amber-500' : styles.border} ${styles.bg} ${highlight} w-60`}>
+				<div className={`w-full ${isDealer ? 'bg-amber-100 text-amber-900' : `${styles.headerBg} ${styles.headerText}`} font-extrabold text-[11px] tracking-widest uppercase px-2 py-1.5 flex items-center justify-between`}>
+					<span className="flex items-center gap-1">
+						{styles.title}
+						{isDealer && (
+							<span title="Dealer" className="ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-amber-500 text-white">
+								D
+							</span>
+						)}
+					</span>
 					<span className="flex items-center gap-1">
 						{seatIsVul && (
 							<span className="text-[9px] font-bold text-red-700 bg-red-100 border border-red-200 rounded px-1 py-0.5">
@@ -501,22 +521,44 @@ export default function DragDropCards() {
 					}}
 					onDragLeave={() => setActiveBucket(null)}
 					onDrop={(e) => onDrop(e, id)}
-					className={`min-h-[200px] p-1.5 flex flex-wrap gap-1 items-start justify-center`}>
-					{bucketCards[id].length === 0 && (
-						<span className="text-[10px] text-gray-400">Drag cards here</span>
-					)}
-					{sortedCards.map((card) => (
-						<div
-							key={card.id}
-							draggable
-							onDragStart={(e) => onDragStartBucket(e, card, id)}
-							onDragEnd={onDragEnd}
-							className={`${CARD_BUCKET}`}>
-							{renderFace(card, false)}
-						</div>
-					))}
+					className={`min-h-[200px] p-2 flex flex-col gap-1 items-stretch justify-start`}>
+					{rowOrder.map((suit) => {
+						const suitCards = sortByPbnRank(bucketCards[id].filter((c) => c.suit === suit))
+						const suitColor = SUIT_TEXT[suit]
+						return (
+							<div key={`${id}-${suit}`} className="flex items-center gap-2 min-h-[28px]">
+								<div className={`w-6 text-center text-xl leading-none ${suitColor}`}>
+									{ suit === 'Clubs' ? '♣' : suit === 'Diamonds' ? '♦' : suit === 'Hearts' ? '♥' : '♠' }
+								</div>
+								<div className="flex-1">
+									{suiteRowContent(suitCards, id)}
+								</div>
+							</div>
+						)
+					})}
 				</div>
 				<div className="px-3 pb-2 text-[10px] text-gray-700 font-semibold text-right">HCP: {hcp}</div>
+			</div>
+		)
+	}
+
+	// Renders a suit row as a sequence of draggable rank spans; shows '-' when void
+	function suiteRowContent(suitCards, bucketId) {
+		if (!suitCards || suitCards.length === 0) {
+			return <span className="text-[12px] text-gray-500">-</span>
+		}
+		return (
+			<div className="flex flex-row flex-wrap items-center gap-1">
+				{suitCards.map((card) => (
+					<span
+						key={card.id}
+						draggable
+						onDragStart={(e) => onDragStartBucket(e, card, bucketId)}
+						onDragEnd={onDragEnd}
+						className="text-[12px] font-semibold text-gray-900 px-0.5 select-none cursor-grab active:cursor-grabbing">
+						{card.rank}
+						</span>
+					))}
 			</div>
 		)
 	}
@@ -656,6 +698,23 @@ export default function DragDropCards() {
 
 			{/* Toolbar in a single row */}
 			<div className="flex flex-wrap items-center justify-center gap-2 w-full mt-1">
+				{/* Dealer selector */}
+				<div className="flex items-center gap-1 mr-2">
+					<span className="text-[10px] text-gray-600">Dealer:</span>
+					{SEATS.map((s) => (
+						<button
+							key={`dealer-${s}`}
+							onClick={() => setDealerExplicit(s)}
+							className={`px-1.5 py-0.5 rounded text-[10px] border ${
+								s === currentDealer
+									? 'bg-amber-500 border-amber-600 text-white'
+									: 'bg-white border-gray-300 text-gray-800 hover:bg-gray-100'
+							}`}
+							title={`Set next dealer to ${s}`}>
+							{s}
+						</button>
+					))}
+				</div>
 				<span className="font-modern text-[11px] text-gray-700 mr-2">Selected: {selectedCount} • Remaining: {remaining}</span>
 				<button
 					className="px-2 py-1.5 rounded bg-purple-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
