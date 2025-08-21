@@ -182,6 +182,8 @@ export default function Player() {
 	const [trick, setTrick] = useState([]) // [{seat, card}]
 	const [tricksDecl, setTricksDecl] = useState(0)
 	const [tricksDef, setTricksDef] = useState(0)
+	// Guard to avoid double-resolving a trick on rapid clicks/renders
+	const resolvingRef = useRef(false)
 
 	// Initialize when hands change (new file or board)
 	useEffect(() => {
@@ -283,6 +285,7 @@ export default function Player() {
 	const prev = () => setIndex((i) => Math.max(0, i - 1))
 
 	const onPlayCard = (seat, cardId) => {
+		if (resolvingRef.current) return
 		if (!remaining || !remaining[seat]) return
 		if (turnSeat !== seat) return
 		const pool = remaining[seat]
@@ -311,6 +314,7 @@ export default function Player() {
 			if (nextTrick.length < 4) {
 				setTurnSeat(rightOf(seat))
 			} else {
+				resolvingRef.current = true
 				const trump = parseTrump(current?.contract)
 				const winner = evaluateTrick(nextTrick, trump)
 				const isDeclSide = isDeclarerSide(winner, current?.declarer)
@@ -318,7 +322,10 @@ export default function Player() {
 				else setTricksDef((n) => n + 1)
 				setTurnSeat(winner)
 				// queue clearing the trick after render
-				setTimeout(() => setTrick([]), 0)
+				setTimeout(() => {
+					setTrick([])
+					resolvingRef.current = false
+				}, 0)
 			}
 			return nextTrick
 		})
