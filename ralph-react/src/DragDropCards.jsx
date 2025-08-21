@@ -98,14 +98,13 @@ const SUIT_TEXT = {
 	Clubs: 'text-black',
 }
 
+// For seat display and PBN formatting
 const SUIT_ORDER = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
 
 function hcpOfCards(cards) {
 	const pts = { A: 4, K: 3, Q: 2, J: 1 }
 	return cards.reduce((sum, c) => sum + (pts[c.rank] || 0), 0)
 }
-
-// (honor face styling now unified in renderFace; legacy helpers removed)
 
 function sortByPbnRank(cards) {
 	const order = {
@@ -198,7 +197,7 @@ export default function DragDropCards() {
 	const [cards, setCards] = useState(initialCards)
 	const [bucketCards, setBucketCards] = useState({ N: [], E: [], S: [], W: [] })
 	const [draggedCard, setDraggedCard] = useState(null)
-	const [dragSource, setDragSource] = useState(null)
+	const [dragSource, setDragSource] = useState(null) // 'deck' | 'N' | 'E' | 'S' | 'W' | null
 	const [activeBucket, setActiveBucket] = useState(null)
 	const [selected, setSelected] = useState(() => new Set())
 	const [savedHands, setSavedHands] = useState([]) // array of {N,E,S,W}
@@ -209,6 +208,7 @@ export default function DragDropCards() {
 	const [hintsEnabled, setHintsEnabled] = useState(true)
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const copyTimerRef = useRef(null)
+
 	const { slides } = useMemo(() => {
 		const today = new Date()
 		const y = today.getFullYear()
@@ -216,9 +216,7 @@ export default function DragDropCards() {
 		const d = String(today.getDate()).padStart(2, '0')
 		const dateStr = `${y}.${m}.${d}`
 		return {
-			slides: savedHands.map((hand, i) =>
-				buildSinglePBN(hand, startBoard + i, dateStr)
-			),
+			slides: savedHands.map((hand, i) => buildSinglePBN(hand, startBoard + i, dateStr)),
 		}
 	}, [savedHands, startBoard])
 
@@ -259,17 +257,39 @@ export default function DragDropCards() {
 		resetBoard()
 	}
 
-	const onDragStartDeck = (card) => {
+	// HTML5 DnD handlers (robust across browsers)
+	const onDragStartDeck = (e, card) => {
+		try {
+			e.dataTransfer.setData('text/plain', String(card.id))
+			e.dataTransfer.effectAllowed = 'move'
+		} catch {
+			// Some browsers can throw here under odd conditions; ignore
+			void 0
+		}
 		setDraggedCard(card)
 		setDragSource('deck')
 	}
 
-	const onDragStartBucket = (card, bucket) => {
+	const onDragStartBucket = (e, card, bucket) => {
+		try {
+			e.dataTransfer.setData('text/plain', String(card.id))
+			e.dataTransfer.effectAllowed = 'move'
+		} catch {
+			// Some browsers can throw here under odd conditions; ignore
+			void 0
+		}
 		setDraggedCard(card)
 		setDragSource(bucket)
 	}
 
-	const onDrop = (bucket) => {
+	const onDragEnd = () => {
+		setActiveBucket(null)
+		setDraggedCard(null)
+		setDragSource(null)
+	}
+
+	const onDrop = (e, bucket) => {
+		if (e && e.preventDefault) e.preventDefault()
 		setActiveBucket(null)
 		if (!draggedCard) return
 		if (dragSource === 'deck') {
@@ -296,7 +316,8 @@ export default function DragDropCards() {
 		setDragSource(null)
 	}
 
-	const onDropToDeck = () => {
+	const onDropToDeck = (e) => {
+		if (e && e.preventDefault) e.preventDefault()
 		if (!draggedCard || !SEATS.includes(dragSource)) return
 		setBucketCards((prev) => ({
 			...prev,
@@ -310,21 +331,7 @@ export default function DragDropCards() {
 	// Keep deck ordered CDHS and by rank 2..A when cards return to the deck
 	const sortDeck = (arr) => {
 		const suitOrder = { Clubs: 0, Diamonds: 1, Hearts: 2, Spades: 3 }
-		const rankOrder = {
-			2: 2,
-			3: 3,
-			4: 4,
-			5: 5,
-			6: 6,
-			7: 7,
-			8: 8,
-			9: 9,
-			10: 10,
-			J: 11,
-			Q: 12,
-			K: 13,
-			A: 14,
-		}
+		const rankOrder = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, J: 11, Q: 12, K: 13, A: 14 }
 		return [...arr].sort((a, b) => {
 			const s = suitOrder[a.suit] - suitOrder[b.suit]
 			if (s !== 0) return s
@@ -420,9 +427,7 @@ export default function DragDropCards() {
 	const handleEmailPBN = () => {
 		if (savedHands.length === 0) return
 		const pbn = buildPBN(savedHands, startBoard)
-		const subject = encodeURIComponent(
-			"PBN hands from Bristol Bridge Club's PBN Picker"
-		)
+		const subject = encodeURIComponent("PBN hands from Bristol Bridge Club's PBN Picker")
 		const body = encodeURIComponent(pbn)
 		window.location.href = `mailto:dr.mark.oconnor@googlemail.com?subject=${subject}&body=${body}`
 	}
@@ -438,19 +443,13 @@ export default function DragDropCards() {
 		// Ace keeps calligraphic A, but symbol size increased
 		if (isA) {
 			return (
-				<div
-					className={`w-full h-full bg-[#FFF8E7] flex flex-col items-center justify-center ${suitClass}`}>
+				<div className={`w-full h-full bg-[#FFF8E7] flex flex-col items-center justify-center ${suitClass}`}>
 					<div
 						style={{ fontFamily: 'Apple Chancery, Snell Roundhand, cursive' }}
-						className={`${
-							largeCenter ? 'text-2xl' : 'text-base'
-						} leading-none italic`}>
+						className={`${largeCenter ? 'text-2xl' : 'text-base'} leading-none italic`}>
 						A
 					</div>
-					<div
-						className={`${
-							largeCenter ? 'text-2xl' : 'text-base'
-						} leading-none`}>
+					<div className={`${largeCenter ? 'text-2xl' : 'text-base'} leading-none`}>
 						{card.symbol}
 					</div>
 				</div>
@@ -458,12 +457,8 @@ export default function DragDropCards() {
 		}
 		// J/Q/K and number cards share the same clean face style
 		return (
-			<div
-				className={`w-full h-full bg-[#FFF8E7] flex flex-col items-center justify-center ${suitClass}`}>
-				<div
-					className={`${
-						largeCenter ? 'text-2xl' : 'text-lg'
-					} leading-none font-extrabold`}>
+			<div className={`w-full h-full bg-[#FFF8E7] flex flex-col items-center justify-center ${suitClass}`}>
+				<div className={`${largeCenter ? 'text-2xl' : 'text-lg'} leading-none font-extrabold`}>
 					{card.rank}
 				</div>
 				<div className={`${largeCenter ? 'text-2xl' : 'text-lg'} leading-none`}>
@@ -487,10 +482,8 @@ export default function DragDropCards() {
 		)
 		const hcp = hcpOfCards(bucketCards[id])
 		return (
-			<div
-				className={`rounded-xl overflow-hidden shadow-md border ${styles.border} ${styles.bg} ${highlight} w-56`}>
-				<div
-					className={`w-full ${styles.headerBg} ${styles.headerText} font-extrabold text-[11px] tracking-widest uppercase px-2 py-1.5 flex items-center justify-between`}>
+			<div className={`rounded-xl overflow-hidden shadow-md border ${styles.border} ${styles.bg} ${highlight} w-56`}>
+				<div className={`w-full ${styles.headerBg} ${styles.headerText} font-extrabold text-[11px] tracking-widest uppercase px-2 py-1.5 flex items-center justify-between`}>
 					<span>{styles.title}</span>
 					<span className="flex items-center gap-1">
 						{seatIsVul && (
@@ -498,9 +491,7 @@ export default function DragDropCards() {
 								V
 							</span>
 						)}
-						<span className="text-[10px] opacity-80">
-							{bucketCards[id].length}/13
-						</span>
+						<span className="text-[10px] opacity-80">{bucketCards[id].length}/13</span>
 					</span>
 				</div>
 				<div
@@ -509,7 +500,7 @@ export default function DragDropCards() {
 						setActiveBucket(id)
 					}}
 					onDragLeave={() => setActiveBucket(null)}
-					onDrop={() => onDrop(id)}
+					onDrop={(e) => onDrop(e, id)}
 					className={`min-h-[200px] p-1.5 flex flex-wrap gap-1 items-start justify-center`}>
 					{bucketCards[id].length === 0 && (
 						<span className="text-[10px] text-gray-400">Drag cards here</span>
@@ -518,15 +509,14 @@ export default function DragDropCards() {
 						<div
 							key={card.id}
 							draggable
-							onDragStart={() => onDragStartBucket(card, id)}
+							onDragStart={(e) => onDragStartBucket(e, card, id)}
+							onDragEnd={onDragEnd}
 							className={`${CARD_BUCKET}`}>
 							{renderFace(card, false)}
 						</div>
 					))}
 				</div>
-				<div className="px-3 pb-2 text-[10px] text-gray-700 font-semibold text-right">
-					HCP: {hcp}
-				</div>
+				<div className="px-3 pb-2 text-[10px] text-gray-700 font-semibold text-right">HCP: {hcp}</div>
 			</div>
 		)
 	}
@@ -536,11 +526,7 @@ export default function DragDropCards() {
 			{/* Top-right hints toggle */}
 			<div className="w-full flex justify-end">
 				<label className="text-[11px] text-gray-600 flex items-center gap-1 select-none">
-					<input
-						type="checkbox"
-						checked={hintsEnabled}
-						onChange={(e) => setHintsEnabled(e.target.checked)}
-					/>
+					<input type="checkbox" checked={hintsEnabled} onChange={(e) => setHintsEnabled(e.target.checked)} />
 					Hints
 				</label>
 			</div>
@@ -556,9 +542,15 @@ export default function DragDropCards() {
 
 			{/* Deck row */}
 			<div
-				className="flex flex-wrap gap-1 mb-2 justify-center"
+				className="flex flex-wrap gap-1 mb-2 justify-center min-h-[60px]"
 				onDragOver={(e) => {
-					if (SEATS.includes(dragSource)) e.preventDefault()
+					e.preventDefault()
+						try {
+							e.dataTransfer.dropEffect = 'move'
+						} catch {
+							// Some browsers can throw here under odd conditions; ignore
+							void 0
+						}
 				}}
 				onDrop={onDropToDeck}>
 				{cards.map((card) => {
@@ -567,16 +559,11 @@ export default function DragDropCards() {
 						<div
 							key={card.id}
 							draggable
-							onDragStart={() => onDragStartDeck(card)}
+							onDragStart={(e) => onDragStartDeck(e, card)}
+							onDragEnd={onDragEnd}
 							onClick={() => toggleSelect(card.id)}
-							className={`${CARD_DECK} ${
-								isSelected
-									? 'ring-4 ring-yellow-300 scale-105'
-									: 'hover:scale-105'
-							}`}
-							title={
-								hintsEnabled ? 'Click to select, drag to a seat' : undefined
-							}>
+							className={`${CARD_DECK} ${isSelected ? 'ring-4 ring-yellow-300 scale-105' : 'hover:scale-105'}`}
+							title={hintsEnabled ? 'Click to select, drag to a seat' : undefined}>
 							{renderFace(card, true)}
 						</div>
 					)
@@ -589,9 +576,7 @@ export default function DragDropCards() {
 					className="px-3 py-2 rounded bg-sky-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('N')}
 					disabled={selectedCount === 0 || bucketCards.N.length >= 13}
-					title={
-						hintsEnabled ? 'Send selected deck cards to North' : undefined
-					}>
+					title={hintsEnabled ? 'Send selected deck cards to North' : undefined}>
 					Send North
 				</button>
 				<button
@@ -612,9 +597,7 @@ export default function DragDropCards() {
 					className="px-3 py-2 rounded bg-emerald-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('S')}
 					disabled={selectedCount === 0 || bucketCards.S.length >= 13}
-					title={
-						hintsEnabled ? 'Send selected deck cards to South' : undefined
-					}>
+					title={hintsEnabled ? 'Send selected deck cards to South' : undefined}>
 					Send South
 				</button>
 			</div>
@@ -633,9 +616,7 @@ export default function DragDropCards() {
 			<div className="w-full flex items-center justify-center mt-1 mb-1">
 				<span className="text-[10px] text-gray-600">
 					Legend:{' '}
-					<span className="inline-block text-[9px] font-bold text-red-700 bg-red-100 border border-red-200 rounded px-1 py-0.5">
-						V
-					</span>{' '}
+					<span className="inline-block text-[9px] font-bold text-red-700 bg-red-100 border border-red-200 rounded px-1 py-0.5">V</span>{' '}
 					= Vulnerable on next board
 				</span>
 			</div>
@@ -643,9 +624,7 @@ export default function DragDropCards() {
 			{/* Pop-out PBN preview carousel under buckets (two-line scroll) */}
 			<div className="w-full">
 				<div className="flex items-center justify-center gap-2 mb-1">
-					<button
-						className="px-2 py-1 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300"
-						onClick={() => setShowPreview((v) => !v)}>
+					<button className="px-2 py-1 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300" onClick={() => setShowPreview((v) => !v)}>
 						{showPreview ? 'Hide PBN' : 'Show PBN'}
 					</button>
 					{showPreview && (
@@ -657,20 +636,12 @@ export default function DragDropCards() {
 								Prev
 							</button>
 							<div className="text-[10px] text-gray-600">
-								{slides.length > 0
-									? `Board ${startBoard + previewIndex} of ${
-											startBoard + slides.length - 1
-									  }`
-									: 'No boards saved'}
+								{slides.length > 0 ? `Board ${startBoard + previewIndex} of ${startBoard + slides.length - 1}` : 'No boards saved'}
 							</div>
 							<button
 								className="px-2 py-1 rounded bg-white text-gray-800 text-xs border border-gray-300 disabled:opacity-40"
-								onClick={() =>
-									setPreviewIndex((i) => Math.min(slides.length - 1, i + 1))
-								}
-								disabled={
-									previewIndex >= slides.length - 1 || slides.length <= 1
-								}>
+								onClick={() => setPreviewIndex((i) => Math.min(slides.length - 1, i + 1))}
+								disabled={previewIndex >= slides.length - 1 || slides.length <= 1}>
 								Next
 							</button>
 						</>
@@ -678,49 +649,33 @@ export default function DragDropCards() {
 				</div>
 				{showPreview && (
 					<pre className="whitespace-pre-wrap text-[10px] leading-tight bg-gray-50 border border-gray-200 rounded p-2 w-full h-10 overflow-y-auto">
-						{slides.length > 0
-							? slides[previewIndex]
-							: '// Save a hand to preview PBN'}
+						{slides.length > 0 ? slides[previewIndex] : '// Save a hand to preview PBN'}
 					</pre>
 				)}
 			</div>
 
 			{/* Toolbar in a single row */}
 			<div className="flex flex-wrap items-center justify-center gap-2 w-full mt-1">
-				<span className="font-modern text-[11px] text-gray-700 mr-2">
-					Selected: {selectedCount} • Remaining: {remaining}
-				</span>
+				<span className="font-modern text-[11px] text-gray-700 mr-2">Selected: {selectedCount} • Remaining: {remaining}</span>
 				<button
 					className="px-2 py-1.5 rounded bg-purple-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={handleRandomComplete}
 					disabled={remaining === 0}
-					title={
-						hintsEnabled
-							? 'Randomly deal remaining deck cards to seats'
-							: undefined
-					}>
+					title={hintsEnabled ? 'Randomly deal remaining deck cards to seats' : undefined}>
 					Random Complete
 				</button>
 				{selectedCount > 0 && (
 					<button
 						className="px-2 py-1.5 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300"
 						onClick={clearSelection}
-						title={
-							hintsEnabled
-								? 'Deselect currently selected deck cards'
-								: undefined
-						}>
+						title={hintsEnabled ? 'Deselect currently selected deck cards' : undefined}>
 						Clear Selection
 					</button>
 				)}
 				<button
 					className="px-2 py-1.5 rounded bg-gray-800 text-white text-xs hover:opacity-90"
 					onClick={resetBoard}
-					title={
-						hintsEnabled
-							? 'Clear all seats and return all cards to deck'
-							: undefined
-					}>
+					title={hintsEnabled ? 'Clear all seats and return all cards to deck' : undefined}>
 					Reset Board
 				</button>
 				<button
@@ -739,20 +694,12 @@ export default function DragDropCards() {
 				</button>
 				<button
 					className={`px-2 py-1.5 rounded text-white text-[10px] hover:opacity-90 disabled:opacity-40 ${
-						copyState === 'ok'
-							? 'bg-green-600'
-							: copyState === 'err'
-							? 'bg-rose-600'
-							: 'bg-teal-500'
+						copyState === 'ok' ? 'bg-green-600' : copyState === 'err' ? 'bg-rose-600' : 'bg-teal-500'
 					}`}
 					onClick={handleCopyPBN}
 					disabled={savedHands.length === 0}
 					title={hintsEnabled ? 'Copy PBN to clipboard' : undefined}>
-					{copyState === 'ok'
-						? 'Copied!'
-						: copyState === 'err'
-						? 'Copy failed'
-						: 'Copy'}
+					{copyState === 'ok' ? 'Copied!' : copyState === 'err' ? 'Copy failed' : 'Copy'}
 				</button>
 				<button
 					className="px-2 py-1.5 rounded bg-teal-500 text-white text-[10px] hover:opacity-90 disabled:opacity-40"
@@ -761,9 +708,7 @@ export default function DragDropCards() {
 					title={hintsEnabled ? 'Email PBN' : undefined}>
 					Email
 				</button>
-				<span className="text-[10px] text-gray-600">
-					Saved: {savedHands.length}
-				</span>
+				<span className="text-[10px] text-gray-600">Saved: {savedHands.length}</span>
 			</div>
 
 			{/* Danger zone: Delete PBN, kept separate */}
@@ -781,17 +726,12 @@ export default function DragDropCards() {
 			{showDeleteModal && (
 				<div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
 					<div className="bg-white rounded-lg shadow-xl border border-gray-200 w-[90%] max-w-sm p-4">
-						<h3 className="text-sm font-semibold text-gray-800 mb-2">
-							Delete all saved PBN deals?
-						</h3>
+						<h3 className="text-sm font-semibold text-gray-800 mb-2">Delete all saved PBN deals?</h3>
 						<p className="text-xs text-gray-700 mb-4">
-							This will remove all saved boards and reset the app to the start.
-							This action cannot be undone.
+							This will remove all saved boards and reset the app to the start. This action cannot be undone.
 						</p>
 						<div className="flex items-center justify-end gap-2">
-							<button
-								className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300"
-								onClick={() => setShowDeleteModal(false)}>
+							<button className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300" onClick={() => setShowDeleteModal(false)}>
 								Cancel
 							</button>
 							<button
@@ -810,9 +750,7 @@ export default function DragDropCards() {
 			{/* Mobile preview handled by unified preview section above */}
 
 			<div className="w-full flex items-center justify-center mt-1">
-				<a
-					href="/instructions"
-					className="text-[11px] text-sky-600 hover:underline">
+				<a href="/instructions" className="text-[11px] text-sky-600 hover:underline">
 					Read full instructions →
 				</a>
 			</div>
