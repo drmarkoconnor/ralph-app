@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+// Deck suit order: Clubs, Diamonds, Hearts, Spades (traditional CDHS)
 const suits = [
-	{ name: 'Spades', symbol: '♠' },
-	{ name: 'Hearts', symbol: '♥' },
-	{ name: 'Diamonds', symbol: '♦' },
 	{ name: 'Clubs', symbol: '♣' },
+	{ name: 'Diamonds', symbol: '♦' },
+	{ name: 'Hearts', symbol: '♥' },
+	{ name: 'Spades', symbol: '♠' },
 ]
 const ranks = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2']
 
@@ -54,22 +55,15 @@ function vulnerabilityForBoard(boardNo) {
 	]
 	return cycle[(boardNo - 1) % 16]
 }
+// Partner theming: N/S share a style; E/W share a different style
 const BUCKET_STYLES = {
 	N: {
 		title: 'NORTH',
-		bg: 'bg-sky-50',
-		border: 'border-sky-300',
-		headerBg: 'bg-sky-100',
-		headerText: 'text-sky-700',
-		ring: 'ring-sky-300',
-	},
-	E: {
-		title: 'EAST',
-		bg: 'bg-rose-50',
-		border: 'border-rose-300',
-		headerBg: 'bg-rose-100',
-		headerText: 'text-rose-700',
-		ring: 'ring-rose-300',
+		bg: 'bg-emerald-50',
+		border: 'border-emerald-300',
+		headerBg: 'bg-emerald-100',
+		headerText: 'text-emerald-700',
+		ring: 'ring-emerald-300',
 	},
 	S: {
 		title: 'SOUTH',
@@ -79,13 +73,21 @@ const BUCKET_STYLES = {
 		headerText: 'text-emerald-700',
 		ring: 'ring-emerald-300',
 	},
+	E: {
+		title: 'EAST',
+		bg: 'bg-rose-50',
+		border: 'border-rose-300',
+		headerBg: 'bg-rose-100',
+		headerText: 'text-rose-700',
+		ring: 'ring-rose-300',
+	},
 	W: {
 		title: 'WEST',
-		bg: 'bg-emerald-50',
-		border: 'border-emerald-300',
-		headerBg: 'bg-emerald-100',
-		headerText: 'text-emerald-700',
-		ring: 'ring-emerald-300',
+		bg: 'bg-rose-50',
+		border: 'border-rose-300',
+		headerBg: 'bg-rose-100',
+		headerText: 'text-rose-700',
+		ring: 'ring-rose-300',
 	},
 }
 
@@ -300,9 +302,34 @@ export default function DragDropCards() {
 			...prev,
 			[dragSource]: prev[dragSource].filter((c) => c.id !== draggedCard.id),
 		}))
-		setCards((prev) => [...prev, draggedCard])
+		setCards((prev) => sortDeck([...prev, draggedCard]))
 		setDraggedCard(null)
 		setDragSource(null)
+	}
+
+	// Keep deck ordered CDHS and by rank 2..A when cards return to the deck
+	const sortDeck = (arr) => {
+		const suitOrder = { Clubs: 0, Diamonds: 1, Hearts: 2, Spades: 3 }
+		const rankOrder = {
+			2: 2,
+			3: 3,
+			4: 4,
+			5: 5,
+			6: 6,
+			7: 7,
+			8: 8,
+			9: 9,
+			10: 10,
+			J: 11,
+			Q: 12,
+			K: 13,
+			A: 14,
+		}
+		return [...arr].sort((a, b) => {
+			const s = suitOrder[a.suit] - suitOrder[b.suit]
+			if (s !== 0) return s
+			return rankOrder[a.rank] - rankOrder[b.rank]
+		})
 	}
 
 	const sendSelectedTo = (bucket) => {
