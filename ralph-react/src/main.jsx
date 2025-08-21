@@ -5,9 +5,13 @@ import './index.css'
 import App from './App.jsx'
 import Instructions from './pages/Instructions.jsx'
 import Sources from './pages/Sources.jsx'
+import Home from './pages/Home.jsx'
+import Player from './pages/Player.jsx'
 
 const router = createBrowserRouter([
-	{ path: '/', element: <App /> },
+	{ path: '/', element: <Home /> },
+	{ path: '/picker', element: <App /> },
+	{ path: '/player', element: <Player /> },
 	{ path: '/instructions', element: <Instructions /> },
 	{ path: '/sources', element: <Sources /> },
 ])
