@@ -103,17 +103,7 @@ function hcpOfCards(cards) {
 	return cards.reduce((sum, c) => sum + (pts[c.rank] || 0), 0)
 }
 
-function isHonor(rank) {
-	return rank === 'A' || rank === 'K' || rank === 'Q' || rank === 'J'
-}
-
-function honorBg(rank) {
-	if (rank === 'K') return 'bg-gradient-to-br from-yellow-300 to-amber-400'
-	if (rank === 'Q') return 'bg-gradient-to-br from-fuchsia-300 to-pink-400'
-	if (rank === 'J') return 'bg-gradient-to-br from-blue-300 to-cyan-400'
-	// Ace keeps cream but with calligraphic A styling
-	return 'bg-[#FFF8E7]'
-}
+// (honor face styling now unified in renderFace; legacy helpers removed)
 
 function sortByPbnRank(cards) {
 	const order = {
@@ -215,6 +205,7 @@ export default function DragDropCards() {
 	const [previewIndex, setPreviewIndex] = useState(0)
 	const [copyState, setCopyState] = useState('idle') // idle | ok | err
 	const [hintsEnabled, setHintsEnabled] = useState(true)
+	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const copyTimerRef = useRef(null)
 	const { slides } = useMemo(() => {
 		const today = new Date()
@@ -258,6 +249,12 @@ export default function DragDropCards() {
 		setCards(initialCards)
 		setBucketCards({ N: [], E: [], S: [], W: [] })
 		setSelected(new Set())
+	}
+
+	const fullReset = () => {
+		setSavedHands([])
+		setStartBoard(1)
+		resetBoard()
 	}
 
 	const onDragStartDeck = (card) => {
@@ -451,7 +448,6 @@ export default function DragDropCards() {
 
 	const Bucket = ({ id }) => {
 		const styles = BUCKET_STYLES[id]
-		const isFull = bucketCards[id].length >= 13
 		const highlight = activeBucket === id ? `ring-2 ${styles.ring}` : ''
 		const nextBoardNo = startBoard + savedHands.length
 		const vul = vulnerabilityForBoard(nextBoardNo)
@@ -743,6 +739,47 @@ export default function DragDropCards() {
 				</span>
 			</div>
 
+			{/* Danger zone: Delete PBN, kept separate */}
+			<div className="w-full flex items-center justify-center mt-2">
+				<button
+					className="px-3 py-2 rounded bg-rose-600 text-white text-xs hover:bg-rose-700 disabled:opacity-40"
+					onClick={() => setShowDeleteModal(true)}
+					disabled={savedHands.length === 0}
+					title={hintsEnabled ? 'Delete all saved PBN boards' : undefined}>
+					Delete PBN
+				</button>
+			</div>
+
+			{/* Confirmation Modal */}
+			{showDeleteModal && (
+				<div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg shadow-xl border border-gray-200 w-[90%] max-w-sm p-4">
+						<h3 className="text-sm font-semibold text-gray-800 mb-2">
+							Delete all saved PBN deals?
+						</h3>
+						<p className="text-xs text-gray-700 mb-4">
+							This will remove all saved boards and reset the app to the start.
+							This action cannot be undone.
+						</p>
+						<div className="flex items-center justify-end gap-2">
+							<button
+								className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300"
+								onClick={() => setShowDeleteModal(false)}>
+								Cancel
+							</button>
+							<button
+								className="px-3 py-1.5 rounded bg-rose-600 text-white text-xs hover:bg-rose-700"
+								onClick={() => {
+									fullReset()
+									setShowDeleteModal(false)
+								}}>
+								Delete
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Mobile preview handled by unified preview section above */}
 
 			<div className="w-full flex items-center justify-center mt-1">
@@ -750,6 +787,12 @@ export default function DragDropCards() {
 					href="/instructions"
 					className="text-[11px] text-sky-600 hover:underline">
 					Read full instructions →
+				</a>
+			</div>
+
+			<div className="w-full flex items-center justify-center">
+				<a href="/sources" className="text-[11px] text-sky-600 hover:underline">
+					Browse public PBN sources →
 				</a>
 			</div>
 		</div>

@@ -90,6 +90,10 @@ export default function Instructions() {
 						<li>
 							Download/Copy/Email PBN lets you export saved deals in PBN format.
 						</li>
+						<li>
+							Delete PBN removes all saved boards after a confirmation. This is
+							kept separate from other controls to avoid accidental clicks.
+						</li>
 					</ul>
 				</section>
 
@@ -142,6 +146,11 @@ export default function Instructions() {
 				</section>
 
 				<footer className="mt-10 pt-4 border-t text-xs text-gray-600">
+					<div className="mb-2">
+						<a href="/sources" className="text-sky-600 hover:underline">
+							Browse public PBN sources →
+						</a>
+					</div>
 					<div>Copyright © Dr Mark O'Connor — {d}</div>
 					<div>
 						Enhancement requests:{' '}
