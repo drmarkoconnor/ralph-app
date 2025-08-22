@@ -184,6 +184,7 @@ export default function Player() {
 	const [showHcpWhenHidden, setShowHcpWhenHidden] = useState(false)
 	const [teacherMode, setTeacherMode] = useState(false)
 	const playIdxRef = useRef(0)
+	const lastTrickKeyRef = useRef('')
 
 	// Manual overrides when PBN lacks contract/declarer
 	const [manualDeclarer, setManualDeclarer] = useState('') // 'N'|'E'|'S'|'W'|''
@@ -436,6 +437,7 @@ export default function Player() {
 				// Start a new trick with this card; keep previous 4-card trick visible until now
 				nextTrick = [{ seat, card }]
 				setTurnSeat(rightOf(seat))
+				lastTrickKeyRef.current = ''
 				return nextTrick
 			}
 			nextTrick = [...prev, { seat, card }]
@@ -446,6 +448,15 @@ export default function Player() {
 			// Trick just completed with 4th card: determine winner and keep trick visible
 			resolvingRef.current = true
 			const winner = evaluateTrick(nextTrick, effTrump)
+			const key = nextTrick
+				.map((t) => `${t.seat}-${t.card.suit}-${t.card.rank}`)
+				.join('|')
+			if (lastTrickKeyRef.current === key) {
+				// prevent double-processing the same 4-card trick (e.g., in dev double invoke)
+				resolvingRef.current = false
+				return nextTrick
+			}
+			lastTrickKeyRef.current = key
 			if (winner) {
 				if (effDeclarer) {
 					const isDeclSide = isDeclarerSide(winner, effDeclarer)
@@ -694,7 +705,7 @@ export default function Player() {
 							</select>
 						</label>
 						<label className="flex items-center gap-1">
-							Strain
+							Trumps
 							<select
 								className="border rounded px-1 py-0.5"
 								value={manualStrain}
