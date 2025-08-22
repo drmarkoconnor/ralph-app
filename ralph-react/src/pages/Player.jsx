@@ -185,10 +185,26 @@ export default function Player() {
 	const [teacherMode, setTeacherMode] = useState(false)
 	const playIdxRef = useRef(0)
 
+	// Manual overrides when PBN lacks contract/declarer
+	const [manualDeclarer, setManualDeclarer] = useState('') // 'N'|'E'|'S'|'W'|''
+	const [manualLevel, setManualLevel] = useState('') // '1'..'7'|''
+	const [manualStrain, setManualStrain] = useState('') // 'C'|'D'|'H'|'S'|'NT'|''
+	const [manualDbl, setManualDbl] = useState('') // ''|'X'|'XX'
+
 	// Deals and current selection
 	const [deals, setDeals] = useState([])
 	const [index, setIndex] = useState(0)
 	const current = deals[index] || null
+
+	// Effective context with manual overrides
+	const effDeclarer = manualDeclarer || current?.declarer || ''
+	const effContract = useMemo(() => {
+		if (manualLevel && manualStrain) {
+			return `${manualLevel}${manualStrain}${manualDbl}`
+		}
+		return current?.contract || ''
+	}, [manualLevel, manualStrain, manualDbl, current?.contract])
+	const effTrump = parseTrump(effContract)
 
 	// Board state: remaining hands, per-suit tally of played cards, current trick, turn, and trick counts
 	const [remaining, setRemaining] = useState(null)
@@ -218,16 +234,12 @@ export default function Player() {
 	const playMoves = useMemo(() => {
 		if (!current?.play?.length) return []
 		try {
-			return parsePlayMoves(
-				current?.playLeader,
-				current.play,
-				current?.contract
-			)
+			return parsePlayMoves(current?.playLeader, current.play, effContract)
 		} catch (e) {
 			console.error('Failed to parse Play:', e)
 			return []
 		}
-	}, [current?.playLeader, current?.play, current?.contract])
+	}, [current?.playLeader, current?.play, effContract])
 
 	// Initialize/reinitialize board state when a new deal loads or context changes
 	useEffect(() => {
@@ -253,12 +265,28 @@ export default function Player() {
 		setTrick([])
 		setTricksDecl(0)
 		setTricksDef(0)
-		const leaderFromDec = current?.declarer
-			? leftOf(current.declarer)
+		const leaderFromDec = effDeclarer
+			? leftOf(effDeclarer)
 			: current?.dealer || 'N'
 		setTurnSeat(current?.playLeader || leaderFromDec)
 		setPlayIdx(0)
-	}, [hands, current?.declarer, current?.dealer, current?.playLeader])
+		// reset manual overrides when changing boards if the new board has contract/declarer
+		if (current?.contract) {
+			if (manualLevel || manualStrain || manualDbl) {
+				// clear manual when PBN already has contract
+				setManualLevel('')
+				setManualStrain('')
+				setManualDbl('')
+			}
+		}
+		if (current?.declarer && manualDeclarer) setManualDeclarer('')
+	}, [
+		hands,
+		current?.declarer,
+		current?.dealer,
+		current?.playLeader,
+		current?.contract,
+	])
 
 	// Apply PBN play moves up to k cards, recomputing from the initial hands
 	const applyMovesTo = useCallback(
@@ -273,8 +301,8 @@ export default function Player() {
 			}
 			const tl = { Spades: [], Hearts: [], Diamonds: [], Clubs: [] }
 			const trickArr = []
-			const trump = parseTrump(current?.contract)
-			const dec = current?.declarer
+			const trump = effTrump
+			const dec = effDeclarer || null
 			const leaderFromDec = dec ? leftOf(dec) : current?.dealer || 'N'
 			let nextSeat = current?.playLeader || leaderFromDec
 			let declTricks = 0
@@ -302,9 +330,13 @@ export default function Player() {
 					nextSeat = rightOf(seatForMove)
 				} else {
 					const winner = evaluateTrick(trickArr, trump)
-					if (isDeclarerSide(winner, dec)) declTricks++
-					else defTricks++
-					nextSeat = winner
+					if (winner) {
+						if (dec) {
+							if (isDeclarerSide(winner, dec)) declTricks++
+							else defTricks++
+						}
+						nextSeat = winner
+					}
 					// keep the completed trick visible if we've reached the target step;
 					// only clear when there are more moves to apply
 					if (i < maxK - 1) {
@@ -324,8 +356,8 @@ export default function Player() {
 		[
 			hands,
 			playMoves,
-			current?.contract,
-			current?.declarer,
+			effContract,
+			effDeclarer,
 			current?.dealer,
 			current?.playLeader,
 		]
@@ -386,7 +418,9 @@ export default function Player() {
 		const hasLead = leadSuit ? pool.some((c) => c.suit === leadSuit) : false
 		if (leadSuit && hasLead && chosen.suit !== leadSuit) return
 
+		// Guard against any malformed card
 		const card = chosen
+		if (!/^(A|K|Q|J|10|[2-9])$/.test(card.rank)) return
 		setRemaining((prev) => ({
 			...prev,
 			[seat]: prev[seat].filter((c) => c.id !== cardId),
@@ -397,23 +431,31 @@ export default function Player() {
 		}))
 
 		setTrick((prev) => {
-			const nextTrick = [...prev, { seat, card }]
+			let nextTrick
+			if (prev.length === 4) {
+				// Start a new trick with this card; keep previous 4-card trick visible until now
+				nextTrick = [{ seat, card }]
+				setTurnSeat(rightOf(seat))
+				return nextTrick
+			}
+			nextTrick = [...prev, { seat, card }]
 			if (nextTrick.length < 4) {
 				setTurnSeat(rightOf(seat))
-			} else {
-				resolvingRef.current = true
-				const trump = parseTrump(current?.contract)
-				const winner = evaluateTrick(nextTrick, trump)
-				const isDeclSide = isDeclarerSide(winner, current?.declarer)
-				if (isDeclSide) setTricksDecl((n) => n + 1)
-				else setTricksDef((n) => n + 1)
-				setTurnSeat(winner)
-				// queue clearing the trick after render
-				setTimeout(() => {
-					setTrick([])
-					resolvingRef.current = false
-				}, 0)
+				return nextTrick
 			}
+			// Trick just completed with 4th card: determine winner and keep trick visible
+			resolvingRef.current = true
+			const winner = evaluateTrick(nextTrick, effTrump)
+			if (winner) {
+				if (effDeclarer) {
+					const isDeclSide = isDeclarerSide(winner, effDeclarer)
+					if (isDeclSide) setTricksDecl((n) => n + 1)
+					else setTricksDef((n) => n + 1)
+				}
+				setTurnSeat(winner)
+			}
+			// Do not clear here; keep visible until next card is played
+			resolvingRef.current = false
 			return nextTrick
 		})
 	}
@@ -429,7 +471,7 @@ export default function Player() {
 		: 'Manual play'
 
 	const result = useMemo(() => {
-		if (!current?.contract || !current?.declarer) return null
+		if (!effContract || !effDeclarer) return null
 		const completed = tricksDecl + tricksDef
 		const remainingTricks = Math.max(0, 13 - completed)
 		const isFinished = playIdx >= totalMoves
@@ -444,20 +486,15 @@ export default function Player() {
 				? tricksDecl + remainingTricks
 				: null
 		if (assumedDecl == null) return { partial: true }
-		const vul = isSeatVul(current.declarer, current.vul)
-		return computeDuplicateScore(
-			current.contract,
-			current.declarer,
-			vul,
-			assumedDecl
-		)
+		const vul = isSeatVul(effDeclarer, current.vul)
+		return computeDuplicateScore(effContract, effDeclarer, vul, assumedDecl)
 	}, [
 		playIdx,
 		totalMoves,
 		tricksDecl,
 		tricksDef,
-		current?.contract,
-		current?.declarer,
+		effContract,
+		effDeclarer,
 		current?.vul,
 		current?.resultTricks,
 	])
@@ -467,8 +504,8 @@ export default function Player() {
 		const k = Math.max(0, Math.min(playIdx, playMoves.length))
 		if (k === 0) return []
 		const rounds = []
-		const trump = parseTrump(current?.contract)
-		const dec = current?.declarer
+		const trump = effTrump
+		const dec = effDeclarer
 		const leaderFromDec = dec ? leftOf(dec) : current?.dealer || 'N'
 		let nextSeat = current?.playLeader || leaderFromDec
 		let cur = []
@@ -565,9 +602,9 @@ export default function Player() {
 									deals.length
 							  }`
 							: 'No file loaded'}
-						{current?.contract
-							? ` • Contract: ${current.contract}${
-									current?.declarer ? ` (${current.declarer})` : ''
+						{effContract
+							? ` • Contract: ${effContract}${
+									effDeclarer ? ` (${effDeclarer})` : ''
 							  }`
 							: ' • No bidding found'}
 					</div>
@@ -611,20 +648,77 @@ export default function Player() {
 					</label>
 				</div>
 
-				{hideDefenders &&
-					turnSeat &&
-					isDefender(turnSeat, current?.declarer) && (
-						<div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">
-							Defender's turn is hidden — unhide defenders to choose a card.
-						</div>
-					)}
+				{hideDefenders && turnSeat && isDefender(turnSeat, effDeclarer) && (
+					<div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">
+						Defender's turn is hidden — unhide defenders to choose a card.
+					</div>
+				)}
 
 				{current?.auction?.length ? (
 					<AuctionView
 						dealer={current.auctionDealer || current.dealer}
 						calls={current.auction}
-						finalContract={current.contract}
+						finalContract={effContract}
 					/>
+				) : null}
+
+				{/* Manual contract/declarer controls when missing in PBN */}
+				{!current?.contract ? (
+					<div className="mb-2 rounded border bg-white p-2 text-xs text-gray-700 flex flex-wrap items-center gap-2">
+						<span className="font-semibold">Set contract:</span>
+						<label className="flex items-center gap-1">
+							Declarer
+							<select
+								className="border rounded px-1 py-0.5"
+								value={manualDeclarer}
+								onChange={(e) => setManualDeclarer(e.target.value)}>
+								<option value="">—</option>
+								<option value="N">N</option>
+								<option value="E">E</option>
+								<option value="S">S</option>
+								<option value="W">W</option>
+							</select>
+						</label>
+						<label className="flex items-center gap-1">
+							Level
+							<select
+								className="border rounded px-1 py-0.5"
+								value={manualLevel}
+								onChange={(e) => setManualLevel(e.target.value)}>
+								<option value="">—</option>
+								{['1', '2', '3', '4', '5', '6', '7'].map((lv) => (
+									<option key={lv} value={lv}>
+										{lv}
+									</option>
+								))}
+							</select>
+						</label>
+						<label className="flex items-center gap-1">
+							Strain
+							<select
+								className="border rounded px-1 py-0.5"
+								value={manualStrain}
+								onChange={(e) => setManualStrain(e.target.value)}>
+								<option value="">—</option>
+								<option value="C">C</option>
+								<option value="D">D</option>
+								<option value="H">H</option>
+								<option value="S">S</option>
+								<option value="NT">NT</option>
+							</select>
+						</label>
+						<label className="flex items-center gap-1">
+							Dbl
+							<select
+								className="border rounded px-1 py-0.5"
+								value={manualDbl}
+								onChange={(e) => setManualDbl(e.target.value)}>
+								<option value="">—</option>
+								<option value="X">X</option>
+								<option value="XX">XX</option>
+							</select>
+						</label>
+					</div>
 				) : null}
 
 				{/* Current Trick panel with integrated stepper controls */}
@@ -639,6 +733,7 @@ export default function Player() {
 					onPrev={() => applyMovesTo(playIdx - 1)}
 					onNext={() => applyMovesTo(playIdx + 1)}
 					resultTag={current?.resultTricks}
+					completedTricks={tricksDecl + tricksDef}
 					finishedBanner={
 						result && !result.partial
 							? `${result.resultText} • Score ${result.score > 0 ? '+' : ''}${
@@ -690,8 +785,8 @@ export default function Player() {
 						showHcpWhenHidden={showHcpWhenHidden}
 						dealer={current?.dealer}
 						vulnerable={current?.vul}
-						declarer={current?.declarer}
-						contract={current?.contract}
+						declarer={effDeclarer}
+						contract={effContract}
 						players={current?.players || {}}
 						result={result}
 						turnSeat={turnSeat}
@@ -699,7 +794,7 @@ export default function Player() {
 						tally={tally}
 						tricksDecl={tricksDecl}
 						tricksDef={tricksDef}
-						neededToSet={neededToSet(current?.contract)}
+						neededToSet={neededToSet(effContract)}
 						teacherMode={teacherMode}
 					/>
 				) : (
@@ -1054,12 +1149,18 @@ function CurrentTrick({
 	onNext,
 	finishedBanner,
 	resultTag,
+	completedTricks,
 }) {
 	const order = ['N', 'E', 'S', 'W']
 	const items = Array.isArray(trick) ? trick : []
 	const safeIdx = Math.min(Math.max(0, idx), Math.max(0, totalMoves - 1))
 	const helper = helperText
-	const completed = hasPlay ? Math.floor(idx / 4) : 0
+	const completed =
+		typeof completedTricks === 'number'
+			? completedTricks
+			: hasPlay
+			? Math.floor(idx / 4)
+			: 0
 	return (
 		<div
 			className={`mt-2 rounded-xl border p-3 w-full max-w-[820px] ${
@@ -1294,15 +1395,18 @@ function dealToHands(dealStr) {
 	for (let i = 0; i < 4; i++) {
 		const seat = seats[(startIdx + i) % 4]
 		const seg = segs[i]
-		const [s, h, d, c] = seg.split('.').map((x) => x || '')
+		const [s, h, d, c] = seg.split('.').map((x) => (x && x !== '-' ? x : ''))
 		const parseSuit = (suitName, str) =>
-			Array.from(str).map((ch) => ({
-				id: `${seat}-${suitName}-${ch}-${Math.random()
-					.toString(36)
-					.slice(2, 7)}`,
-				suit: suitName,
-				rank: ch === 'T' ? '10' : ch,
-			}))
+			Array.from(str)
+				.map((ch) => ch.toUpperCase())
+				.filter((ch) => /^(?:[AKQJT2-9])$/.test(ch))
+				.map((ch) => ({
+					id: `${seat}-${suitName}-${ch}-${Math.random()
+						.toString(36)
+						.slice(2, 7)}`,
+					suit: suitName,
+					rank: ch === 'T' ? '10' : ch,
+				}))
 		const cards = [
 			...parseSuit('Spades', s),
 			...parseSuit('Hearts', h),
@@ -1457,39 +1561,19 @@ function parseTrump(contract) {
 	return null
 }
 function evaluateTrick(trickArr, trumpSuit) {
+	if (!Array.isArray(trickArr) || trickArr.length === 0) return null
 	const leadSuit = trickArr[0].card.suit
-	let winner = trickArr[0]
-	for (let i = 1; i < trickArr.length; i++) {
-		const t = trickArr[i]
-		if (trumpSuit) {
-			const wTrump = winner.card.suit === trumpSuit
-			const tTrump = t.card.suit === trumpSuit
-			if (tTrump && !wTrump) {
-				winner = t
-				continue
-			}
-			if (tTrump && wTrump) {
-				if (rankValue(t.card.rank) > rankValue(winner.card.rank)) winner = t
-				continue
-			}
-			// Neither is trump: compare by lead suit
-			if (
-				winner.card.suit !== trumpSuit &&
-				t.card.suit === leadSuit &&
-				winner.card.suit === leadSuit &&
-				rankValue(t.card.rank) > rankValue(winner.card.rank)
-			) {
-				winner = t
-			}
-		} else {
-			if (
-				t.card.suit === leadSuit &&
-				rankValue(t.card.rank) > rankValue(winner.card.rank)
-			)
-				winner = t
-		}
+	const inTrump = trumpSuit
+		? trickArr.filter((p) => p.card.suit === trumpSuit)
+		: []
+	const pool = inTrump.length
+		? inTrump
+		: trickArr.filter((p) => p.card.suit === leadSuit)
+	let best = pool[0]
+	for (let i = 1; i < pool.length; i++) {
+		if (rankValue(pool[i].card.rank) > rankValue(best.card.rank)) best = pool[i]
 	}
-	return winner.seat
+	return best.seat
 }
 function isDeclarerSide(seat, declarer) {
 	if (!declarer) return false
