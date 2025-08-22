@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 // Minimal PBN parser extended to capture metadata (Event/Site/Date) and player names (North/East/South/West)
@@ -50,6 +50,16 @@ function parsePBN(text) {
 		if (tag === 'Deal') current.deal = val
 		if (tag === 'Contract') current.contract = val
 		if (tag === 'Declarer') current.declarer = val
+		if (tag === 'Result') {
+			const n = parseInt(val, 10)
+			if (!Number.isNaN(n)) current.resultTricks = n
+			continue
+		}
+		if (tag === 'Score') {
+			const n = parseInt(val, 10)
+			if (!Number.isNaN(n)) current.scoreTag = n
+			continue
+		}
 		if (tag === 'Auction') {
 			inAuction = true
 			current.auction = []
@@ -151,6 +161,17 @@ function AuctionView({ dealer, calls, finalContract }) {
 		</div>
 	)
 }
+
+// Treat common placeholder tokens as missing metadata
+function cleanMetaVal(val) {
+	if (val == null) return ''
+	const t = String(val).trim()
+	if (!t) return ''
+	if (/^#+$/.test(t)) return '' // '##' '###'
+	if (/^\?+$/.test(t)) return '' // '?' '??' '???'
+	if (t === '-' || /^N\/?A$/i.test(t)) return ''
+	return t
+}
 export default function Player() {
 	// Controlled stepper index (how many cards from playMoves applied)
 	const [playIdx, setPlayIdx] = useState(0)
@@ -161,11 +182,27 @@ export default function Player() {
 	const [hideDefenders, setHideDefenders] = useState(false)
 	const [showSuitTally, setShowSuitTally] = useState(false)
 	const [showHcpWhenHidden, setShowHcpWhenHidden] = useState(false)
+	const [teacherMode, setTeacherMode] = useState(false)
+	const playIdxRef = useRef(0)
 
 	// Deals and current selection
 	const [deals, setDeals] = useState([])
 	const [index, setIndex] = useState(0)
 	const current = deals[index] || null
+
+	// Board state: remaining hands, per-suit tally of played cards, current trick, turn, and trick counts
+	const [remaining, setRemaining] = useState(null)
+	const [tally, setTally] = useState({
+		Spades: [],
+		Hearts: [],
+		Diamonds: [],
+		Clubs: [],
+	})
+	const [trick, setTrick] = useState([])
+	const [turnSeat, setTurnSeat] = useState(null)
+	const [tricksDecl, setTricksDecl] = useState(0)
+	const [tricksDef, setTricksDef] = useState(0)
+	const resolvingRef = useRef(false)
 
 	// Derived: parsed hands and play moves
 	const hands = useMemo(() => {
@@ -181,161 +218,148 @@ export default function Player() {
 	const playMoves = useMemo(() => {
 		if (!current?.play?.length) return []
 		try {
-			return parsePlayMoves(current?.playLeader, current.play)
+			return parsePlayMoves(
+				current?.playLeader,
+				current.play,
+				current?.contract
+			)
 		} catch (e) {
 			console.error('Failed to parse Play:', e)
 			return []
 		}
-	}, [current?.playLeader, current?.play])
+	}, [current?.playLeader, current?.play, current?.contract])
 
-	// Interactive state: remaining hands per seat
-	const [remaining, setRemaining] = useState(null)
-	const [tally, setTally] = useState({
-		Spades: [],
-		Hearts: [],
-		Diamonds: [],
-		Clubs: [],
-	})
-	const [turnSeat, setTurnSeat] = useState(null)
-	const [trick, setTrick] = useState([]) // [{seat, card}]
-	const [tricksDecl, setTricksDecl] = useState(0)
-	const [tricksDef, setTricksDef] = useState(0)
-	// Guard to avoid double-resolving a trick on rapid clicks/renders
-	const resolvingRef = useRef(false)
-
-	// Initialize when hands change (new file or board)
+	// Initialize/reinitialize board state when a new deal loads or context changes
 	useEffect(() => {
-		if (hands) {
-			setRemaining(hands)
-			setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
-			setTrick([])
-			setTricksDecl(0)
-			setTricksDef(0)
-			const dec = current?.declarer
-			const leaderFromDec = dec ? leftOf(dec) : current?.dealer || 'N'
-			const leader = current?.playLeader || leaderFromDec
-			setTurnSeat(leader)
-			setPlayIdx(0)
-		} else {
+		if (!hands) {
 			setRemaining(null)
 			setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
 			setTrick([])
+			setTurnSeat(null)
 			setTricksDecl(0)
 			setTricksDef(0)
-			setTurnSeat(null)
+			setPlayIdx(0)
+			return
 		}
-	}, [hands, current?.declarer, current?.dealer, current?.playLeader])
-
-	// Apply PBN play moves up to k cards, recomputing from the initial hands
-	function applyMovesTo(k) {
-		if (!hands) return
-		const maxK = Math.max(0, Math.min(k, playMoves.length))
-		const rem = {
+		// Seed from hands; determine initial leader: Play tag, else left of declarer, else dealer
+		const seed = {
 			N: [...hands.N],
 			E: [...hands.E],
 			S: [...hands.S],
 			W: [...hands.W],
 		}
-		const tl = { Spades: [], Hearts: [], Diamonds: [], Clubs: [] }
-		const trickArr = []
-		const trump = parseTrump(current?.contract)
-		const dec = current?.declarer
-		const leaderFromDec = dec ? leftOf(dec) : current?.dealer || 'N'
-		let nextSeat = current?.playLeader || leaderFromDec
-		let declTricks = 0
-		let defTricks = 0
+		setRemaining(seed)
+		setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
+		setTrick([])
+		setTricksDecl(0)
+		setTricksDef(0)
+		const leaderFromDec = current?.declarer
+			? leftOf(current.declarer)
+			: current?.dealer || 'N'
+		setTurnSeat(current?.playLeader || leaderFromDec)
+		setPlayIdx(0)
+	}, [hands, current?.declarer, current?.dealer, current?.playLeader])
 
-		const takeFromSeat = (seat, suit, rank) => {
-			let idx = rem[seat].findIndex((c) => c.suit === suit && c.rank === rank)
-			if (idx === -1 && rank === '10')
-				idx = rem[seat].findIndex((c) => c.suit === suit && c.rank === 'T')
-			if (idx === -1 && rank === 'T')
-				idx = rem[seat].findIndex((c) => c.suit === suit && c.rank === '10')
-			if (idx === -1) return null
-			const [card] = rem[seat].splice(idx, 1)
-			return card
-		}
+	// Apply PBN play moves up to k cards, recomputing from the initial hands
+	const applyMovesTo = useCallback(
+		(k) => {
+			if (!hands) return
+			const maxK = Math.max(0, Math.min(k, playMoves.length))
+			const rem = {
+				N: [...hands.N],
+				E: [...hands.E],
+				S: [...hands.S],
+				W: [...hands.W],
+			}
+			const tl = { Spades: [], Hearts: [], Diamonds: [], Clubs: [] }
+			const trickArr = []
+			const trump = parseTrump(current?.contract)
+			const dec = current?.declarer
+			const leaderFromDec = dec ? leftOf(dec) : current?.dealer || 'N'
+			let nextSeat = current?.playLeader || leaderFromDec
+			let declTricks = 0
+			let defTricks = 0
 
-		for (let i = 0; i < maxK; i++) {
-			const mv = playMoves[i]
-			const card = takeFromSeat(nextSeat, mv.suit, mv.rank)
-			if (!card) break
-			tl[card.suit] = [...tl[card.suit], card]
-			trickArr.push({ seat: nextSeat, card })
-			if (trickArr.length < 4) {
-				nextSeat = rightOf(nextSeat)
-			} else {
-			// Keyboard shortcuts for stepping through play
-			useEffect(() => {
-				const onKey = (e) => {
-					// Avoid when typing in inputs/textareas
-					const tag = (e.target && e.target.tagName) || ''
-					if (/(INPUT|TEXTAREA|SELECT)/.test(tag)) return
-					if (e.key === 'ArrowRight') {
-						e.preventDefault()
-						applyMovesTo(playIdx + 1)
+			const takeFromSeat = (seat, suit, rank) => {
+				let idx = rem[seat].findIndex((c) => c.suit === suit && c.rank === rank)
+				if (idx === -1 && rank === '10')
+					idx = rem[seat].findIndex((c) => c.suit === suit && c.rank === 'T')
+				if (idx === -1 && rank === 'T')
+					idx = rem[seat].findIndex((c) => c.suit === suit && c.rank === '10')
+				if (idx === -1) return null
+				const [card] = rem[seat].splice(idx, 1)
+				return card
+			}
+
+			for (let i = 0; i < maxK; i++) {
+				const mv = playMoves[i]
+				const seatForMove = mv.seat || nextSeat
+				const card = takeFromSeat(seatForMove, mv.suit, mv.rank)
+				if (!card) break
+				tl[card.suit] = [...tl[card.suit], card]
+				trickArr.push({ seat: seatForMove, card })
+				if (trickArr.length < 4) {
+					nextSeat = rightOf(seatForMove)
+				} else {
+					const winner = evaluateTrick(trickArr, trump)
+					if (isDeclarerSide(winner, dec)) declTricks++
+					else defTricks++
+					nextSeat = winner
+					// keep the completed trick visible if we've reached the target step;
+					// only clear when there are more moves to apply
+					if (i < maxK - 1) {
+						trickArr.length = 0
 					}
-					if (e.key === 'ArrowLeft') {
-						e.preventDefault()
-						applyMovesTo(playIdx - 1)
-					}
-				}
-				window.addEventListener('keydown', onKey)
-				return () => window.removeEventListener('keydown', onKey)
-			}, [playIdx, applyMovesTo])
-				const winner = evaluateTrick(trickArr, trump)
-		function parsePlayMoves(playLeader, lines) {
-			// Accept common PBN token formats: "S: A", "S:A", "SA", "S10", or separate suit then rank
-			const moves = []
-			for (const rawLine of lines) {
-				const line = rawLine.replace(/[|]/g, ' ').replace(/[,;]/g, ' ')
-				const parts = line.split(/\s+/).filter(Boolean)
-				let pendingSuit = null
-				for (let i = 0; i < parts.length; i++) {
-					const tok0 = parts[i].replace(/[.]+$/g, '') // strip trailing dots used as trick separators
-					// Patterns
-					let m
-					// 1) "S:" then next token rank
-					m = tok0.match(/^([SHDC]):$/i)
-					if (m) {
-						const r = parts[i + 1]
-						if (r) {
-							moves.push({ suit: suitName(m[1]), rank: normalizeRank(r) })
-							i++
-							continue
-						}
-					}
-					// 2) "S:9" or "S:A"
-					m = tok0.match(/^([SHDC]):([AKQJT2-9]|10)$/i)
-					if (m) {
-						moves.push({ suit: suitName(m[1]), rank: normalizeRank(m[2]) })
-						continue
-					}
-					// 3) "S9", "SA", "S10"
-					m = tok0.match(/^([SHDC])([AKQJT2-9]|10)$/i)
-					if (m) {
-						moves.push({ suit: suitName(m[1]), rank: normalizeRank(m[2]) })
-						continue
-					}
-					// 4) Suit alone followed by separate rank token
-					m = tok0.match(/^([SHDC])$/i)
-					if (m) {
-						pendingSuit = suitName(m[1])
-						continue
-					}
-					if (pendingSuit) {
-						const rnk = tok0.match(/^([AKQJT2-9]|10)$/i)
-						if (rnk) {
-							moves.push({ suit: pendingSuit, rank: normalizeRank(rnk[1]) })
-							pendingSuit = null
-							continue
-						}
-					}
-					// Otherwise ignore token
 				}
 			}
-			return moves
+
+			setRemaining(rem)
+			setTally(tl)
+			setTrick(trickArr)
+			setTricksDecl(declTricks)
+			setTricksDef(defTricks)
+			setTurnSeat(nextSeat)
+			setPlayIdx(maxK)
+		},
+		[
+			hands,
+			playMoves,
+			current?.contract,
+			current?.declarer,
+			current?.dealer,
+			current?.playLeader,
+		]
+	)
+
+	// Keep a ref of playIdx for keyboard handler without depending on it
+	useEffect(() => {
+		playIdxRef.current = playIdx
+	}, [playIdx])
+
+	// Keyboard shortcuts for stepping (Left/Right arrows)
+	useEffect(() => {
+		const onKey = (e) => {
+			const tag = String(e.target?.tagName || '').toLowerCase()
+			if (
+				tag === 'input' ||
+				tag === 'textarea' ||
+				tag === 'select' ||
+				e.target?.isContentEditable
+			)
+				return
+			if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+			if (e.key === 'ArrowLeft') {
+				e.preventDefault()
+				applyMovesTo(playIdxRef.current - 1)
+			}
+			if (e.key === 'ArrowRight') {
+				e.preventDefault()
+				applyMovesTo(playIdxRef.current + 1)
+			}
 		}
+		window.addEventListener('keydown', onKey)
+		return () => window.removeEventListener('keydown', onKey)
+	}, [applyMovesTo])
 	const onFile = async (e) => {
 		const file = e.target.files?.[0]
 		if (!file) return
@@ -405,29 +429,20 @@ export default function Player() {
 		: 'Manual play'
 
 	const result = useMemo(() => {
-	// Keyboard shortcuts for stepping (Left/Right arrows)
-	useEffect(() => {
-		const onKey = (e) => {
-			const tag = String(e.target?.tagName || '').toLowerCase()
-			if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable) return
-			if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
-			if (e.key === 'ArrowLeft') {
-				e.preventDefault()
-				applyMovesTo(playIdx - 1)
-			}
-			if (e.key === 'ArrowRight') {
-				e.preventDefault()
-				applyMovesTo(playIdx + 1)
-			}
-		}
-		window.addEventListener('keydown', onKey)
-		return () => window.removeEventListener('keydown', onKey)
-	}, [playIdx])
 		if (!current?.contract || !current?.declarer) return null
 		const completed = tricksDecl + tricksDef
 		const remainingTricks = Math.max(0, 13 - completed)
 		const isFinished = playIdx >= totalMoves
-		const assumedDecl = isFinished ? tricksDecl + remainingTricks : null
+		// Prefer explicit Result from PBN when provided
+		const declFromTag = Number.isFinite(current?.resultTricks)
+			? current.resultTricks
+			: null
+		const assumedDecl =
+			declFromTag != null
+				? declFromTag
+				: isFinished
+				? tricksDecl + remainingTricks
+				: null
 		if (assumedDecl == null) return { partial: true }
 		const vul = isSeatVul(current.declarer, current.vul)
 		return computeDuplicateScore(
@@ -444,6 +459,48 @@ export default function Player() {
 		current?.contract,
 		current?.declarer,
 		current?.vul,
+		current?.resultTricks,
+	])
+
+	// Build trick history up to current index (completed tricks + optional partial)
+	const trickHistory = useMemo(() => {
+		const k = Math.max(0, Math.min(playIdx, playMoves.length))
+		if (k === 0) return []
+		const rounds = []
+		const trump = parseTrump(current?.contract)
+		const dec = current?.declarer
+		const leaderFromDec = dec ? leftOf(dec) : current?.dealer || 'N'
+		let nextSeat = current?.playLeader || leaderFromDec
+		let cur = []
+		for (let i = 0; i < k; i++) {
+			const mv = playMoves[i]
+			const seat = mv.seat || nextSeat
+			cur.push({ seat, suit: mv.suit, rank: mv.rank })
+			if (cur.length < 4) {
+				nextSeat = rightOf(seat)
+			} else {
+				const winner = evaluateTrick(
+					cur.map((x) => ({
+						seat: x.seat,
+						card: { suit: x.suit, rank: x.rank },
+					})),
+					trump
+				)
+				rounds.push({ cards: cur, winner })
+				nextSeat = winner
+				cur = []
+			}
+		}
+		// include partial trick if any
+		if (cur.length > 0) rounds.push({ cards: cur, winner: null })
+		return rounds
+	}, [
+		playIdx,
+		playMoves,
+		current?.contract,
+		current?.declarer,
+		current?.dealer,
+		current?.playLeader,
 	])
 
 	return (
@@ -451,25 +508,34 @@ export default function Player() {
 			<div className="w-full max-w-5xl">
 				<div className="flex items-center justify-between mb-4">
 					<div>
-						<h1 className="text-3xl font-bold text-gray-800">
-							Tournament PBN Player (beta)
-						</h1>
-						{current?.meta ? (
-							<div className="text-xs text-gray-600">
-								{[
-									current?.meta?.event ? `${current.meta.event}` : null,
-									current?.meta?.date ? `${current.meta.date}` : null,
-									current?.meta?.site ? `${current.meta.site}` : null,
-								]
-									.filter(Boolean)
-									.join(' • ')}
-							</div>
-						) : null}
+						{(() => {
+							const ev = cleanMetaVal(current?.meta?.event)
+							const dt = cleanMetaVal(current?.meta?.date)
+							const st = cleanMetaVal(current?.meta?.site)
+							const title =
+								ev || (selectedName ? selectedName : 'Tournament PBN Player')
+							const subtitle = [dt || null, st || null]
+								.filter(Boolean)
+								.join(' • ')
+							return (
+								<>
+									<h1 className="text-3xl font-bold text-gray-800">{title}</h1>
+									{subtitle ? (
+										<div className="text-xs text-gray-600">{subtitle}</div>
+									) : null}
+								</>
+							)
+						})()}
 					</div>
 					<Link to="/" className="text-sm text-sky-600 hover:underline">
 						← Home
 					</Link>
 				</div>
+
+				{/* Teacher mode overlay */}
+				{teacherMode ? (
+					<div className="fixed inset-0 bg-gradient-to-b from-slate-900/60 via-slate-900/40 to-slate-900/30 backdrop-blur-[2px] z-30 pointer-events-none" />
+				) : null}
 
 				<div className="flex items-center gap-3 mb-3">
 					<input
@@ -535,6 +601,14 @@ export default function Player() {
 						/>{' '}
 						Show HCP for declarer/dummy when hidden
 					</label>
+					<label className="text-sm text-gray-700 flex items-center gap-1">
+						<input
+							type="checkbox"
+							checked={teacherMode}
+							onChange={(e) => setTeacherMode(e.target.checked)}
+						/>{' '}
+						Teacher mode
+					</label>
 				</div>
 
 				{hideDefenders &&
@@ -555,6 +629,7 @@ export default function Player() {
 
 				{/* Current Trick panel with integrated stepper controls */}
 				<CurrentTrick
+					teacherMode={teacherMode}
 					trick={trick}
 					turnSeat={turnSeat}
 					hasPlay={!!totalMoves}
@@ -563,6 +638,7 @@ export default function Player() {
 					idx={playIdx}
 					onPrev={() => applyMovesTo(playIdx - 1)}
 					onNext={() => applyMovesTo(playIdx + 1)}
+					resultTag={current?.resultTricks}
 					finishedBanner={
 						result && !result.partial
 							? `${result.resultText} • Score ${result.score > 0 ? '+' : ''}${
@@ -571,6 +647,38 @@ export default function Player() {
 							: null
 					}
 				/>
+
+				{/* Trick history */}
+				{trickHistory.length ? (
+					<div className="mt-2 rounded-lg border bg-white p-2 w-full max-w-[820px] text-xs text-gray-700 relative z-40">
+						<div className="font-semibold mb-1">Trick history</div>
+						<div className="flex flex-col gap-1">
+							{trickHistory.map((t, i) => (
+								<div key={`th-${i}`} className="leading-tight">
+									{t.cards
+										.map((c, j) => {
+											const token = `${c.rank}${suitLetter(c.suit)}`
+											const isWin = t.winner && c.seat === t.winner
+											return (
+												<span
+													key={`th-${i}-${j}`}
+													className={isWin ? 'font-bold' : ''}>
+													{token}
+												</span>
+											)
+										})
+										.reduce(
+											(acc, el, idx) =>
+												idx
+													? [...acc, <span key={`sep-${i}-${idx}`}>:</span>, el]
+													: [el],
+											[]
+										)}
+								</div>
+							))}
+						</div>
+					</div>
+				) : null}
 
 				{/* Player layout or pre-upload options */}
 				{remaining ? (
@@ -592,6 +700,7 @@ export default function Player() {
 						tricksDecl={tricksDecl}
 						tricksDef={tricksDef}
 						neededToSet={neededToSet(current?.contract)}
+						teacherMode={teacherMode}
 					/>
 				) : (
 					<PreUploadGrid
@@ -623,6 +732,7 @@ function PlayerLayout({
 	tricksDecl,
 	tricksDef,
 	neededToSet,
+	teacherMode,
 }) {
 	const seats = ['N', 'E', 'S', 'W']
 	// Use the shared seat order (kept for clarity)
@@ -661,6 +771,7 @@ function PlayerLayout({
 								declarer={declarer}
 								playerName={players[id]}
 								showHcpWhenHidden={showHcpWhenHidden}
+								teacherMode={teacherMode}
 							/>
 						))}
 					</div>
@@ -682,6 +793,30 @@ function PlayerLayout({
 	)
 }
 
+function SuitTally({ tally }) {
+	if (!tally) return null
+	const suits = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
+	const color = (s) =>
+		s === 'Hearts' || s === 'Diamonds' ? 'text-red-600' : 'text-black'
+	const sym = (s) =>
+		s === 'Spades' ? '♠' : s === 'Hearts' ? '♥' : s === 'Diamonds' ? '♦' : '♣'
+	return (
+		<div className="rounded border bg-white p-2">
+			<div className="text-[11px] text-gray-600 mb-1">Played</div>
+			<div className="flex flex-col gap-1">
+				{suits.map((s) => (
+					<div
+						key={`tally-${s}`}
+						className="flex items-center justify-between text-xs">
+						<span className={`font-semibold ${color(s)}`}>{sym(s)}</span>
+						<span className="text-gray-700">{tally[s]?.length || 0}</span>
+					</div>
+				))}
+			</div>
+		</div>
+	)
+}
+
 function SeatPanel({
 	id,
 	remaining,
@@ -694,6 +829,7 @@ function SeatPanel({
 	declarer,
 	playerName,
 	showHcpWhenHidden,
+	teacherMode,
 }) {
 	const bySeat = remaining[id] || []
 	const hcp = bySeat.reduce((sum, c) => sum + hcpValue(c.rank), 0)
@@ -744,7 +880,15 @@ function SeatPanel({
 					: isTurn
 					? 'border-red-500'
 					: 'border-gray-300'
-			} bg-white w-64`}>
+			} ${
+				teacherMode
+					? `${
+							isTurn
+								? 'relative z-40 bg-gradient-to-br from-white to-rose-50 ring-1 ring-red-200'
+								: 'relative z-40 bg-gradient-to-br from-white to-slate-50 ring-1 ring-slate-200'
+					  }`
+					: 'bg-white'
+			} w-64`}>
 			<div
 				className={`w-full ${
 					isDealer
@@ -899,6 +1043,7 @@ function ScorePanel({
 }
 
 function CurrentTrick({
+	teacherMode = false,
 	trick,
 	turnSeat,
 	hasPlay,
@@ -908,6 +1053,7 @@ function CurrentTrick({
 	onPrev,
 	onNext,
 	finishedBanner,
+	resultTag,
 }) {
 	const order = ['N', 'E', 'S', 'W']
 	const items = Array.isArray(trick) ? trick : []
@@ -915,7 +1061,12 @@ function CurrentTrick({
 	const helper = helperText
 	const completed = hasPlay ? Math.floor(idx / 4) : 0
 	return (
-		<div className="mt-2 rounded-lg border bg-white p-3 w-full max-w-[820px]">
+		<div
+			className={`mt-2 rounded-xl border p-3 w-full max-w-[820px] ${
+				teacherMode
+					? 'relative z-40 bg-white/95 shadow-lg shadow-slate-900/5 ring-1 ring-slate-200'
+					: 'bg-white'
+			}`}>
 			<div className="text-xs text-gray-600 mb-2 flex items-center justify-between">
 				<span>Current Trick</span>
 				<div className="flex items-center gap-2">
@@ -944,8 +1095,10 @@ function CurrentTrick({
 					return (
 						<div
 							key={`ctl-${seat}`}
-							className={`text-center text-[11px] font-semibold ${
-								isTurn ? 'text-red-600' : 'text-gray-500'
+							className={`text-center text-[11px] font-semibold transition-colors ${
+								isTurn
+									? 'text-red-600 drop-shadow-[0_0_0.25rem_rgba(220,38,38,0.25)]'
+									: 'text-gray-500'
 							}`}>
 							{seat} {isTurn ? '•' : ''}
 						</div>
@@ -957,8 +1110,14 @@ function CurrentTrick({
 					return (
 						<div
 							key={`ct-${seat}`}
-							className={`w-20 h-24 rounded-md border flex items-center justify-center ${
-								isTurn ? 'border-red-400 bg-red-50' : 'bg-[#FFF8E7]'
+							className={`w-20 h-24 rounded-xl border flex items-center justify-center transition-all ${
+								teacherMode
+									? isTurn
+										? 'border-red-400 ring-2 ring-red-300/60 bg-gradient-to-br from-white to-rose-50'
+										: 'border-slate-200 bg-gradient-to-br from-white to-slate-50'
+									: isTurn
+									? 'border-red-400 bg-red-50'
+									: 'bg-[#FFF8E7]'
 							}`}>
 							{t ? (
 								<div
@@ -966,7 +1125,7 @@ function CurrentTrick({
 										t.card.suit === 'Hearts' || t.card.suit === 'Diamonds'
 											? 'text-red-600'
 											: 'text-black'
-									} text-2xl font-extrabold`}>
+									} text-2xl font-extrabold drop-shadow-[0_0_0.25rem_rgba(0,0,0,0.1)]`}>
 									{t.card.rank}
 									{suitSymbol(t.card.suit)}
 								</div>
@@ -980,6 +1139,12 @@ function CurrentTrick({
 			{finishedBanner ? (
 				<div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
 					{finishedBanner}
+				</div>
+			) : null}
+			{resultTag != null && idx < totalMoves ? (
+				<div className="mt-2 text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded px-2 py-1">
+					Result tag present: final tricks by declarer = {resultTag}. Play may
+					be truncated in the PBN.
 				</div>
 			) : null}
 			<div className="mt-2 text-[11px] text-gray-500">
@@ -1149,51 +1314,93 @@ function dealToHands(dealStr) {
 	return seatMap
 }
 
-// Parse PBN Play lines like "S: A" or combined tokens
-function parsePlayMoves(playLeader, lines) {
-	// Robustly parse PBN Play lines. Supports:
-	// - Seat-labelled tokens: "W:" "N:" etc (ignored for card extraction)
-	// - Combined cards: "DA", "S10", "HJ"
-	// - Split with colon: "S:A" or tokens "S:" followed by "A"
-	// - Split with space: "S A"
-	const moves = []
+// Parse PBN Play lines into chronological seat-aware moves.
+// Handles BridgePlaza-style fixed-seat order per trick line (W N E S), rotating per leader.
+function parsePlayMoves(playLeader, lines, contract) {
+	const fixedSeats = ['W', 'N', 'E', 'S']
+	const rotateFromLeader = (leader) => {
+		const base = ['N', 'E', 'S', 'W']
+		const i = base.indexOf(leader || 'N')
+		return [base[i], base[(i + 1) % 4], base[(i + 2) % 4], base[(i + 3) % 4]]
+	}
+	const parseToken = (tok) => {
+		const t = String(tok || '').replace(/[.,;]$/g, '')
+		if (!t || t === '-' || t === '*') return null
+		// Skip seat markers like N:, E:, etc.
+		if (/^[NESW]:?$/i.test(t)) return null
+		let m = t.match(/^([SHDC])(?::)?(10|[AKQJT2-9])$/i)
+		if (m) return { suit: suitName(m[1]), rank: normalizeRank(m[2]) }
+		const m2 = t.match(/^([SHDC]):$/i)
+		if (m2) return { suit: suitName(m2[1]), rank: null }
+		const m3 = t.match(/^([SHDC])[-](10|[AKQJT2-9])$/i)
+		if (m3) return { suit: suitName(m3[1]), rank: normalizeRank(m3[2]) }
+		const m4 = t.match(/^([SHDC])$/i)
+		if (m4) return { suit: suitName(m4[1]), rank: null }
+		if (/^(10|[AKQJT2-9])$/i.test(t))
+			return { suit: null, rank: normalizeRank(t) }
+		return null
+	}
+	const trump = parseTrump(contract)
+	let leader = playLeader || 'N'
+	const out = []
+	let carry = [] // tokens in fixed seat order groups of 4
+	const flushCarry = () => {
+		while (carry.length >= 4) {
+			const seatsChrono = rotateFromLeader(leader)
+			const group = carry.slice(0, 4)
+			const trickCards = []
+			for (let j = 0; j < 4; j++) {
+				const seat = seatsChrono[j]
+				const idxFixed = fixedSeats.indexOf(seat)
+				const tok = group[idxFixed]
+				if (!tok) continue
+				out.push({ seat, suit: tok.suit, rank: tok.rank })
+				trickCards.push({ seat, card: { suit: tok.suit, rank: tok.rank } })
+			}
+			if (trickCards.length === 4) {
+				const winner = evaluateTrick(trickCards, trump)
+				leader = winner
+			}
+			carry = carry.slice(4)
+		}
+	}
 	for (const raw of lines) {
 		const line = (raw || '').replace(/([;%].*)$/g, '').trim()
 		if (!line) continue
 		const parts = line.split(/\s+/).filter(Boolean)
+		if (!parts.length) continue
+		let pendingSuit = null
 		for (let i = 0; i < parts.length; i++) {
-			let tok = parts[i].replace(/[.,;]$/g, '')
-			// Skip seat markers like N:, E, W: etc.
-			if (/^[NESW]:?$/i.test(tok)) continue
-			// Combined suit+rank (e.g., DA, S10)
-			let m = tok.match(/^([SHDC])(?:\:)?(10|[AKQJT2-9])$/i)
-			if (m) {
-				moves.push({ suit: suitName(m[1]), rank: normalizeRank(m[2]) })
+			const tok = parseToken(parts[i])
+			if (!tok) continue
+			if (tok.suit && tok.rank) {
+				carry.push({ suit: tok.suit, rank: tok.rank })
 				continue
 			}
-			// Suit with colon then separate rank token: "S:" "A"
-			let m2 = tok.match(/^([SHDC]):$/i)
-			if (m2 && parts[i + 1]) {
-				moves.push({ suit: suitName(m2[1]), rank: normalizeRank(parts[i + 1]) })
-				i++
+			if (tok.suit && !tok.rank) {
+				pendingSuit = tok.suit
 				continue
 			}
-			// Suit then space then rank: "S" "A"
-			let m3 = tok.match(/^([SHDC])$/i)
-			if (m3 && parts[i + 1] && /^(10|[AKQJT2-9])$/i.test(parts[i + 1])) {
-				moves.push({ suit: suitName(m3[1]), rank: normalizeRank(parts[i + 1]) })
-				i++
-				continue
-			}
-			// Suit-joined with hyphen: "S-A" or "S-10"
-			let m4 = tok.match(/^([SHDC])[-](10|[AKQJT2-9])$/i)
-			if (m4) {
-				moves.push({ suit: suitName(m4[1]), rank: normalizeRank(m4[2]) })
+			if (!tok.suit && tok.rank && pendingSuit) {
+				carry.push({ suit: pendingSuit, rank: tok.rank })
+				pendingSuit = null
 				continue
 			}
 		}
+		flushCarry()
 	}
-	return moves
+	if (carry.length > 0) {
+		const seatsChrono = rotateFromLeader(leader)
+		for (let j = 0; j < 4; j++) {
+			const seat = seatsChrono[j]
+			const idxFixed = fixedSeats.indexOf(seat)
+			if (idxFixed < carry.length) {
+				const tok = carry[idxFixed]
+				out.push({ seat, suit: tok.suit, rank: tok.rank })
+			} else break
+		}
+	}
+	return out
 }
 
 function suitName(letter) {
@@ -1218,6 +1425,17 @@ function suitSymbol(suit) {
 		: suit === 'Diamonds'
 		? '♦'
 		: '♣'
+}
+
+// Short suit letter for trick history (S, H, D, C)
+function suitLetter(suit) {
+	return suit === 'Spades'
+		? 'S'
+		: suit === 'Hearts'
+		? 'H'
+		: suit === 'Diamonds'
+		? 'D'
+		: 'C'
 }
 
 // High-card point value helper (A=4, K=3, Q=2, J=1; others 0)
@@ -1246,13 +1464,24 @@ function evaluateTrick(trickArr, trumpSuit) {
 		if (trumpSuit) {
 			const wTrump = winner.card.suit === trumpSuit
 			const tTrump = t.card.suit === trumpSuit
-			if (
-				tTrump &&
-				(!wTrump || rankValue(t.card.rank) > rankValue(winner.card.rank))
-			)
+			if (tTrump && !wTrump) {
 				winner = t
-		}
-		if (!trumpSuit) {
+				continue
+			}
+			if (tTrump && wTrump) {
+				if (rankValue(t.card.rank) > rankValue(winner.card.rank)) winner = t
+				continue
+			}
+			// Neither is trump: compare by lead suit
+			if (
+				winner.card.suit !== trumpSuit &&
+				t.card.suit === leadSuit &&
+				winner.card.suit === leadSuit &&
+				rankValue(t.card.rank) > rankValue(winner.card.rank)
+			) {
+				winner = t
+			}
+		} else {
 			if (
 				t.card.suit === leadSuit &&
 				rankValue(t.card.rank) > rankValue(winner.card.rank)
