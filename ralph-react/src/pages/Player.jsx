@@ -1,28 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-// Minimal PBN parser for Deal lines and Board/Dealer/Vulnerable (+Contract/Declarer if present)
+// Minimal PBN parser extended to capture metadata (Event/Site/Date) and player names (North/East/South/West)
 function parsePBN(text) {
 	const lines = text.split(/\r?\n/)
 	const deals = []
 	let current = {}
+	const globalMeta = { meta: {}, players: { N: '', E: '', S: '', W: '' } }
 	let inAuction = false
 	let inPlay = false
 	for (let i = 0; i < lines.length; i++) {
-		const raw = lines[i]
+		const raw = lines[i] || ''
 		const line = raw.trim()
-		if (!line && inAuction) {
-			inAuction = false
-		}
+		if (!line && inAuction) inAuction = false
 		const m = line.match(/^\[([^\s]+)\s+"([^"]*)"\]/)
 		if (!m) {
 			if (inAuction) {
-				const calls = line.split(/\s+/).filter(Boolean)
-				current.auction = [...(current.auction || []), ...calls]
+				const calls = line
+					.replace(/([;%].*)$/g, '')
+					.split(/\s+/)
+					.filter(Boolean)
+				if (calls.length)
+					current.auction = [...(current.auction || []), ...calls]
 			}
 			if (inPlay) {
 				if (!current.play) current.play = []
-				current.play.push(line)
+				const body = line.replace(/([;%].*)$/g, '')
+				if (body) current.play.push(body)
 			}
 			continue
 		}
@@ -32,26 +36,49 @@ function parsePBN(text) {
 		if (tag !== 'Play' && inPlay) inPlay = false
 		if (tag === 'Board') {
 			if (current.deal) deals.push(current)
-			current = { board: parseInt(val, 10) }
+			current = {
+				board: parseInt(val, 10),
+				meta: { ...globalMeta.meta },
+				players: { ...globalMeta.players },
+			}
 			inAuction = false
 			inPlay = false
 			continue
 		}
 		if (tag === 'Dealer') current.dealer = val
 		if (tag === 'Vulnerable') current.vul = val
-		if (tag === 'Deal') current.deal = val // e.g., N:... ... ... ...
-		if (tag === 'Contract') current.contract = val // e.g., 4S, 3NT
-		if (tag === 'Declarer') current.declarer = val // N/E/S/W
+		if (tag === 'Deal') current.deal = val
+		if (tag === 'Contract') current.contract = val
+		if (tag === 'Declarer') current.declarer = val
 		if (tag === 'Auction') {
 			inAuction = true
 			current.auction = []
-			current.auctionDealer = val // starting seat for calls
+			current.auctionDealer = val
 			continue
 		}
 		if (tag === 'Play') {
 			inPlay = true
 			current.play = []
 			current.playLeader = val
+			continue
+		}
+		// Metadata and player names
+		if (tag === 'Event' || tag === 'Site' || tag === 'Date') {
+			const tgt = current.board ? current : globalMeta
+			tgt.meta = tgt.meta || {}
+			tgt.meta[tag.toLowerCase()] = val
+			continue
+		}
+		if (
+			tag === 'North' ||
+			tag === 'East' ||
+			tag === 'South' ||
+			tag === 'West'
+		) {
+			const seat = tag[0].toUpperCase()
+			const tgt = current.board ? current : globalMeta
+			tgt.players = tgt.players || { N: '', E: '', S: '', W: '' }
+			tgt.players[seat] = val
 			continue
 		}
 	}
@@ -161,9 +188,8 @@ export default function Player() {
 		}
 	}, [current?.playLeader, current?.play])
 
-	// Interactive state: remaining hands and played cards per seat
+	// Interactive state: remaining hands per seat
 	const [remaining, setRemaining] = useState(null)
-	const [played, setPlayed] = useState({ N: [], E: [], S: [], W: [] })
 	const [tally, setTally] = useState({
 		Spades: [],
 		Hearts: [],
@@ -181,7 +207,6 @@ export default function Player() {
 	useEffect(() => {
 		if (hands) {
 			setRemaining(hands)
-			setPlayed({ N: [], E: [], S: [], W: [] })
 			setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
 			setTrick([])
 			setTricksDecl(0)
@@ -193,14 +218,13 @@ export default function Player() {
 			setPlayIdx(0)
 		} else {
 			setRemaining(null)
-			setPlayed({ N: [], E: [], S: [], W: [] })
 			setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
 			setTrick([])
 			setTricksDecl(0)
 			setTricksDef(0)
 			setTurnSeat(null)
 		}
-	}, [hands])
+	}, [hands, current?.declarer, current?.dealer, current?.playLeader])
 
 	// Apply PBN play moves up to k cards, recomputing from the initial hands
 	function applyMovesTo(k) {
@@ -212,7 +236,6 @@ export default function Player() {
 			S: [...hands.S],
 			W: [...hands.W],
 		}
-		const pl = { N: [], E: [], S: [], W: [] }
 		const tl = { Spades: [], Hearts: [], Diamonds: [], Clubs: [] }
 		const trickArr = []
 		const trump = parseTrump(current?.contract)
@@ -237,34 +260,82 @@ export default function Player() {
 			const mv = playMoves[i]
 			const card = takeFromSeat(nextSeat, mv.suit, mv.rank)
 			if (!card) break
-			pl[nextSeat] = [...pl[nextSeat], card]
 			tl[card.suit] = [...tl[card.suit], card]
 			trickArr.push({ seat: nextSeat, card })
 			if (trickArr.length < 4) {
 				nextSeat = rightOf(nextSeat)
 			} else {
+			// Keyboard shortcuts for stepping through play
+			useEffect(() => {
+				const onKey = (e) => {
+					// Avoid when typing in inputs/textareas
+					const tag = (e.target && e.target.tagName) || ''
+					if (/(INPUT|TEXTAREA|SELECT)/.test(tag)) return
+					if (e.key === 'ArrowRight') {
+						e.preventDefault()
+						applyMovesTo(playIdx + 1)
+					}
+					if (e.key === 'ArrowLeft') {
+						e.preventDefault()
+						applyMovesTo(playIdx - 1)
+					}
+				}
+				window.addEventListener('keydown', onKey)
+				return () => window.removeEventListener('keydown', onKey)
+			}, [playIdx, applyMovesTo])
 				const winner = evaluateTrick(trickArr, trump)
-				if (isDeclarerSide(winner, dec)) declTricks++
-				else defTricks++
-				nextSeat = winner
-				// Pause on completed trick at boundary index (i === maxK - 1)
-				// So learners can reflect before the trick clears
-				if (i < maxK - 1) {
-					trickArr.length = 0
+		function parsePlayMoves(playLeader, lines) {
+			// Accept common PBN token formats: "S: A", "S:A", "SA", "S10", or separate suit then rank
+			const moves = []
+			for (const rawLine of lines) {
+				const line = rawLine.replace(/[|]/g, ' ').replace(/[,;]/g, ' ')
+				const parts = line.split(/\s+/).filter(Boolean)
+				let pendingSuit = null
+				for (let i = 0; i < parts.length; i++) {
+					const tok0 = parts[i].replace(/[.]+$/g, '') // strip trailing dots used as trick separators
+					// Patterns
+					let m
+					// 1) "S:" then next token rank
+					m = tok0.match(/^([SHDC]):$/i)
+					if (m) {
+						const r = parts[i + 1]
+						if (r) {
+							moves.push({ suit: suitName(m[1]), rank: normalizeRank(r) })
+							i++
+							continue
+						}
+					}
+					// 2) "S:9" or "S:A"
+					m = tok0.match(/^([SHDC]):([AKQJT2-9]|10)$/i)
+					if (m) {
+						moves.push({ suit: suitName(m[1]), rank: normalizeRank(m[2]) })
+						continue
+					}
+					// 3) "S9", "SA", "S10"
+					m = tok0.match(/^([SHDC])([AKQJT2-9]|10)$/i)
+					if (m) {
+						moves.push({ suit: suitName(m[1]), rank: normalizeRank(m[2]) })
+						continue
+					}
+					// 4) Suit alone followed by separate rank token
+					m = tok0.match(/^([SHDC])$/i)
+					if (m) {
+						pendingSuit = suitName(m[1])
+						continue
+					}
+					if (pendingSuit) {
+						const rnk = tok0.match(/^([AKQJT2-9]|10)$/i)
+						if (rnk) {
+							moves.push({ suit: pendingSuit, rank: normalizeRank(rnk[1]) })
+							pendingSuit = null
+							continue
+						}
+					}
+					// Otherwise ignore token
 				}
 			}
+			return moves
 		}
-
-		setRemaining(rem)
-		setPlayed(pl)
-		setTally(tl)
-		setTrick(trickArr)
-		setTricksDecl(declTricks)
-		setTricksDef(defTricks)
-		setTurnSeat(nextSeat)
-		setPlayIdx(maxK)
-	}
-
 	const onFile = async (e) => {
 		const file = e.target.files?.[0]
 		if (!file) return
@@ -296,10 +367,6 @@ export default function Player() {
 			...prev,
 			[seat]: prev[seat].filter((c) => c.id !== cardId),
 		}))
-		setPlayed((prev) => ({
-			...prev,
-			[seat]: [...prev[seat], card],
-		}))
 		setTally((prev) => ({
 			...prev,
 			[card.suit]: [...prev[card.suit], card],
@@ -327,13 +394,78 @@ export default function Player() {
 		})
 	}
 
+	// Derived: step helper and result/score for completed hands
+	const totalMoves = playMoves.length
+	const stepHelper = totalMoves
+		? (() => {
+				const i = Math.max(0, Math.min(playIdx, totalMoves - 1))
+				const mv = playMoves[i]
+				return `Step ${i + 1}/${totalMoves}: ${mv.rank}${suitSymbol(mv.suit)}`
+		  })()
+		: 'Manual play'
+
+	const result = useMemo(() => {
+	// Keyboard shortcuts for stepping (Left/Right arrows)
+	useEffect(() => {
+		const onKey = (e) => {
+			const tag = String(e.target?.tagName || '').toLowerCase()
+			if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable) return
+			if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+			if (e.key === 'ArrowLeft') {
+				e.preventDefault()
+				applyMovesTo(playIdx - 1)
+			}
+			if (e.key === 'ArrowRight') {
+				e.preventDefault()
+				applyMovesTo(playIdx + 1)
+			}
+		}
+		window.addEventListener('keydown', onKey)
+		return () => window.removeEventListener('keydown', onKey)
+	}, [playIdx])
+		if (!current?.contract || !current?.declarer) return null
+		const completed = tricksDecl + tricksDef
+		const remainingTricks = Math.max(0, 13 - completed)
+		const isFinished = playIdx >= totalMoves
+		const assumedDecl = isFinished ? tricksDecl + remainingTricks : null
+		if (assumedDecl == null) return { partial: true }
+		const vul = isSeatVul(current.declarer, current.vul)
+		return computeDuplicateScore(
+			current.contract,
+			current.declarer,
+			vul,
+			assumedDecl
+		)
+	}, [
+		playIdx,
+		totalMoves,
+		tricksDecl,
+		tricksDef,
+		current?.contract,
+		current?.declarer,
+		current?.vul,
+	])
+
 	return (
 		<div className="min-h-screen bg-white flex flex-col items-center px-4 py-6">
 			<div className="w-full max-w-5xl">
 				<div className="flex items-center justify-between mb-4">
-					<h1 className="text-3xl font-bold text-gray-800">
-						Tournament PBN Player (beta)
-					</h1>
+					<div>
+						<h1 className="text-3xl font-bold text-gray-800">
+							Tournament PBN Player (beta)
+						</h1>
+						{current?.meta ? (
+							<div className="text-xs text-gray-600">
+								{[
+									current?.meta?.event ? `${current.meta.event}` : null,
+									current?.meta?.date ? `${current.meta.date}` : null,
+									current?.meta?.site ? `${current.meta.site}` : null,
+								]
+									.filter(Boolean)
+									.join(' • ')}
+							</div>
+						) : null}
+					</div>
 					<Link to="/" className="text-sm text-sky-600 hover:underline">
 						← Home
 					</Link>
@@ -425,18 +557,25 @@ export default function Player() {
 				<CurrentTrick
 					trick={trick}
 					turnSeat={turnSeat}
-					hasPlay={!!current?.play?.length}
-					lines={current?.play || []}
+					hasPlay={!!totalMoves}
+					totalMoves={totalMoves}
+					helperText={stepHelper}
 					idx={playIdx}
 					onPrev={() => applyMovesTo(playIdx - 1)}
 					onNext={() => applyMovesTo(playIdx + 1)}
+					finishedBanner={
+						result && !result.partial
+							? `${result.resultText} • Score ${result.score > 0 ? '+' : ''}${
+									result.score
+							  }`
+							: null
+					}
 				/>
 
 				{/* Player layout or pre-upload options */}
 				{remaining ? (
 					<PlayerLayout
 						remaining={remaining}
-						played={played}
 						onPlay={onPlayCard}
 						hideDefenders={hideDefenders}
 						showSuitTally={showSuitTally}
@@ -445,6 +584,8 @@ export default function Player() {
 						vulnerable={current?.vul}
 						declarer={current?.declarer}
 						contract={current?.contract}
+						players={current?.players || {}}
+						result={result}
 						turnSeat={turnSeat}
 						trick={trick}
 						tally={tally}
@@ -466,7 +607,6 @@ export default function Player() {
 
 function PlayerLayout({
 	remaining,
-	played,
 	onPlay,
 	hideDefenders,
 	showSuitTally,
@@ -475,6 +615,8 @@ function PlayerLayout({
 	vulnerable,
 	declarer,
 	contract,
+	players = {},
+	result,
 	turnSeat,
 	trick,
 	tally,
@@ -483,8 +625,7 @@ function PlayerLayout({
 	neededToSet,
 }) {
 	const seats = ['N', 'E', 'S', 'W']
-	// Use the shared seat order
-	// eslint-disable-next-line no-unused-vars
+	// Use the shared seat order (kept for clarity)
 	const _useSharedSeatOrder = orderSeats
 	let visible = seats
 	if (hideDefenders) {
@@ -518,6 +659,7 @@ function PlayerLayout({
 								turnSeat={turnSeat}
 								trick={trick}
 								declarer={declarer}
+								playerName={players[id]}
 								showHcpWhenHidden={showHcpWhenHidden}
 							/>
 						))}
@@ -525,52 +667,16 @@ function PlayerLayout({
 					{/* Current trick now displayed above with integrated controls */}
 				</div>
 				{/* Right margin: scoreboard */}
-				<div className="w-52 hidden md:flex flex-col gap-2">
+				<div className="w-64 hidden md:flex flex-col gap-2">
 					<ScorePanel
 						tricksDecl={tricksDecl}
 						tricksDef={tricksDef}
 						neededToSet={neededToSet}
 						contract={contract}
 						declarer={declarer}
+						result={result}
 					/>
 				</div>
-			</div>
-		</div>
-	)
-}
-
-function PlayedColumn({ id, played, hidden, align = 'left' }) {
-	if (hidden) return <div className="min-h-[100px]" />
-	const seatName =
-		id === 'N' ? 'NORTH' : id === 'E' ? 'EAST' : id === 'S' ? 'SOUTH' : 'WEST'
-	return (
-		<div
-			className={`rounded-lg border bg-gray-50 ${
-				align === 'right' ? 'text-right' : ''
-			} p-2`}>
-			<div className="text-[10px] font-semibold text-gray-600 mb-1">
-				{seatName} played
-			</div>
-			<div
-				className={`flex ${
-					align === 'right' ? 'justify-end' : 'justify-start'
-				} flex-wrap gap-1`}>
-				{played.length ? (
-					played.map((c) => (
-						<span
-							key={c.id}
-							className={`inline-flex items-center justify-center text-xs px-1.5 py-0.5 rounded border ${
-								c.suit === 'Hearts' || c.suit === 'Diamonds'
-									? 'text-red-600 border-red-200 bg-white'
-									: 'text-gray-800 border-gray-200 bg-white'
-							}`}>
-							{c.rank}
-							{suitSymbol(c.suit)}
-						</span>
-					))
-				) : (
-					<span className="text-[11px] text-gray-400 italic">none</span>
-				)}
 			</div>
 		</div>
 	)
@@ -586,6 +692,7 @@ function SeatPanel({
 	turnSeat,
 	trick,
 	declarer,
+	playerName,
 	showHcpWhenHidden,
 }) {
 	const bySeat = remaining[id] || []
@@ -734,6 +841,12 @@ function SeatPanel({
 					</div>
 				))}
 			</div>
+			{/* Player name if present in PBN */}
+			{playerName ? (
+				<div className="px-2 pb-2 pt-0.5 text-[10px] text-gray-500 truncate">
+					{playerName}
+				</div>
+			) : null}
 		</div>
 	)
 }
@@ -744,23 +857,24 @@ function ScorePanel({
 	neededToSet,
 	contract,
 	declarer,
+	result,
 }) {
 	return (
 		<div className="rounded-lg border bg-white p-3">
-			<div className="text-xs text-gray-600 mb-1">Scoreboard</div>
-			<div className="text-sm text-gray-800">
+			<div className="text-[11px] text-gray-600 mb-1">Scoreboard</div>
+			<div className="text-xs text-gray-800">
 				Declarer: <span className="font-semibold">{declarer || '-'}</span>
 			</div>
-			<div className="text-sm text-gray-800 mb-1">
+			<div className="text-xs text-gray-800 mb-1">
 				Contract: <span className="font-semibold">{contract || '-'}</span>
 			</div>
-			<div className="text-sm text-gray-800">
+			<div className="text-xs text-gray-800">
 				Declarer tricks: <span className="font-semibold">{tricksDecl}</span>
 			</div>
-			<div className="text-sm text-gray-800">
+			<div className="text-xs text-gray-800">
 				Defender tricks: <span className="font-semibold">{tricksDef}</span>
 			</div>
-			<div className="text-sm text-gray-800">
+			<div className="text-xs text-gray-800">
 				Defenders to defeat:{' '}
 				<span className="font-semibold">{neededToSet || '-'}</span>
 				{typeof neededToSet === 'number' && neededToSet > 0 ? (
@@ -770,6 +884,16 @@ function ScorePanel({
 					)})`}</span>
 				) : null}
 			</div>
+			{result && !result.partial ? (
+				<div className="mt-1 text-xs text-gray-800">
+					Result: <span className="font-semibold">{result.resultText}</span>
+					{typeof result.score === 'number' ? (
+						<span className="ml-1 font-semibold">{`Score ${
+							result.score > 0 ? '+' : ''
+						}${result.score}`}</span>
+					) : null}
+				</div>
+			) : null}
 		</div>
 	)
 }
@@ -778,63 +902,55 @@ function CurrentTrick({
 	trick,
 	turnSeat,
 	hasPlay,
-	lines = [],
+	totalMoves = 0,
+	helperText = 'Manual play',
 	idx = 0,
 	onPrev,
 	onNext,
+	finishedBanner,
 }) {
-	const order = ['N', 'E', 'W', 'S']
+	const order = ['N', 'E', 'S', 'W']
 	const items = Array.isArray(trick) ? trick : []
-	const safeIdx = Math.min(
-		Math.max(0, idx),
-		Math.max(0, (lines?.length || 0) - 1)
-	)
-	const helper =
-		hasPlay && lines?.length
-			? `Step ${safeIdx + 1}/${lines.length}: ${lines[safeIdx]}`
-			: 'Manual play'
-	const completed = hasPlay ? Math.floor(safeIdx / 4) : 0
+	const safeIdx = Math.min(Math.max(0, idx), Math.max(0, totalMoves - 1))
+	const helper = helperText
+	const completed = hasPlay ? Math.floor(idx / 4) : 0
 	return (
 		<div className="mt-2 rounded-lg border bg-white p-3 w-full max-w-[820px]">
 			<div className="text-xs text-gray-600 mb-2 flex items-center justify-between">
 				<span>Current Trick</span>
 				<div className="flex items-center gap-2">
-					{hasPlay ? (
-						<>
-							<button
-								onClick={onPrev}
-								disabled={safeIdx === 0}
-								className="px-2 py-0.5 rounded border text-xs disabled:opacity-40">
-								Prev
-							</button>
-							<button
-								onClick={onNext}
-								disabled={safeIdx >= lines.length - 1}
-								className="px-2 py-0.5 rounded border text-xs disabled:opacity-40">
-								Next
-							</button>
-						</>
-					) : null}
+					<button
+						onClick={onPrev}
+						disabled={safeIdx === 0}
+						className="px-2 py-0.5 rounded border text-xs disabled:opacity-40">
+						Prev
+					</button>
+					<span className="text-[10px] text-gray-600">
+						{totalMoves > 0 ? `${safeIdx + 1}/${totalMoves}` : '—'}
+					</span>
+					<button
+						onClick={onNext}
+						disabled={safeIdx >= totalMoves - 1}
+						className="px-2 py-0.5 rounded border text-xs disabled:opacity-40">
+						Next
+					</button>
 				</div>
 			</div>
 			<div className="text-[11px] text-gray-600 mb-2">{helper}</div>
-			{/* Labels row */}
-			<div className="flex items-center justify-center gap-4 mb-1">
+			{/* Unified grid: labels above boxes in the same 4-column grid */}
+			<div className="grid grid-cols-4 gap-4 place-items-center">
 				{order.map((seat) => {
 					const isTurn = turnSeat === seat
 					return (
 						<div
 							key={`ctl-${seat}`}
-							className={`w-20 text-center text-[11px] font-semibold ${
+							className={`text-center text-[11px] font-semibold ${
 								isTurn ? 'text-red-600' : 'text-gray-500'
 							}`}>
 							{seat} {isTurn ? '•' : ''}
 						</div>
 					)
 				})}
-			</div>
-			{/* Cards row */}
-			<div className="flex items-center justify-center gap-4">
 				{order.map((seat) => {
 					const t = items.find((x) => x.seat === seat)
 					const isTurn = turnSeat === seat
@@ -861,6 +977,11 @@ function CurrentTrick({
 					)
 				})}
 			</div>
+			{finishedBanner ? (
+				<div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
+					{finishedBanner}
+				</div>
+			) : null}
 			<div className="mt-2 text-[11px] text-gray-500">
 				Completed tricks:{' '}
 				<span className="font-semibold">{Math.max(0, completed)}</span>
@@ -973,11 +1094,6 @@ function isDefender(seat, declarer) {
 	const opp = orderSeats[(orderSeats.indexOf(declarer) + 2) % 4]
 	return seat !== declarer && seat !== opp
 }
-function declarerVisible(declarer) {
-	if (!declarer) return ['N', 'S']
-	const opp = orderSeats[(orderSeats.indexOf(declarer) + 2) % 4]
-	return [declarer, opp]
-}
 
 function rankValue(rank) {
 	const map = {
@@ -1005,20 +1121,23 @@ function dealToHands(dealStr) {
 	if (!m) throw new Error('Bad Deal string')
 	const start = m[1]
 	const rest = m[2].trim()
-	const seats = ['N','E','S','W']
+	const seats = ['N', 'E', 'S', 'W']
 	const startIdx = seats.indexOf(start)
 	const segs = rest.split(/\s+/)
 	if (segs.length !== 4) throw new Error('Deal must have 4 seat segments')
 	const seatMap = {}
-	for (let i=0;i<4;i++) {
+	for (let i = 0; i < 4; i++) {
 		const seat = seats[(startIdx + i) % 4]
 		const seg = segs[i]
-		const [s, h, d, c] = seg.split('.').map(x => x || '')
-		const parseSuit = (suitName, str) => Array.from(str).map((ch) => ({
-			id: `${seat}-${suitName}-${ch}-${Math.random().toString(36).slice(2,7)}`,
-			suit: suitName,
-			rank: ch === 'T' ? '10' : ch,
-		}))
+		const [s, h, d, c] = seg.split('.').map((x) => x || '')
+		const parseSuit = (suitName, str) =>
+			Array.from(str).map((ch) => ({
+				id: `${seat}-${suitName}-${ch}-${Math.random()
+					.toString(36)
+					.slice(2, 7)}`,
+				suit: suitName,
+				rank: ch === 'T' ? '10' : ch,
+			}))
 		const cards = [
 			...parseSuit('Spades', s),
 			...parseSuit('Hearts', h),
@@ -1032,19 +1151,45 @@ function dealToHands(dealStr) {
 
 // Parse PBN Play lines like "S: A" or combined tokens
 function parsePlayMoves(playLeader, lines) {
-	// Flatten tokens like "S: A" into suit/rank pairs in leader-rotation order
+	// Robustly parse PBN Play lines. Supports:
+	// - Seat-labelled tokens: "W:" "N:" etc (ignored for card extraction)
+	// - Combined cards: "DA", "S10", "HJ"
+	// - Split with colon: "S:A" or tokens "S:" followed by "A"
+	// - Split with space: "S A"
 	const moves = []
-	for (const line of lines) {
+	for (const raw of lines) {
+		const line = (raw || '').replace(/([;%].*)$/g, '').trim()
+		if (!line) continue
 		const parts = line.split(/\s+/).filter(Boolean)
-		for (let i=0;i<parts.length;i++) {
-			const tok = parts[i]
-			const m = tok.match(/^([SHDC]):$/i)
-			if (m && parts[i+1]) {
-				moves.push({ suit: suitName(m[1]), rank: normalizeRank(parts[i+1]) })
+		for (let i = 0; i < parts.length; i++) {
+			let tok = parts[i].replace(/[.,;]$/g, '')
+			// Skip seat markers like N:, E, W: etc.
+			if (/^[NESW]:?$/i.test(tok)) continue
+			// Combined suit+rank (e.g., DA, S10)
+			let m = tok.match(/^([SHDC])(?:\:)?(10|[AKQJT2-9])$/i)
+			if (m) {
+				moves.push({ suit: suitName(m[1]), rank: normalizeRank(m[2]) })
+				continue
+			}
+			// Suit with colon then separate rank token: "S:" "A"
+			let m2 = tok.match(/^([SHDC]):$/i)
+			if (m2 && parts[i + 1]) {
+				moves.push({ suit: suitName(m2[1]), rank: normalizeRank(parts[i + 1]) })
 				i++
-			} else {
-				const m2 = tok.match(/^([SHDC]):([AKQJT2-9])$/i)
-				if (m2) moves.push({ suit: suitName(m2[1]), rank: normalizeRank(m2[2]) })
+				continue
+			}
+			// Suit then space then rank: "S" "A"
+			let m3 = tok.match(/^([SHDC])$/i)
+			if (m3 && parts[i + 1] && /^(10|[AKQJT2-9])$/i.test(parts[i + 1])) {
+				moves.push({ suit: suitName(m3[1]), rank: normalizeRank(parts[i + 1]) })
+				i++
+				continue
+			}
+			// Suit-joined with hyphen: "S-A" or "S-10"
+			let m4 = tok.match(/^([SHDC])[-](10|[AKQJT2-9])$/i)
+			if (m4) {
+				moves.push({ suit: suitName(m4[1]), rank: normalizeRank(m4[2]) })
+				continue
 			}
 		}
 	}
@@ -1053,14 +1198,26 @@ function parsePlayMoves(playLeader, lines) {
 
 function suitName(letter) {
 	const L = String(letter).toUpperCase()
-	return L === 'S' ? 'Spades' : L === 'H' ? 'Hearts' : L === 'D' ? 'Diamonds' : 'Clubs'
+	return L === 'S'
+		? 'Spades'
+		: L === 'H'
+		? 'Hearts'
+		: L === 'D'
+		? 'Diamonds'
+		: 'Clubs'
 }
 function normalizeRank(r) {
 	return r === 'T' ? '10' : r.toUpperCase()
 }
 
 function suitSymbol(suit) {
-	return suit === 'Spades' ? '♠' : suit === 'Hearts' ? '♥' : suit === 'Diamonds' ? '♦' : '♣'
+	return suit === 'Spades'
+		? '♠'
+		: suit === 'Hearts'
+		? '♥'
+		: suit === 'Diamonds'
+		? '♦'
+		: '♣'
 }
 
 // High-card point value helper (A=4, K=3, Q=2, J=1; others 0)
@@ -1084,13 +1241,6 @@ function parseTrump(contract) {
 function evaluateTrick(trickArr, trumpSuit) {
 	const leadSuit = trickArr[0].card.suit
 	let winner = trickArr[0]
-	function hcpValue(rank) {
-		if (rank === 'A') return 4
-		if (rank === 'K') return 3
-		if (rank === 'Q') return 2
-		if (rank === 'J') return 1
-		return 0
-	}
 	for (let i = 1; i < trickArr.length; i++) {
 		const t = trickArr[i]
 		if (trumpSuit) {
@@ -1133,5 +1283,97 @@ function seatFullName(id) {
 		: id === 'S'
 		? 'South'
 		: 'West'
+}
+
+// Determine if a seat is vulnerable from PBN Vulnerable tag
+function isSeatVul(seat, vulTag) {
+	if (!seat || !vulTag) return false
+	if (vulTag === 'All') return true
+	if (vulTag === 'None') return false
+	if (vulTag === 'NS') return seat === 'N' || seat === 'S'
+	if (vulTag === 'EW') return seat === 'E' || seat === 'W'
+	return false
+}
+
+// Compute approximate duplicate score for contract, given declarer vul status and declarer tricks
+function computeDuplicateScore(contract, declarer, vul, declTricks) {
+	// contract examples: 4S, 3NT, 2HX, 6NTXX etc.
+	if (!contract) return { partial: true }
+	const m = String(contract)
+		.toUpperCase()
+		.match(/^(\d)(C|D|H|S|NT)(X{0,2})?$/)
+	if (!m) return { partial: true }
+	const level = parseInt(m[1], 10)
+	const strain = m[2]
+	const dbl = m[3] || '' // '', 'X', 'XX'
+	const target = 6 + level
+	const made = declTricks - target
+	const isNT = strain === 'NT'
+	const isMajor = strain === 'H' || strain === 'S'
+	const base = isNT ? 40 : isMajor ? 30 : 20
+	const baseSecondOn = isNT ? 30 : base
+	const trickValue = (n) => {
+		if (n <= 0) return 0
+		let v = 0
+		if (n >= 1) v += base
+		if (n >= 2) v += (n - 1) * baseSecondOn
+		return v
+	}
+	const overValue = (n) => {
+		if (n <= 0) return 0
+		if (dbl === 'XX') return n * (vul ? 400 : 200)
+		if (dbl === 'X') return n * (vul ? 200 : 100)
+		return n * (isNT ? 30 : isMajor ? 30 : 20)
+	}
+	const underPenalty = (n) => {
+		if (n <= 0) return 0
+		if (!dbl) return n * (vul ? 100 : 50)
+		if (dbl === 'XX') {
+			if (!vul) {
+				if (n === 1) return 200
+				if (n === 2) return 500
+				return 500 + (n - 2) * 300
+			}
+			// vul
+			return 400 + (n - 1) * 400
+		}
+		// X
+		if (!vul) {
+			if (n === 1) return 100
+			if (n === 2) return 300
+			return 300 + (n - 2) * 300
+		}
+		// vul
+		return 200 + (n - 1) * 300
+	}
+
+	let score = 0
+	let resultText = ''
+	if (made >= 0) {
+		// contract made
+		const contractValue = trickValue(level)
+		const trickScore =
+			dbl === 'XX'
+				? contractValue * 4
+				: dbl === 'X'
+				? contractValue * 2
+				: contractValue
+		const over = overValue(made)
+		const insult = dbl === 'XX' ? 100 : dbl === 'X' ? 50 : 0
+		const game = contractValue >= 100
+		const slamBonus =
+			level === 6 ? (vul ? 750 : 500) : level === 7 ? (vul ? 1500 : 1000) : 0
+		const gamePartScore = game ? (vul ? 500 : 300) : 50
+		score = trickScore + over + insult + slamBonus + gamePartScore
+		resultText = `${level}${strain}${dbl ? dbl : ''}=${
+			made === 0 ? '' : `+${made}`
+		}`
+	} else {
+		const down = -made
+		const penalty = underPenalty(down)
+		score = -penalty
+		resultText = `${level}${strain}${dbl ? dbl : ''}-${down}`
+	}
+	return { partial: false, score, resultText }
 }
 
