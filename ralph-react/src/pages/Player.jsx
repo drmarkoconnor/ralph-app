@@ -186,6 +186,9 @@ export default function Player() {
 	const playIdxRef = useRef(0)
 	const lastTrickKeyRef = useRef('')
 
+	// Manual play timeline when no PBN Play is present
+	const [manualMoves, setManualMoves] = useState([]) // { seat, suit, rank }[]
+
 	// Manual overrides when PBN lacks contract/declarer
 	const [manualDeclarer, setManualDeclarer] = useState('') // 'N'|'E'|'S'|'W'|''
 	const [manualLevel, setManualLevel] = useState('') // '1'..'7'|''
@@ -242,6 +245,10 @@ export default function Player() {
 		}
 	}, [current?.playLeader, current?.play, effContract])
 
+	// Unified timeline source: prefer PBN moves if present, else manual
+	const usingManual = playMoves.length === 0
+	const timelineMoves = usingManual ? manualMoves : playMoves
+
 	// Initialize/reinitialize board state when a new deal loads or context changes
 	useEffect(() => {
 		if (!hands) {
@@ -289,11 +296,11 @@ export default function Player() {
 		current?.contract,
 	])
 
-	// Apply PBN play moves up to k cards, recomputing from the initial hands
+	// Apply timeline moves up to k cards, recomputing from the initial hands
 	const applyMovesTo = useCallback(
 		(k) => {
 			if (!hands) return
-			const maxK = Math.max(0, Math.min(k, playMoves.length))
+			const maxK = Math.max(0, Math.min(k, timelineMoves.length))
 			const rem = {
 				N: [...hands.N],
 				E: [...hands.E],
@@ -321,7 +328,7 @@ export default function Player() {
 			}
 
 			for (let i = 0; i < maxK; i++) {
-				const mv = playMoves[i]
+				const mv = timelineMoves[i]
 				const seatForMove = mv.seat || nextSeat
 				const card = takeFromSeat(seatForMove, mv.suit, mv.rank)
 				if (!card) break
@@ -356,7 +363,7 @@ export default function Player() {
 		},
 		[
 			hands,
-			playMoves,
+			timelineMoves,
 			effContract,
 			effDeclarer,
 			current?.dealer,
@@ -422,6 +429,15 @@ export default function Player() {
 		// Guard against any malformed card
 		const card = chosen
 		if (!/^(A|K|Q|J|10|[2-9])$/.test(card.rank)) return
+
+		// If playing manually (no PBN Play), record timeline move for stepping
+		if (usingManual) {
+			setManualMoves((prev) => [
+				...prev,
+				{ seat, suit: card.suit, rank: card.rank },
+			])
+			setPlayIdx((i) => i + 1)
+		}
 		setRemaining((prev) => ({
 			...prev,
 			[seat]: prev[seat].filter((c) => c.id !== cardId),
@@ -472,11 +488,11 @@ export default function Player() {
 	}
 
 	// Derived: step helper and result/score for completed hands
-	const totalMoves = playMoves.length
+	const totalMoves = timelineMoves.length
 	const stepHelper = totalMoves
 		? (() => {
 				const i = Math.max(0, Math.min(playIdx, totalMoves - 1))
-				const mv = playMoves[i]
+				const mv = timelineMoves[i]
 				return `Step ${i + 1}/${totalMoves}: ${mv.rank}${suitSymbol(mv.suit)}`
 		  })()
 		: 'Manual play'
@@ -512,7 +528,7 @@ export default function Player() {
 
 	// Build trick history up to current index (completed tricks + optional partial)
 	const trickHistory = useMemo(() => {
-		const k = Math.max(0, Math.min(playIdx, playMoves.length))
+		const k = Math.max(0, Math.min(playIdx, timelineMoves.length))
 		if (k === 0) return []
 		const rounds = []
 		const trump = effTrump
@@ -521,7 +537,7 @@ export default function Player() {
 		let nextSeat = current?.playLeader || leaderFromDec
 		let cur = []
 		for (let i = 0; i < k; i++) {
-			const mv = playMoves[i]
+			const mv = timelineMoves[i]
 			const seat = mv.seat || nextSeat
 			cur.push({ seat, suit: mv.suit, rank: mv.rank })
 			if (cur.length < 4) {
@@ -544,9 +560,9 @@ export default function Player() {
 		return rounds
 	}, [
 		playIdx,
-		playMoves,
-		current?.contract,
-		current?.declarer,
+		timelineMoves,
+		effContract,
+		effDeclarer,
 		current?.dealer,
 		current?.playLeader,
 	])
@@ -729,6 +745,34 @@ export default function Player() {
 								<option value="XX">XX</option>
 							</select>
 						</label>
+						<button
+							onClick={() => {
+								// Reset manual timeline and reinitialize board state
+								setManualMoves([])
+								setTricksDecl(0)
+								setTricksDef(0)
+								setTrick([])
+								// Reset remaining hands and tally
+								if (hands) {
+									setRemaining({
+										N: [...hands.N],
+										E: [...hands.E],
+										S: [...hands.S],
+										W: [...hands.W],
+									})
+								}
+								setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
+								setPlayIdx(0)
+								// set initial leader from declarer if available, else dealer
+								const leaderFromDec =
+									manualDeclarer || current?.declarer
+										? leftOf(manualDeclarer || current?.declarer)
+										: current?.dealer || 'N'
+								setTurnSeat(current?.playLeader || leaderFromDec)
+							}}
+							className="ml-2 px-2 py-0.5 rounded border bg-white hover:bg-gray-50">
+							Start again
+						</button>
 					</div>
 				) : null}
 
