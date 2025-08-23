@@ -211,24 +211,36 @@ export default function DragDropCards({ meta }) {
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const copyTimerRef = useRef(null)
 
-	const { slides } = useMemo(() => {
-		const today = new Date()
-		const y = today.getFullYear()
-		const m = String(today.getMonth() + 1).padStart(2, '0')
-		const d = String(today.getDate()).padStart(2, '0')
-		const dateStr = `${y}.${m}.${d}`
-		return {
-			slides: savedHands.map((hand, i) =>
-				buildSinglePBN(hand, startBoard + i, dateStr)
-			),
+	// Extended PBN preview slides generated asynchronously per saved hand
+	const [extSlides, setExtSlides] = useState([])
+	useEffect(() => {
+		let cancelled = false
+		const build = async () => {
+			const arr = []
+			for (let i = 0; i < savedHands.length; i++) {
+				try {
+					const board = buildBoardFromHand(savedHands[i], startBoard + i)
+					const txt = await exportBoardPBN(board)
+					if (cancelled) return
+					arr.push(txt)
+				} catch (e) {
+					// If something goes wrong, still push a minimal placeholder
+					arr.push('// Error generating preview for board ' + (startBoard + i))
+				}
+			}
+			if (!cancelled) setExtSlides(arr)
 		}
-	}, [savedHands, startBoard])
+		build()
+		return () => {
+			cancelled = true
+		}
+	}, [savedHands, startBoard, meta])
 
 	useEffect(() => {
-		if (previewIndex > Math.max(0, slides.length - 1)) {
-			setPreviewIndex(Math.max(0, slides.length - 1))
+		if (previewIndex > Math.max(0, extSlides.length - 1)) {
+			setPreviewIndex(Math.max(0, extSlides.length - 1))
 		}
-	}, [slides.length, previewIndex])
+	}, [extSlides.length, previewIndex])
 
 	useEffect(() => {
 		document.title = "Bristol Bridge Club's PBN Picker"
@@ -262,7 +274,6 @@ export default function DragDropCards({ meta }) {
 		setStartBoard(1)
 		resetBoard()
 	}
-
 	// HTML5 DnD handlers (robust across browsers)
 	const onDragStartDeck = (e, card) => {
 		try {
@@ -443,9 +454,13 @@ export default function DragDropCards({ meta }) {
 		const d = String(today.getDate()).padStart(2, '0')
 		const dateStrDefault = `${y}.${m}.${d}`
 
-		const event = meta?.event || 'Club Session'
-		const site = meta?.site || 'Local'
+		const event = meta?.event || 'Club Teaching session'
+		const siteChoice = meta?.siteChoice || 'Bristol Bridge Club'
+		const site = siteChoice === 'Other' ? (meta?.siteOther || 'Other') : siteChoice
 		const dateStr = meta?.date || dateStrDefault
+
+		const theme = meta?.themeChoice === 'Custom…' ? (meta?.themeCustom || '') : meta?.themeChoice
+		const auctionTokens = (meta?.auctionText || '').trim().split(/\s+/).filter(Boolean)
 
 		// dealPrefix aligns with dealer by default
 		const boardObj = {
@@ -462,14 +477,17 @@ export default function DragDropCards({ meta }) {
 				S: mapSeatHand(hand.S),
 				W: mapSeatHand(hand.W),
 			},
-			notes: [],
+			notes: (meta?.notes && meta.notes.length) ? meta.notes : [],
+			auctionStart: auctionTokens.length ? (meta?.auctionStart || 'N') : undefined,
+			auction: auctionTokens.length ? auctionTokens : undefined,
 			ext: {
 				system: meta?.system || undefined,
-				theme: meta?.theme || undefined,
+				theme: theme || undefined,
 				interf: meta?.interf || undefined,
-				lead: meta?.lead || undefined,
 				ddpar: meta?.ddpar || undefined,
 				scoring: meta?.scoring || undefined,
+				lead: meta?.lead || undefined,
+				playscript: meta?.playscript || undefined,
 			},
 		}
 		return BoardZ.parse(boardObj)
@@ -816,23 +834,23 @@ export default function DragDropCards({ meta }) {
 							<button
 								className="px-2 py-1 rounded bg-white text-gray-800 text-xs border border-gray-300 disabled:opacity-40"
 								onClick={() => setPreviewIndex((i) => Math.max(0, i - 1))}
-								disabled={previewIndex === 0 || slides.length <= 1}>
+								disabled={previewIndex === 0 || extSlides.length <= 1}>
 								Prev
 							</button>
 							<div className="text-[10px] text-gray-600">
-								{slides.length > 0
+								{extSlides.length > 0
 									? `Board ${startBoard + previewIndex} of ${
-											startBoard + slides.length - 1
+											startBoard + extSlides.length - 1
 									  }`
 									: 'No boards saved'}
 							</div>
 							<button
 								className="px-2 py-1 rounded bg-white text-gray-800 text-xs border border-gray-300 disabled:opacity-40"
 								onClick={() =>
-									setPreviewIndex((i) => Math.min(slides.length - 1, i + 1))
+									setPreviewIndex((i) => Math.min(extSlides.length - 1, i + 1))
 								}
 								disabled={
-									previewIndex >= slides.length - 1 || slides.length <= 1
+									previewIndex >= extSlides.length - 1 || extSlides.length <= 1
 								}>
 								Next
 							</button>
@@ -841,9 +859,9 @@ export default function DragDropCards({ meta }) {
 				</div>
 				{showPreview && (
 					<pre className="whitespace-pre-wrap text-[10px] leading-tight bg-gray-50 border border-gray-200 rounded p-2 w-full h-10 overflow-y-auto">
-						{slides.length > 0
-							? slides[previewIndex]
-							: '// Save a hand to preview PBN'}
+						{extSlides.length > 0
+							? extSlides[previewIndex]
+							: '// Save a hand to preview Extended PBN'}
 					</pre>
 				)}
 			</div>

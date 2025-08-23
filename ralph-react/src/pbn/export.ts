@@ -19,9 +19,14 @@ export async function exportBoardPBN(board: Board): Promise<string> {
   const handBlocks = order.map((s) => suitBlock(board.hands[s]))
   const dealLine = `${board.dealPrefix}:${handBlocks.join(' ')}`
 
-  // compute owner string + hash
-  const owner = ownerStringFromHands(board.hands as any)
-  const dealHash = await computeDealHashV1(owner)
+  // compute owner string + hash (skip gracefully if hands are incomplete)
+  let dealHash: string | undefined
+  try {
+    const owner = ownerStringFromHands(board.hands as any)
+    dealHash = await computeDealHashV1(owner)
+  } catch {
+    dealHash = undefined
+  }
 
   const core = [
     `[Event "${board.event}"]`,
@@ -49,7 +54,7 @@ export async function exportBoardPBN(board: Board): Promise<string> {
   if (board.ext.diagram) ext.push(`[Diagram "${board.ext.diagram}"]`)
   if (board.ext.playscript) ext.push(`[PlayScript "${board.ext.playscript.replace(/\n/g,'\\n')}"]`)
   if (board.ext.scoring) ext.push(`[Scoring "${board.ext.scoring}"]`)
-  ext.push(`[DealHash "${dealHash}"]`)
+  if (dealHash) ext.push(`[DealHash "${dealHash}"]`)
 
   const notes = (board.notes||[]).map((n) => `[Note "${n.slice(0,300)}"]`)
 
