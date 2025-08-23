@@ -776,27 +776,7 @@ export default function Player() {
 					</div>
 				) : null}
 
-				{/* Current Trick panel with integrated stepper controls */}
-				<CurrentTrick
-					teacherMode={teacherMode}
-					trick={trick}
-					turnSeat={turnSeat}
-					hasPlay={!!totalMoves}
-					totalMoves={totalMoves}
-					helperText={stepHelper}
-					idx={playIdx}
-					onPrev={() => applyMovesTo(playIdx - 1)}
-					onNext={() => applyMovesTo(playIdx + 1)}
-					resultTag={current?.resultTricks}
-					completedTricks={tricksDecl + tricksDef}
-					finishedBanner={
-						result && !result.partial
-							? `${result.resultText} • Score ${result.score > 0 ? '+' : ''}${
-									result.score
-							  }`
-							: null
-					}
-				/>
+				{/* Trick panel will be placed below South inside the PlayerLayout */}
 
 				{/* Trick history */}
 				{trickHistory.length ? (
@@ -851,6 +831,20 @@ export default function Player() {
 						tricksDef={tricksDef}
 						neededToSet={neededToSet(effContract)}
 						teacherMode={teacherMode}
+												// Center/stepper props
+												totalMoves={totalMoves}
+												helperText={stepHelper}
+												idx={playIdx}
+												onPrev={() => applyMovesTo(playIdx - 1)}
+												onNext={() => applyMovesTo(playIdx + 1)}
+												resultTag={current?.resultTricks}
+												finishedBanner={
+														result && !result.partial
+																? `${result.resultText} • Score ${
+																				result.score > 0 ? '+' : ''
+																	}${result.score}`
+																: null
+												}
 					/>
 				) : (
 					<PreUploadGrid
@@ -883,6 +877,14 @@ function PlayerLayout({
 	tricksDef,
 	neededToSet,
 	teacherMode,
+	// Center/stepper props
+	totalMoves = 0,
+	helperText = 'Manual play',
+	idx = 0,
+	onPrev,
+	onNext,
+	resultTag,
+	finishedBanner,
 }) {
 	const seats = ['N', 'E', 'S', 'W']
 	// Use the shared seat order (kept for clarity)
@@ -897,6 +899,7 @@ function PlayerLayout({
 			visible = ['N', 'S']
 		}
 	}
+	const completedTricks = tricksDecl + tricksDef
 	return (
 		<div className="w-full flex flex-col items-stretch gap-2">
 			<div className="w-full flex items-start justify-center gap-3">
@@ -904,28 +907,99 @@ function PlayerLayout({
 				<div className="w-44 hidden md:flex flex-col gap-2">
 					{showSuitTally && <SuitTally tally={tally} />}
 				</div>
-				{/* Center seats */}
-				<div className="flex flex-col items-center gap-2">
-					<div className="flex flex-row flex-wrap items-start justify-center gap-2">
-						{seats.map((id) => (
+				{/* Center cross grid with compact spacing */}
+				<div className="flex-1">
+					<div className="grid grid-cols-3 gap-x-8 gap-y-1 items-center justify-items-center">
+						{/* Top (North) */}
+						<div />
+						<div>
 							<SeatPanel
-								key={id}
-								id={id}
+								id="N"
 								remaining={remaining}
 								onPlay={onPlay}
-								visible={visible.includes(id)}
+								visible={visible.includes('N')}
 								dealer={dealer}
 								vulnerable={vulnerable}
 								turnSeat={turnSeat}
 								trick={trick}
 								declarer={declarer}
-								playerName={players[id]}
+								playerName={players['N']}
 								showHcpWhenHidden={showHcpWhenHidden}
 								teacherMode={teacherMode}
 							/>
-						))}
+						</div>
+						<div />
+						{/* Middle row: West | (empty) | East */}
+						<div className="justify-self-end mr-2 -mt-14">
+							<SeatPanel
+								id="W"
+								remaining={remaining}
+								onPlay={onPlay}
+								visible={visible.includes('W')}
+								dealer={dealer}
+								vulnerable={vulnerable}
+								turnSeat={turnSeat}
+								trick={trick}
+								declarer={declarer}
+								playerName={players['W']}
+								showHcpWhenHidden={showHcpWhenHidden}
+								teacherMode={teacherMode}
+							/>
+						</div>
+						<div />
+						<div className="justify-self-start ml-2 -mt-14">
+							<SeatPanel
+								id="E"
+								remaining={remaining}
+								onPlay={onPlay}
+								visible={visible.includes('E')}
+								dealer={dealer}
+								vulnerable={vulnerable}
+								turnSeat={turnSeat}
+								trick={trick}
+								declarer={declarer}
+								playerName={players['E']}
+								showHcpWhenHidden={showHcpWhenHidden}
+								teacherMode={teacherMode}
+							/>
+						</div>
+						{/* Bottom (South) */}
+						<div />
+						<div className="-mt-8">
+							<SeatPanel
+								id="S"
+								remaining={remaining}
+								onPlay={onPlay}
+								visible={visible.includes('S')}
+								dealer={dealer}
+								vulnerable={vulnerable}
+								turnSeat={turnSeat}
+								trick={trick}
+								declarer={declarer}
+								playerName={players['S']}
+								showHcpWhenHidden={showHcpWhenHidden}
+								teacherMode={teacherMode}
+							/>
+						</div>
+						<div />
 					</div>
-					{/* Current trick now displayed above with integrated controls */}
+					{/* Place the trick panel below South */}
+					<div className="flex items-center justify-center mt-3">
+						<CurrentTrick
+							teacherMode={teacherMode}
+							trick={trick}
+							turnSeat={turnSeat}
+							hasPlay={!!totalMoves}
+							totalMoves={totalMoves}
+							helperText={helperText}
+							idx={idx}
+							onPrev={onPrev}
+							onNext={onNext}
+							resultTag={resultTag}
+							completedTricks={completedTricks}
+							finishedBanner={finishedBanner}
+						/>
+					</div>
 				</div>
 				{/* Right margin: scoreboard */}
 				<div className="w-64 hidden md:flex flex-col gap-2">
