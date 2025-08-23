@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { BoardZ } from './schemas/board'
+import { exportBoardPBN } from './pbn/export'
 
 // Deck suit order: Clubs, Diamonds, Hearts, Spades (traditional CDHS)
 const suits = [
@@ -193,7 +195,7 @@ function buildSinglePBN(hand, boardNo, dateStr) {
 	)
 }
 
-export default function DragDropCards() {
+export default function DragDropCards({ meta }) {
 	const [cards, setCards] = useState(initialCards)
 	const [bucketCards, setBucketCards] = useState({ N: [], E: [], S: [], W: [] })
 	const [draggedCard, setDraggedCard] = useState(null)
@@ -421,16 +423,83 @@ export default function DragDropCards() {
 		URL.revokeObjectURL(url)
 	}
 
+	// Helpers to map picker hands to Extended Board hands (rank chars and suit letters)
+	const toRankChar = (r) => (r === '10' ? 'T' : r)
+	const mapSeatHand = (handArr) => {
+		return {
+			S: sortByPbnRank(handArr.filter((c) => c.suit === 'Spades')).map((c) => toRankChar(c.rank)),
+			H: sortByPbnRank(handArr.filter((c) => c.suit === 'Hearts')).map((c) => toRankChar(c.rank)),
+			D: sortByPbnRank(handArr.filter((c) => c.suit === 'Diamonds')).map((c) => toRankChar(c.rank)),
+			C: sortByPbnRank(handArr.filter((c) => c.suit === 'Clubs')).map((c) => toRankChar(c.rank)),
+		}
+	}
+
+	const buildBoardFromHand = (hand, boardNo) => {
+		const dealer = dealerForBoard(boardNo)
+		const vul = vulnerabilityForBoard(boardNo)
+		const today = new Date()
+		const y = today.getFullYear()
+		const m = String(today.getMonth() + 1).padStart(2, '0')
+		const d = String(today.getDate()).padStart(2, '0')
+		const dateStrDefault = `${y}.${m}.${d}`
+
+		const event = meta?.event || 'Club Session'
+		const site = meta?.site || 'Local'
+		const dateStr = meta?.date || dateStrDefault
+
+		// dealPrefix aligns with dealer by default
+		const boardObj = {
+			event,
+			site,
+			date: dateStr,
+			board: boardNo,
+			dealer,
+			vul,
+			dealPrefix: dealer,
+			hands: {
+				N: mapSeatHand(hand.N),
+				E: mapSeatHand(hand.E),
+				S: mapSeatHand(hand.S),
+				W: mapSeatHand(hand.W),
+			},
+			notes: [],
+			ext: {
+				system: meta?.system || undefined,
+				theme: meta?.theme || undefined,
+				interf: meta?.interf || undefined,
+				lead: meta?.lead || undefined,
+				ddpar: meta?.ddpar || undefined,
+				scoring: meta?.scoring || undefined,
+			},
+		}
+		return BoardZ.parse(boardObj)
+	}
+
+	const exportSavedBoards = async () => {
+		const texts = []
+		for (let i = 0; i < savedHands.length; i++) {
+			const bno = startBoard + i
+			const board = buildBoardFromHand(savedHands[i], bno)
+			const txt = await exportBoardPBN(board)
+			texts.push(txt)
+		}
+		return texts.join('')
+	}
+
 	const handleGeneratePBN = async () => {
 		if (savedHands.length === 0) return
-		const pbn = buildPBN(savedHands, startBoard)
-		downloadPBN(pbn)
+		try {
+			const pbn = await exportSavedBoards()
+			downloadPBN(pbn)
+		} catch (e) {
+			console.error('Export failed', e)
+		}
 	}
 
 	const handleCopyPBN = async () => {
 		if (savedHands.length === 0) return
-		const pbn = buildPBN(savedHands, startBoard)
 		try {
+			const pbn = await exportSavedBoards()
 			await navigator.clipboard.writeText(pbn)
 			if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
 			setCopyState('ok')
@@ -442,14 +511,18 @@ export default function DragDropCards() {
 		}
 	}
 
-	const handleEmailPBN = () => {
+	const handleEmailPBN = async () => {
 		if (savedHands.length === 0) return
-		const pbn = buildPBN(savedHands, startBoard)
-		const subject = encodeURIComponent(
-			"PBN hands from Bristol Bridge Club's PBN Picker"
-		)
-		const body = encodeURIComponent(pbn)
-		window.location.href = `mailto:dr.mark.oconnor@googlemail.com?subject=${subject}&body=${body}`
+		try {
+			const pbn = await exportSavedBoards()
+			const subject = encodeURIComponent(
+				"PBN hands from Bristol Bridge Club's PBN Picker"
+			)
+			const body = encodeURIComponent(pbn)
+			window.location.href = `mailto:dr.mark.oconnor@googlemail.com?subject=${subject}&body=${body}`
+		} catch (e) {
+			console.error('Email export failed', e)
+		}
 	}
 
 	// Explicit dealer selection: aligns startBoard so the next board's dealer equals the chosen seat

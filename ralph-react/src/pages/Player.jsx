@@ -16,12 +16,8 @@ function parsePBN(text) {
 		const m = line.match(/^\[([^\s]+)\s+"([^"]*)"\]/)
 		if (!m) {
 			if (inAuction) {
-				const calls = line
-					.replace(/([;%].*)$/g, '')
-					.split(/\s+/)
-					.filter(Boolean)
-				if (calls.length)
-					current.auction = [...(current.auction || []), ...calls]
+				const calls = line.replace(/([;%].*)$/g, '').split(/\s+/).filter(Boolean)
+				if (calls.length) current.auction = [...(current.auction || []), ...calls]
 			}
 			if (inPlay) {
 				if (!current.play) current.play = []
@@ -570,37 +566,6 @@ export default function Player() {
 	return (
 		<div className="min-h-screen bg-white flex flex-col items-center px-4 py-6">
 			<div className="w-full max-w-5xl">
-				<div className="flex items-center justify-between mb-4">
-					<div>
-						{(() => {
-							const ev = cleanMetaVal(current?.meta?.event)
-							const dt = cleanMetaVal(current?.meta?.date)
-							const st = cleanMetaVal(current?.meta?.site)
-							const title =
-								ev || (selectedName ? selectedName : 'Tournament PBN Player')
-							const subtitle = [dt || null, st || null]
-								.filter(Boolean)
-								.join(' • ')
-							return (
-								<>
-									<h1 className="text-3xl font-bold text-gray-800">{title}</h1>
-									{subtitle ? (
-										<div className="text-xs text-gray-600">{subtitle}</div>
-									) : null}
-								</>
-							)
-						})()}
-					</div>
-					<Link to="/" className="text-sm text-sky-600 hover:underline">
-						← Home
-					</Link>
-				</div>
-
-				{/* Teacher mode overlay */}
-				{teacherMode ? (
-					<div className="fixed inset-0 bg-gradient-to-b from-slate-900/60 via-slate-900/40 to-slate-900/30 backdrop-blur-[2px] z-30 pointer-events-none" />
-				) : null}
-
 				<div className="flex items-center gap-3 mb-3">
 					<input
 						ref={fileRef}
@@ -835,8 +800,8 @@ export default function Player() {
 												totalMoves={totalMoves}
 												helperText={stepHelper}
 												idx={playIdx}
-												onPrev={() => applyMovesTo(playIdx - 1)}
-												onNext={() => applyMovesTo(playIdx + 1)}
+												onPrev={() => applyMovesTo(playIdxRef.current - 1)}
+												onNext={() => applyMovesTo(playIdxRef.current + 1)}
 												resultTag={current?.resultTricks}
 												finishedBanner={
 														result && !result.partial
@@ -845,7 +810,7 @@ export default function Player() {
 																	}${result.score}`
 																: null
 												}
-					/>
+											/>
 				) : (
 					<PreUploadGrid
 						onChooseFile={() => fileRef.current?.click()}
@@ -853,7 +818,7 @@ export default function Player() {
 						setExampleMsg={setExampleMsg}
 					/>
 				)}
-			</div>
+				</div>
 		</div>
 	)
 }
@@ -909,7 +874,7 @@ function PlayerLayout({
 				</div>
 				{/* Center cross grid with compact spacing */}
 				<div className="flex-1">
-					<div className="grid grid-cols-3 gap-x-8 gap-y-1 items-center justify-items-center">
+					<div className="grid grid-cols-3 gap-x-6 gap-y-0 items-center justify-items-center">
 						{/* Top (North) */}
 						<div />
 						<div>
@@ -930,7 +895,7 @@ function PlayerLayout({
 						</div>
 						<div />
 						{/* Middle row: West | (empty) | East */}
-						<div className="justify-self-end mr-2 -mt-14">
+						<div className="justify-self-end mr-2">
 							<SeatPanel
 								id="W"
 								remaining={remaining}
@@ -947,7 +912,7 @@ function PlayerLayout({
 							/>
 						</div>
 						<div />
-						<div className="justify-self-start ml-2 -mt-14">
+						<div className="justify-self-start ml-2">
 							<SeatPanel
 								id="E"
 								remaining={remaining}
@@ -965,7 +930,7 @@ function PlayerLayout({
 						</div>
 						{/* Bottom (South) */}
 						<div />
-						<div className="-mt-8">
+						<div>
 							<SeatPanel
 								id="S"
 								remaining={remaining}
@@ -1112,7 +1077,7 @@ function SeatPanel({
 								: 'relative z-40 bg-gradient-to-br from-white to-slate-50 ring-1 ring-slate-200'
 					  }`
 					: 'bg-white'
-			} w-64`}>
+			} w-48`}>
 			<div
 				className={`w-full ${
 					isDealer
@@ -1120,7 +1085,7 @@ function SeatPanel({
 						: isTurn
 						? 'bg-red-100 text-red-900'
 						: 'bg-gray-100 text-gray-800'
-				} font-extrabold text-[11px] tracking-widest uppercase px-2 py-1.5 flex items-center justify-between`}>
+				} font-extrabold text-[10px] tracking-widest uppercase px-1.5 py-1 flex items-center justify-between`}>
 				<span className="flex items-center gap-1">
 					{id === 'N'
 						? 'NORTH'
@@ -1132,19 +1097,19 @@ function SeatPanel({
 					{isDealer && (
 						<span
 							title="Dealer"
-							className="ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] rounded-full bg-amber-500 text-white">
+							className="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 text-[8px] rounded-full bg-amber-500 text-white">
 							D
 						</span>
 					)}
 				</span>
 				<span className="flex items-center gap-1">
 					{isTurn && (
-						<span className="text-[10px] font-bold text-white bg-red-500 rounded px-1 py-0.5">
+						<span className="text-[9px] font-bold text-white bg-red-500 rounded px-0.5 py-0.5">
 							{seatFullName(id)} to play
 						</span>
 					)}
 					{seatIsVul && (
-						<span className="text-[9px] font-bold text-red-700 bg-red-100 border border-red-200 rounded px-1 py-0.5">
+						<span className="text-[8px] font-bold text-red-700 bg-red-100 border border-red-200 rounded px-0.5 py-0.5">
 							V
 						</span>
 					)}
@@ -1156,16 +1121,16 @@ function SeatPanel({
 									['N', 'E', 'S', 'W'][
 										(['N', 'E', 'S', 'W'].indexOf(declarer) + 2) % 4
 									]))) && (
-						<span className="text-[10px] opacity-80">HCP {hcp}</span>
+						<span className="text-[9px] opacity-80">HCP {hcp}</span>
 					)}
-					<span className="text-[10px] opacity-80">{bySeat.length}/13</span>
+					<span className="text-[9px] opacity-80">{bySeat.length}/13</span>
 				</span>
 			</div>
-			<div className="h-64 p-3 flex flex-col gap-2 items-stretch justify-center">
+			<div className="h-40 p-2 flex flex-col gap-1.5 items-stretch justify-center">
 				{suitOrder.map((suit) => (
 					<div key={`${id}-${suit}`} className="flex items-center gap-3 flex-1">
 						<div
-							className={`w-8 text-center text-2xl leading-none ${suitText[suit]}`}>
+							className={`w-6 text-center text-lg leading-none ${suitText[suit]}`}>
 							{suit === 'Clubs'
 								? '♣'
 								: suit === 'Diamonds'
@@ -1174,7 +1139,7 @@ function SeatPanel({
 								? '♥'
 								: '♠'}
 						</div>
-						<div className="flex-1 text-base md:text-lg leading-none flex flex-wrap gap-2">
+						<div className="flex-1 text-xs md:text-sm leading-none flex flex-wrap gap-1">
 							{visible ? (
 								cardsBySuit[suit].length ? (
 									cardsBySuit[suit].map((c) => {
@@ -1211,7 +1176,7 @@ function SeatPanel({
 			</div>
 			{/* Player name if present in PBN */}
 			{playerName ? (
-				<div className="px-2 pb-2 pt-0.5 text-[10px] text-gray-500 truncate">
+				<div className="px-1.5 pb-1.5 pt-0.5 text-[9px] text-gray-500 truncate">
 					{playerName}
 				</div>
 			) : null}
@@ -1292,79 +1257,76 @@ function CurrentTrick({
 			: 0
 	return (
 		<div
-			className={`mt-2 rounded-xl border p-3 w-full max-w-[820px] ${
+			className={`mt-2 rounded-xl border p-2 w-full max-w-[820px] ${
 				teacherMode
 					? 'relative z-40 bg-white/95 shadow-lg shadow-slate-900/5 ring-1 ring-slate-200'
 					: 'bg-white'
 			}`}>
-			<div className="text-xs text-gray-600 mb-2 flex items-center justify-between">
-				<span>Current Trick</span>
-				<div className="flex items-center gap-2">
-					<button
-						onClick={onPrev}
-						disabled={safeIdx === 0}
-						className="px-2 py-0.5 rounded border text-xs disabled:opacity-40">
-						Prev
-					</button>
-					<span className="text-[10px] text-gray-600">
-						{totalMoves > 0 ? `${safeIdx + 1}/${totalMoves}` : '—'}
-					</span>
-					<button
-						onClick={onNext}
-						disabled={safeIdx >= totalMoves - 1}
-						className="px-2 py-0.5 rounded border text-xs disabled:opacity-40">
-						Next
-					</button>
-				</div>
-			</div>
-			<div className="text-[11px] text-gray-600 mb-2">{helper}</div>
-			{/* Unified grid: labels above boxes in the same 4-column grid */}
-			<div className="grid grid-cols-4 gap-4 place-items-center">
-				{order.map((seat) => {
-					const isTurn = turnSeat === seat
-					return (
-						<div
-							key={`ctl-${seat}`}
-							className={`text-center text-[11px] font-semibold transition-colors ${
-								isTurn
-									? 'text-red-600 drop-shadow-[0_0_0.25rem_rgba(220,38,38,0.25)]'
-									: 'text-gray-500'
-							}`}>
-							{seat} {isTurn ? '•' : ''}
-						</div>
-					)
-				})}
-				{order.map((seat) => {
-					const t = items.find((x) => x.seat === seat)
-					const isTurn = turnSeat === seat
-					return (
-						<div
-							key={`ct-${seat}`}
-							className={`w-20 h-24 rounded-xl border flex items-center justify-center transition-all ${
-								teacherMode
-									? isTurn
-										? 'border-red-400 ring-2 ring-red-300/60 bg-gradient-to-br from-white to-rose-50'
-										: 'border-slate-200 bg-gradient-to-br from-white to-slate-50'
-									: isTurn
-									? 'border-red-400 bg-red-50'
-									: 'bg-[#FFF8E7]'
-							}`}>
-							{t ? (
+			<div className="flex items-center justify-between">
+				<button
+					onClick={onPrev}
+					disabled={safeIdx === 0}
+					className="px-2 py-1 rounded border text-xs disabled:opacity-40">
+					← Prev
+				</button>
+				<div className="flex-1 px-2">
+					<div className="text-[11px] text-center text-gray-600">{helper}</div>
+					<div className="grid grid-cols-4 gap-2 place-items-center mt-1">
+						{order.map((seat) => {
+							const isTurn = turnSeat === seat
+							return (
 								<div
-									className={`${
-										t.card.suit === 'Hearts' || t.card.suit === 'Diamonds'
-											? 'text-red-600'
-											: 'text-black'
-									} text-2xl font-extrabold drop-shadow-[0_0_0.25rem_rgba(0,0,0,0.1)]`}>
-									{t.card.rank}
-									{suitSymbol(t.card.suit)}
+									key={`ctl-${seat}`}
+									className={`text-center text-[9px] font-semibold ${
+										isTurn ? 'text-red-600' : 'text-gray-500'
+									}`}>
+									{seat} {isTurn ? '•' : ''}
 								</div>
-							) : (
-								<span className="text-[10px] text-gray-400">—</span>
-							)}
-						</div>
-					)
-				})}
+							)
+						})}
+						{order.map((seat) => {
+							const t = items.find((x) => x.seat === seat)
+							const isTurn = turnSeat === seat
+							return (
+								<div
+									key={`ct-${seat}`}
+									className={`w-12 h-12 rounded-lg border flex items-center justify-center ${
+										teacherMode
+											? isTurn
+												? 'border-red-400 ring-1 ring-red-300/60 bg-gradient-to-br from-white to-rose-50'
+												: 'border-slate-200 bg-gradient-to-br from-white to-slate-50'
+											: isTurn
+											? 'border-red-400 bg-red-50'
+											: 'bg-[#FFF8E7]'
+									}`}>
+									{t ? (
+										<div
+											className={`${
+												t.card.suit === 'Hearts' || t.card.suit === 'Diamonds'
+													? 'text-red-600'
+													: 'text-black'
+											} text-lg font-extrabold`}>
+											{t.card.rank}
+											{suitSymbol(t.card.suit)}
+										</div>
+									) : (
+										<span className="text-[10px] text-gray-400">—</span>
+									)}
+								</div>
+							)
+						})}
+					</div>
+				</div>
+				<button
+					onClick={onNext}
+					disabled={safeIdx >= totalMoves - 1}
+					className="px-1.5 py-0.5 rounded border text-[11px] disabled:opacity-40">
+					Next →
+				</button>
+			</div>
+			<div className="mt-0.5 text-[10px] text-center text-gray-500">
+				{totalMoves > 0 ? `${safeIdx + 1}/${totalMoves}` : '—'} · Completed tricks:{' '}
+				<span className="font-semibold">{Math.max(0, completed)}</span>
 			</div>
 			{finishedBanner ? (
 				<div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
@@ -1373,14 +1335,9 @@ function CurrentTrick({
 			) : null}
 			{resultTag != null && idx < totalMoves ? (
 				<div className="mt-2 text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded px-2 py-1">
-					Result tag present: final tricks by declarer = {resultTag}. Play may
-					be truncated in the PBN.
+					Result tag present: final tricks by declarer = {resultTag}. Play may be truncated in the PBN.
 				</div>
 			) : null}
-			<div className="mt-2 text-[11px] text-gray-500">
-				Completed tricks:{' '}
-				<span className="font-semibold">{Math.max(0, completed)}</span>
-			</div>
 		</div>
 	)
 }
