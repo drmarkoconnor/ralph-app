@@ -28,6 +28,7 @@ function parsePBN(text) {
 		}
 		const tag = m[1]
 		const val = m[2]
+		const trailing = line.slice(m[0].length).trim()
 		if (tag !== 'Auction' && inAuction) inAuction = false
 		if (tag !== 'Play' && inPlay) inPlay = false
 		if (tag === 'Board') {
@@ -36,6 +37,7 @@ function parsePBN(text) {
 				board: parseInt(val, 10),
 				meta: { ...globalMeta.meta },
 				players: { ...globalMeta.players },
+				ext: {},
 			}
 			inAuction = false
 			inPlay = false
@@ -60,6 +62,11 @@ function parsePBN(text) {
 			inAuction = true
 			current.auction = []
 			current.auctionDealer = val
+			// Support inline auction content on the same line
+			if (trailing) {
+				const calls = trailing.replace(/([;%].*)$/g, '').split(/\s+/).filter(Boolean)
+				if (calls.length) current.auction.push(...calls)
+			}
 			continue
 		}
 		if (tag === 'Play') {
@@ -68,11 +75,38 @@ function parsePBN(text) {
 			current.playLeader = val
 			continue
 		}
+		if (tag === 'PlayScript') {
+			// decode escaped newlines (\n) into actual lines
+			const decoded = String(val || '').replace(/\\n/g, '\n')
+			current.playScript = decoded
+			continue
+		}
 		// Metadata and player names
 		if (tag === 'Event' || tag === 'Site' || tag === 'Date') {
 			const tgt = current.board ? current : globalMeta
 			tgt.meta = tgt.meta || {}
 			tgt.meta[tag.toLowerCase()] = val
+			continue
+		}
+		// Extended tags
+		if (tag === 'TagSpec') {
+			current.ext = current.ext || {}
+			current.ext.tagSpec = val
+			continue
+		}
+		if (tag === 'System' || tag === 'Theme' || tag === 'Interf' || tag === 'Lead' || tag === 'DDPar' || tag === 'Diagram' || tag === 'Scoring') {
+			current.ext = current.ext || {}
+			current.ext[tag.toLowerCase()] = val
+			continue
+		}
+		if (tag === 'DealHash') {
+			current.ext = current.ext || {}
+			current.ext.dealHash = val
+			continue
+		}
+		if (tag === 'Note') {
+			current.notes = current.notes || []
+			if (val) current.notes.push(val)
 			continue
 		}
 		if (
@@ -168,6 +202,55 @@ function cleanMetaVal(val) {
 	if (t === '-' || /^N\/?A$/i.test(t)) return ''
 	return t
 }
+
+// Compact metadata panel using small-caps to display core and extended tags
+function MetaPanel({ current, effContract, effDeclarer }) {
+	if (!current) return null
+	const m = current.meta || {}
+	const ext = current.ext || {}
+	const rows = []
+	const pushRow = (label, value) => {
+		const v = cleanMetaVal(value)
+		if (v) rows.push({ label, value: v })
+	}
+	pushRow('Event', m.event)
+	pushRow('Site', m.site)
+	pushRow('Date', m.date)
+	pushRow('Board', current.board)
+	pushRow('Dealer', current.dealer)
+	pushRow('Vul', current.vul)
+	if (effContract) pushRow('Contract', `${effContract}${effDeclarer ? ` (${effDeclarer})` : ''}`)
+	pushRow('System', ext.system)
+	pushRow('Theme', ext.theme)
+	pushRow('Interf', ext.interf)
+	pushRow('Lead', ext.lead)
+	pushRow('DDPar', ext.ddpar)
+	pushRow('Scoring', ext.scoring)
+	pushRow('DealHash', ext.dealHash)
+	const notes = Array.isArray(current.notes) ? current.notes.filter(Boolean) : []
+	return (
+		<div className="mb-2 rounded border bg-white p-2 w-full max-w-5xl">
+			<div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-xs" style={{ fontVariant: 'small-caps' }}>
+				{rows.map((r, idx) => (
+					<div key={`m-${idx}`} className="flex items-center gap-1">
+						<span className="text-gray-500">{r.label}:</span>
+						<span className="text-gray-800 font-semibold truncate">{r.value}</span>
+					</div>
+				))}
+			</div>
+			{notes.length ? (
+				<div className="mt-2 text-xs" style={{ fontVariant: 'small-caps' }}>
+					<div className="text-gray-500 mb-1">Notes:</div>
+					<ul className="list-disc ml-5 text-gray-800 space-y-0.5">
+						{notes.map((n, i) => (
+							<li key={`note-${i}`}>{n}</li>
+						))}
+					</ul>
+				</div>
+			) : null}
+		</div>
+	)
+}
 export default function Player() {
 	// Controlled stepper index (how many cards from playMoves applied)
 	const [playIdx, setPlayIdx] = useState(0)
@@ -197,13 +280,21 @@ export default function Player() {
 	const current = deals[index] || null
 
 	// Effective context with manual overrides
-	const effDeclarer = manualDeclarer || current?.declarer || ''
+	// Validate auction and optionally derive contract/declarer
+	const validatedAuction = useMemo(() => {
+		if (!current) return { legal: false }
+		const calls = Array.isArray(current.auction) ? current.auction : []
+		if (!calls.length) return { legal: false }
+		return validateAuction(current.auctionDealer || current.dealer || 'N', calls)
+	}, [current])
+
+	const effDeclarer = manualDeclarer || current?.declarer || (validatedAuction.legal ? validatedAuction.declarer : '') || ''
 	const effContract = useMemo(() => {
 		if (manualLevel && manualStrain) {
 			return `${manualLevel}${manualStrain}${manualDbl}`
 		}
-		return current?.contract || ''
-	}, [manualLevel, manualStrain, manualDbl, current?.contract])
+		return current?.contract || (validatedAuction.legal ? validatedAuction.contract : '') || ''
+	}, [manualLevel, manualStrain, manualDbl, current?.contract, validatedAuction])
 	const effTrump = parseTrump(effContract)
 
 	// Board state: remaining hands, per-suit tally of played cards, current trick, turn, and trick counts
@@ -232,14 +323,26 @@ export default function Player() {
 	}, [current?.deal])
 
 	const playMoves = useMemo(() => {
-		if (!current?.play?.length) return []
-		try {
-			return parsePlayMoves(current?.playLeader, current.play, effContract)
-		} catch (e) {
-			console.error('Failed to parse Play:', e)
-			return []
+		// Prefer explicit Play lines
+		if (current?.play?.length) {
+			try {
+				return parsePlayMoves(current?.playLeader, current.play, effContract)
+			} catch (e) {
+				console.error('Failed to parse Play:', e)
+				return []
+			}
 		}
-	}, [current?.playLeader, current?.play, effContract])
+		// Next, try PlayScript if provided
+		if (current?.playScript) {
+			try {
+				return parsePlayScript(current.playScript)
+			} catch (e) {
+				console.error('Failed to parse PlayScript:', e)
+				return []
+			}
+		}
+		return []
+	}, [current?.playLeader, current?.play, current?.playScript, effContract])
 
 	// Unified timeline source: prefer PBN moves if present, else manual
 	const usingManual = playMoves.length === 0
@@ -630,15 +733,17 @@ export default function Player() {
 						/>{' '}
 						Show HCP for declarer/dummy when hidden
 					</label>
-					<label className="text-sm text-gray-700 flex items-center gap-1">
-						<input
-							type="checkbox"
-							checked={teacherMode}
-							onChange={(e) => setTeacherMode(e.target.checked)}
-						/>{' '}
-						Teacher mode
-					</label>
+					<button
+						onClick={() => setTeacherMode((v) => !v)}
+						className={`${teacherMode ? 'bg-rose-600 text-white border-rose-700' : 'bg-white text-gray-800 border-gray-300'} px-2.5 py-1 rounded border text-sm font-semibold`}
+						title={teacherMode ? 'Disable teacher focus' : 'Enable teacher focus'}
+					>
+						{teacherMode ? 'Teacher Focus: ON' : 'Teacher Focus'}
+					</button>
 				</div>
+
+				{/* Metadata panel */}
+				<MetaPanel current={current} effContract={effContract} effDeclarer={effDeclarer} />
 
 				{hideDefenders && turnSeat && isDefender(turnSeat, effDeclarer) && (
 					<div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">
@@ -646,10 +751,10 @@ export default function Player() {
 					</div>
 				)}
 
-				{current?.auction?.length ? (
+				{validatedAuction?.legal ? (
 					<AuctionView
-						dealer={current.auctionDealer || current.dealer}
-						calls={current.auction}
+							dealer={current.auctionDealer || current.dealer}
+							calls={current.auction}
 						finalContract={effContract}
 					/>
 				) : null}
@@ -1067,23 +1172,23 @@ function SeatPanel({
 				isDealer
 					? 'border-amber-500'
 					: isTurn
-					? 'border-red-500'
+					? 'border-red-600'
 					: 'border-gray-300'
 			} ${
 				teacherMode
-					? `${
-							isTurn
-								? 'relative z-40 bg-gradient-to-br from-white to-rose-50 ring-1 ring-red-200'
-								: 'relative z-40 bg-gradient-to-br from-white to-slate-50 ring-1 ring-slate-200'
-					  }`
+					? isTurn
+						? 'relative z-40 bg-gradient-to-br from-white to-rose-100 ring-2 ring-rose-400 shadow-lg'
+						: 'relative z-30 bg-gradient-to-br from-white to-slate-50 ring-1 ring-slate-300'
 					: 'bg-white'
-			} w-48`}>
+			} ${teacherMode && !isTurn ? 'opacity-90' : ''} w-48`}>
 			<div
 				className={`w-full ${
 					isDealer
 						? 'bg-amber-100 text-amber-900'
 						: isTurn
 						? 'bg-red-100 text-red-900'
+						: teacherMode
+						? 'bg-gray-50 text-gray-700'
 						: 'bg-gray-100 text-gray-800'
 				} font-extrabold text-[10px] tracking-widest uppercase px-1.5 py-1 flex items-center justify-between`}>
 				<span className="flex items-center gap-1">
@@ -1104,7 +1209,7 @@ function SeatPanel({
 				</span>
 				<span className="flex items-center gap-1">
 					{isTurn && (
-						<span className="text-[9px] font-bold text-white bg-red-500 rounded px-0.5 py-0.5">
+						<span className="text-[9px] font-bold text-white bg-red-600 rounded px-0.5 py-0.5">
 							{seatFullName(id)} to play
 						</span>
 					)}
@@ -1259,7 +1364,7 @@ function CurrentTrick({
 		<div
 			className={`mt-2 rounded-xl border p-2 w-full max-w-[820px] ${
 				teacherMode
-					? 'relative z-40 bg-white/95 shadow-lg shadow-slate-900/5 ring-1 ring-slate-200'
+					? 'relative z-40 bg-white shadow-lg ring-2 ring-rose-200'
 					: 'bg-white'
 			}`}>
 			<div className="flex items-center justify-between">
@@ -1293,7 +1398,7 @@ function CurrentTrick({
 									className={`w-12 h-12 rounded-lg border flex items-center justify-center ${
 										teacherMode
 											? isTurn
-												? 'border-red-400 ring-1 ring-red-300/60 bg-gradient-to-br from-white to-rose-50'
+												? 'border-red-500 ring-2 ring-rose-400 bg-gradient-to-br from-white to-rose-50'
 												: 'border-slate-200 bg-gradient-to-br from-white to-slate-50'
 											: isTurn
 											? 'border-red-400 bg-red-50'
@@ -1774,5 +1879,139 @@ function computeDuplicateScore(contract, declarer, vul, declTricks) {
 		resultText = `${level}${strain}${dbl ? dbl : ''}-${down}`
 	}
 	return { partial: false, score, resultText }
+}
+
+// Validate an auction sequence: ensure legal progression and end condition; derive final contract and declarer.
+function validateAuction(dealer, calls) {
+	const seats = ['N','E','S','W']
+	const startIdx = seats.indexOf(dealer || 'N')
+	const seatFor = (i) => seats[(startIdx + i) % 4]
+	const isPass = (c) => /^P(ASS)?$/i.test(c)
+	const isX = (c) => /^X$/i.test(c)
+	const isXX = (c) => /^XX$/i.test(c)
+	const bidRe = /^([1-7])(C|D|H|S|NT)$/i
+	let lastBid = null
+	let lastBidder = null
+	let lastDblBy = null
+	let lastXXBy = null
+	const history = []
+	for (let i = 0; i < calls.length; i++) {
+		const call = calls[i]
+		const seat = seatFor(i)
+		if (bidRe.test(call)) {
+			const m = call.toUpperCase().match(bidRe)
+			const level = parseInt(m[1], 10)
+			const strain = m[2]
+			// must overcall the last bid
+			if (lastBid) {
+				const [prevLevel, prevStrain] = lastBid
+				const ord = ['C','D','H','S','NT']
+				const prevIdx = ord.indexOf(prevStrain)
+				const curIdx = ord.indexOf(strain)
+				const higher = level > prevLevel || (level === prevLevel && curIdx > prevIdx)
+				if (!higher) return { legal: false }
+			}
+			lastBid = [level, strain]
+			lastBidder = seat
+			lastDblBy = null
+			lastXXBy = null
+			history.push({ seat, type: 'bid', level, strain })
+			continue
+		}
+		if (isX(call)) {
+			// double allowed only if opponents made last bid and no outstanding double on that bid
+			if (!lastBid || !lastBidder) return { legal: false }
+			const oppTeam = (s) => (seats.indexOf(s) % 2)
+			if (oppTeam(seat) === oppTeam(lastBidder)) return { legal: false }
+			if (lastDblBy) return { legal: false }
+			lastDblBy = seat
+			lastXXBy = null
+			history.push({ seat, type: 'X' })
+			continue
+		}
+		if (isXX(call)) {
+			// redouble allowed only if partner was doubled and not already redoubled
+			if (!lastDblBy) return { legal: false }
+			const sameTeam = (a,b) => (seats.indexOf(a) % 2) === (seats.indexOf(b) % 2)
+			if (!sameTeam(seat, lastBidder)) return { legal: false }
+			if (lastXXBy) return { legal: false }
+			lastXXBy = seat
+			history.push({ seat, type: 'XX' })
+			continue
+		}
+		if (isPass(call)) {
+			history.push({ seat, type: 'P' })
+			continue
+		}
+		// unknown call
+		return { legal: false }
+	}
+	// Determine ending: needs a final bid followed by three passes
+	const callsUp = calls.map((c) => c.toUpperCase())
+	const lastBidIdx = [...callsUp].map((c, i) => (bidRe.test(c) ? i : -1)).filter((i) => i >= 0).pop()
+	if (lastBidIdx == null) return { legal: false }
+	if (!(callsUp[lastBidIdx + 1] === 'PASS' && callsUp[lastBidIdx + 2] === 'PASS' && callsUp[lastBidIdx + 3] === 'PASS')) {
+		return { legal: false }
+	}
+	const m = calls[lastBidIdx].toUpperCase().match(bidRe)
+	const level = parseInt(m[1], 10)
+	const strain = m[2]
+	const dbl = callsUp.slice(lastBidIdx + 1).includes('XX')
+		? 'XX'
+		: callsUp.slice(lastBidIdx + 1).includes('X')
+		? 'X'
+		: ''
+	const contract = `${level}${strain}${dbl}`
+	// declarer is first player of the declaring side who bid the final strain
+	const declaringTeam = seats.indexOf(lastBidder) % 2
+	let declarer = null
+	for (let i = 0; i <= lastBidIdx; i++) {
+		const c = calls[i]
+		if (bidRe.test(c)) {
+			const mm = c.toUpperCase().match(bidRe)
+			if (mm[2] === strain) {
+				const seat = seatFor(i)
+				if (seats.indexOf(seat) % 2 === declaringTeam) {
+					declarer = seat
+					break
+				}
+			}
+		}
+	}
+	return { legal: true, contract, declarer }
+}
+
+// Parse a PlayScript string into chronological seat-aware moves.
+function parsePlayScript(text) {
+	// Expected lines like "W: S4" or "N: HA" or suit-first notation similar to Play
+	const lines = String(text || '').split(/\n/)
+	const out = []
+	const parse = (tok) => {
+		const t = String(tok || '').trim()
+		if (!t) return null
+		const m = t.match(/^([SHDC])\s*(10|[AKQJT2-9])$/i)
+		if (m) return { suit: suitName(m[1]), rank: normalizeRank(m[2]) }
+		const m2 = t.match(/^([SHDC])[-:](10|[AKQJT2-9])$/i)
+		if (m2) return { suit: suitName(m2[1]), rank: normalizeRank(m2[2]) }
+		return null
+	}
+	let leader = null
+	for (const raw of lines) {
+		const s = raw.replace(/([;%].*)$/g, '').trim()
+		if (!s) continue
+		const mm = s.match(/^([NESW])\s*:\s*(.+)$/i)
+		if (!mm) continue
+		const seat = mm[1].toUpperCase()
+		const rest = mm[2]
+		const parts = rest.split(/\s+/).filter(Boolean)
+		for (const p of parts) {
+			const token = parse(p)
+			if (token) {
+				out.push({ seat, suit: token.suit, rank: token.rank })
+				if (!leader) leader = seat
+			}
+		}
+	}
+	return out
 }
 
