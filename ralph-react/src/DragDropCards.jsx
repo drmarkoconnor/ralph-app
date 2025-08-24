@@ -211,6 +211,113 @@ export default function DragDropCards({ meta }) {
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const copyTimerRef = useRef(null)
 
+	// Keyboard entry mode: type ranks for a suit, Enter to commit, advance suits then seats (N→E→S→W)
+	const [kbMode, setKbMode] = useState(false)
+	const [kbSeatIdx, setKbSeatIdx] = useState(0) // 0:N,1:E,2:S,3:W
+	const [kbSuitIdx, setKbSuitIdx] = useState(0) // 0:Clubs,1:Diamonds,2:Hearts,3:Spades
+	const [kbRanks, setKbRanks] = useState([]) // ranks buffer e.g. ['2','10','J','Q']
+	const KB_SEATS = SEATS
+	const KB_SUITS = ['Clubs', 'Diamonds', 'Hearts', 'Spades']
+
+	const currentKbSeat = KB_SEATS[kbSeatIdx]
+	const currentKbSuit = KB_SUITS[kbSuitIdx]
+
+	const resetKb = () => {
+		setKbSeatIdx(0)
+		setKbSuitIdx(0)
+		setKbRanks([])
+	}
+
+	useEffect(() => {
+		if (!kbMode) return
+		const onKey = (e) => {
+			const tag = String(e.target?.tagName || '').toLowerCase()
+			if (
+				tag === 'input' ||
+				tag === 'textarea' ||
+				tag === 'select' ||
+				e.target?.isContentEditable
+			)
+				return
+			if (e.metaKey || e.ctrlKey || e.altKey) return
+			const k = e.key
+			if (k === 'Escape') {
+				setKbMode(false)
+				return
+			}
+			if (k === 'Enter') {
+				e.preventDefault()
+				commitKbSelection()
+				return
+			}
+			if (k === 'Backspace') {
+				e.preventDefault()
+				setKbRanks((prev) => prev.slice(0, Math.max(0, prev.length - 1)))
+				return
+			}
+			const lower = k.toLowerCase()
+			let rank = null
+			if (/^[2-9]$/.test(lower)) rank = lower
+			else if (lower === 't' || lower === '0') rank = '10'
+			else if (lower === 'j') rank = 'J'
+			else if (lower === 'q') rank = 'Q'
+			else if (lower === 'k') rank = 'K'
+			else if (lower === 'a') rank = 'A'
+			if (rank) {
+				e.preventDefault()
+				addRankToCurrentSeat(rank)
+			}
+		}
+		window.addEventListener('keydown', onKey)
+		return () => window.removeEventListener('keydown', onKey)
+	}, [kbMode])
+
+	const advanceKbCursor = () => {
+		if (kbSuitIdx >= KB_SUITS.length - 1) {
+			setKbSuitIdx(0)
+			setKbSeatIdx((i) => (i + 1) % KB_SEATS.length)
+		} else {
+			setKbSuitIdx((i) => i + 1)
+		}
+	}
+
+	const commitKbSelection = () => {
+		// Enter advances to next suit/seat and clears the typed buffer; cards were already applied on keypress
+		setKbRanks([])
+		advanceKbCursor()
+	}
+
+	// Immediately move a typed rank from deck to the current seat/suit
+	const addRankToCurrentSeat = (rank) => {
+		const seat = currentKbSeat
+		const suit = currentKbSuit
+		// prevent duplicate rank entries in the status buffer
+		setKbRanks((prev) => (prev.includes(rank) ? prev : [...prev, rank]))
+		// add to bucket and remove from deck if available and capacity allows
+		setCards((prevCards) => {
+			const idx = prevCards.findIndex(
+				(c) =>
+					c.suit === suit &&
+					(c.rank === rank || (rank === '10' && c.rank === '10'))
+			)
+			if (idx === -1) return prevCards
+			let canAdd = false
+			const card = prevCards[idx]
+			setBucketCards((prevBuckets) => {
+				if (prevBuckets[seat].length >= 13) return prevBuckets
+				canAdd = true
+				return {
+					...prevBuckets,
+					[seat]: [...prevBuckets[seat], card],
+				}
+			})
+			if (!canAdd) return prevCards
+			const next = prevCards.slice()
+			next.splice(idx, 1)
+			return next
+		})
+	}
+
 	// Extended PBN preview slides generated asynchronously per saved hand
 	const [extSlides, setExtSlides] = useState([])
 	useEffect(() => {
@@ -438,10 +545,18 @@ export default function DragDropCards({ meta }) {
 	const toRankChar = (r) => (r === '10' ? 'T' : r)
 	const mapSeatHand = (handArr) => {
 		return {
-			S: sortByPbnRank(handArr.filter((c) => c.suit === 'Spades')).map((c) => toRankChar(c.rank)),
-			H: sortByPbnRank(handArr.filter((c) => c.suit === 'Hearts')).map((c) => toRankChar(c.rank)),
-			D: sortByPbnRank(handArr.filter((c) => c.suit === 'Diamonds')).map((c) => toRankChar(c.rank)),
-			C: sortByPbnRank(handArr.filter((c) => c.suit === 'Clubs')).map((c) => toRankChar(c.rank)),
+			S: sortByPbnRank(handArr.filter((c) => c.suit === 'Spades')).map((c) =>
+				toRankChar(c.rank)
+			),
+			H: sortByPbnRank(handArr.filter((c) => c.suit === 'Hearts')).map((c) =>
+				toRankChar(c.rank)
+			),
+			D: sortByPbnRank(handArr.filter((c) => c.suit === 'Diamonds')).map((c) =>
+				toRankChar(c.rank)
+			),
+			C: sortByPbnRank(handArr.filter((c) => c.suit === 'Clubs')).map((c) =>
+				toRankChar(c.rank)
+			),
 		}
 	}
 
@@ -456,11 +571,18 @@ export default function DragDropCards({ meta }) {
 
 		const event = meta?.event || 'Club Teaching session'
 		const siteChoice = meta?.siteChoice || 'Bristol Bridge Club'
-		const site = siteChoice === 'Other' ? (meta?.siteOther || 'Other') : siteChoice
+		const site =
+			siteChoice === 'Other' ? meta?.siteOther || 'Other' : siteChoice
 		const dateStr = meta?.date || dateStrDefault
 
-		const theme = meta?.themeChoice === 'Custom…' ? (meta?.themeCustom || '') : meta?.themeChoice
-		const auctionTokens = (meta?.auctionText || '').trim().split(/\s+/).filter(Boolean)
+		const theme =
+			meta?.themeChoice === 'Custom…'
+				? meta?.themeCustom || ''
+				: meta?.themeChoice
+		const auctionTokens = (meta?.auctionText || '')
+			.trim()
+			.split(/\s+/)
+			.filter(Boolean)
 
 		// dealPrefix aligns with dealer by default
 		const boardObj = {
@@ -477,8 +599,10 @@ export default function DragDropCards({ meta }) {
 				S: mapSeatHand(hand.S),
 				W: mapSeatHand(hand.W),
 			},
-			notes: (meta?.notes && meta.notes.length) ? meta.notes : [],
-			auctionStart: auctionTokens.length ? (meta?.auctionStart || 'N') : undefined,
+			notes: meta?.notes && meta.notes.length ? meta.notes : [],
+			auctionStart: auctionTokens.length
+				? meta?.auctionStart || 'N'
+				: undefined,
 			auction: auctionTokens.length ? auctionTokens : undefined,
 			ext: {
 				system: meta?.system || undefined,
@@ -672,7 +796,14 @@ export default function DragDropCards({ meta }) {
 										? '♥'
 										: '♠'}
 								</div>
-								<div className="flex-1">{suiteRowContent(suitCards, id)}</div>
+								<div
+									className={`flex-1 ${
+										kbMode && id === currentKbSeat && suit === currentKbSuit
+											? 'ring-2 ring-sky-300 rounded bg-white'
+											: ''
+									}`}>
+									{suiteRowContent(suitCards, id, suit)}
+								</div>
 							</div>
 						)
 					})}
@@ -685,7 +816,7 @@ export default function DragDropCards({ meta }) {
 	}
 
 	// Renders a suit row as a sequence of draggable rank spans; shows '-' when void
-	function suiteRowContent(suitCards, bucketId) {
+	function suiteRowContent(suitCards, bucketId, suitName) {
 		if (!suitCards || suitCards.length === 0) {
 			return <span className="text-base md:text-lg text-gray-500">-</span>
 		}
@@ -766,6 +897,25 @@ export default function DragDropCards({ meta }) {
 
 			{/* Send-to buttons directly under the deck */}
 			<div className="flex flex-wrap gap-2 justify-center -mt-1 mb-1 w-full">
+				<button
+					className={`px-3 py-2 rounded ${
+						kbMode ? 'bg-black text-white' : 'bg-gray-900 text-white'
+					} text-xs hover:opacity-90`}
+					onClick={() => {
+						setKbMode((v) => !v)
+						if (!kbMode) {
+							resetKb()
+						}
+					}}
+					title="Toggle keyboard entry (type ranks then Enter; Enter on empty = void; Esc to exit)">
+					{kbMode ? 'Keyboard: ON' : 'Keyboard: OFF'}
+				</button>
+				{kbMode && (
+					<span className="inline-block text-[11px] text-white bg-gray-900 px-2 py-1 rounded">
+						Typing: {currentKbSeat} • {currentKbSuit} —{' '}
+						{kbRanks.length ? kbRanks.join(' ') : 'void'}
+					</span>
+				)}
 				<button
 					className="px-3 py-2 rounded bg-sky-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('N')}

@@ -16,8 +16,12 @@ function parsePBN(text) {
 		const m = line.match(/^\[([^\s]+)\s+"([^"]*)"\]/)
 		if (!m) {
 			if (inAuction) {
-				const calls = line.replace(/([;%].*)$/g, '').split(/\s+/).filter(Boolean)
-				if (calls.length) current.auction = [...(current.auction || []), ...calls]
+				const calls = line
+					.replace(/([;%].*)$/g, '')
+					.split(/\s+/)
+					.filter(Boolean)
+				if (calls.length)
+					current.auction = [...(current.auction || []), ...calls]
 			}
 			if (inPlay) {
 				if (!current.play) current.play = []
@@ -64,7 +68,10 @@ function parsePBN(text) {
 			current.auctionDealer = val
 			// Support inline auction content on the same line
 			if (trailing) {
-				const calls = trailing.replace(/([;%].*)$/g, '').split(/\s+/).filter(Boolean)
+				const calls = trailing
+					.replace(/([;%].*)$/g, '')
+					.split(/\s+/)
+					.filter(Boolean)
 				if (calls.length) current.auction.push(...calls)
 			}
 			continue
@@ -94,7 +101,15 @@ function parsePBN(text) {
 			current.ext.tagSpec = val
 			continue
 		}
-		if (tag === 'System' || tag === 'Theme' || tag === 'Interf' || tag === 'Lead' || tag === 'DDPar' || tag === 'Diagram' || tag === 'Scoring') {
+		if (
+			tag === 'System' ||
+			tag === 'Theme' ||
+			tag === 'Interf' ||
+			tag === 'Lead' ||
+			tag === 'DDPar' ||
+			tag === 'Diagram' ||
+			tag === 'Scoring'
+		) {
 			current.ext = current.ext || {}
 			current.ext[tag.toLowerCase()] = val
 			continue
@@ -219,7 +234,11 @@ function MetaPanel({ current, effContract, effDeclarer }) {
 	pushRow('Board', current.board)
 	pushRow('Dealer', current.dealer)
 	pushRow('Vul', current.vul)
-	if (effContract) pushRow('Contract', `${effContract}${effDeclarer ? ` (${effDeclarer})` : ''}`)
+	if (effContract)
+		pushRow(
+			'Contract',
+			`${effContract}${effDeclarer ? ` (${effDeclarer})` : ''}`
+		)
 	pushRow('System', ext.system)
 	pushRow('Theme', ext.theme)
 	pushRow('Interf', ext.interf)
@@ -227,14 +246,20 @@ function MetaPanel({ current, effContract, effDeclarer }) {
 	pushRow('DDPar', ext.ddpar)
 	pushRow('Scoring', ext.scoring)
 	pushRow('DealHash', ext.dealHash)
-	const notes = Array.isArray(current.notes) ? current.notes.filter(Boolean) : []
+	const notes = Array.isArray(current.notes)
+		? current.notes.filter(Boolean)
+		: []
 	return (
 		<div className="mb-2 rounded border bg-white p-2 w-full max-w-5xl">
-			<div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-xs" style={{ fontVariant: 'small-caps' }}>
+			<div
+				className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-xs"
+				style={{ fontVariant: 'small-caps' }}>
 				{rows.map((r, idx) => (
 					<div key={`m-${idx}`} className="flex items-center gap-1">
 						<span className="text-gray-500">{r.label}:</span>
-						<span className="text-gray-800 font-semibold truncate">{r.value}</span>
+						<span className="text-gray-800 font-semibold truncate">
+							{r.value}
+						</span>
 					</div>
 				))}
 			</div>
@@ -262,6 +287,7 @@ export default function Player() {
 	const [showSuitTally, setShowSuitTally] = useState(false)
 	const [showHcpWhenHidden, setShowHcpWhenHidden] = useState(false)
 	const [teacherMode, setTeacherMode] = useState(false)
+	const [auctionRevealed, setAuctionRevealed] = useState(true)
 	const playIdxRef = useRef(0)
 	const lastTrickKeyRef = useRef('')
 
@@ -279,22 +305,50 @@ export default function Player() {
 	const [index, setIndex] = useState(0)
 	const current = deals[index] || null
 
+	// When teacher focus is toggled on, hide the auction by default; reveal when turning off
+	useEffect(() => {
+		if (teacherMode) setAuctionRevealed(false)
+		else setAuctionRevealed(true)
+	}, [teacherMode])
+
+	// On board change while in teacher mode, keep auction hidden by default
+	useEffect(() => {
+		if (teacherMode) setAuctionRevealed(false)
+	}, [teacherMode, current?.board])
+
 	// Effective context with manual overrides
 	// Validate auction and optionally derive contract/declarer
 	const validatedAuction = useMemo(() => {
 		if (!current) return { legal: false }
 		const calls = Array.isArray(current.auction) ? current.auction : []
 		if (!calls.length) return { legal: false }
-		return validateAuction(current.auctionDealer || current.dealer || 'N', calls)
+		return validateAuction(
+			current.auctionDealer || current.dealer || 'N',
+			calls
+		)
 	}, [current])
 
-	const effDeclarer = manualDeclarer || current?.declarer || (validatedAuction.legal ? validatedAuction.declarer : '') || ''
+	const effDeclarer =
+		manualDeclarer ||
+		current?.declarer ||
+		(validatedAuction.legal ? validatedAuction.declarer : '') ||
+		''
 	const effContract = useMemo(() => {
 		if (manualLevel && manualStrain) {
 			return `${manualLevel}${manualStrain}${manualDbl}`
 		}
-		return current?.contract || (validatedAuction.legal ? validatedAuction.contract : '') || ''
-	}, [manualLevel, manualStrain, manualDbl, current?.contract, validatedAuction])
+		return (
+			current?.contract ||
+			(validatedAuction.legal ? validatedAuction.contract : '') ||
+			''
+		)
+	}, [
+		manualLevel,
+		manualStrain,
+		manualDbl,
+		current?.contract,
+		validatedAuction,
+	])
 	const effTrump = parseTrump(effContract)
 
 	// Board state: remaining hands, per-suit tally of played cards, current trick, turn, and trick counts
@@ -310,6 +364,8 @@ export default function Player() {
 	const [tricksDecl, setTricksDecl] = useState(0)
 	const [tricksDef, setTricksDef] = useState(0)
 	const resolvingRef = useRef(false)
+	const [flashWinner, setFlashWinner] = useState(null)
+	const flashTimerRef = useRef(null)
 
 	// Derived: parsed hands and play moves
 	const hands = useMemo(() => {
@@ -360,7 +416,7 @@ export default function Player() {
 			setPlayIdx(0)
 			return
 		}
-		// Seed from hands; determine initial leader: Play tag, else left of declarer, else dealer
+		// Seed from hands; determine initial leader: Play tag, else right of declarer, else dealer
 		const seed = {
 			N: [...hands.N],
 			E: [...hands.E],
@@ -373,7 +429,7 @@ export default function Player() {
 		setTricksDecl(0)
 		setTricksDef(0)
 		const leaderFromDec = effDeclarer
-			? leftOf(effDeclarer)
+			? rightOf(effDeclarer)
 			: current?.dealer || 'N'
 		setTurnSeat(current?.playLeader || leaderFromDec)
 		setPlayIdx(0)
@@ -389,6 +445,7 @@ export default function Player() {
 		if (current?.declarer && manualDeclarer) setManualDeclarer('')
 	}, [
 		hands,
+		effDeclarer,
 		current?.declarer,
 		current?.dealer,
 		current?.playLeader,
@@ -399,6 +456,13 @@ export default function Player() {
 	const applyMovesTo = useCallback(
 		(k) => {
 			if (!hands) return
+			// cancel any pending winner flash when stepping
+			if (flashTimerRef.current) {
+				clearTimeout(flashTimerRef.current)
+				flashTimerRef.current = null
+			}
+			resolvingRef.current = false
+			setFlashWinner(null)
 			const maxK = Math.max(0, Math.min(k, timelineMoves.length))
 			const rem = {
 				N: [...hands.N],
@@ -410,7 +474,7 @@ export default function Player() {
 			const trickArr = []
 			const trump = effTrump
 			const dec = effDeclarer || null
-			const leaderFromDec = dec ? leftOf(dec) : current?.dealer || 'N'
+			const leaderFromDec = dec ? rightOf(dec) : current?.dealer || 'N'
 			let nextSeat = current?.playLeader || leaderFromDec
 			let declTricks = 0
 			let defTricks = 0
@@ -444,11 +508,8 @@ export default function Player() {
 						}
 						nextSeat = winner
 					}
-					// keep the completed trick visible if we've reached the target step;
-					// only clear when there are more moves to apply
-					if (i < maxK - 1) {
-						trickArr.length = 0
-					}
+					// clear completed trick immediately for next round visual
+					trickArr.length = 0
 				}
 			}
 
@@ -474,6 +535,16 @@ export default function Player() {
 	useEffect(() => {
 		playIdxRef.current = playIdx
 	}, [playIdx])
+
+	// Cleanup any pending flash timer when deal/context changes or unmounts
+	useEffect(() => {
+		return () => {
+			if (flashTimerRef.current) {
+				clearTimeout(flashTimerRef.current)
+				flashTimerRef.current = null
+			}
+		}
+	}, [])
 
 	// Keyboard shortcuts for stepping (Left/Right arrows)
 	useEffect(() => {
@@ -521,7 +592,9 @@ export default function Player() {
 		const pool = remaining[seat]
 		const chosen = pool.find((c) => c.id === cardId)
 		if (!chosen) return
-		const leadSuit = trick.length ? trick[0].card.suit : null
+		// At the start of a new trick (0 or 4 cards in trick), there is no lead suit restriction
+		const isNewTrick = trick.length === 0 || trick.length === 4
+		const leadSuit = isNewTrick ? null : trick[0].card.suit
 		const hasLead = leadSuit ? pool.some((c) => c.suit === leadSuit) : false
 		if (leadSuit && hasLead && chosen.suit !== leadSuit) return
 
@@ -549,7 +622,7 @@ export default function Player() {
 		setTrick((prev) => {
 			let nextTrick
 			if (prev.length === 4) {
-				// Start a new trick with this card; keep previous 4-card trick visible until now
+				// Start a new trick with this card; previous trick cleared already
 				nextTrick = [{ seat, card }]
 				setTurnSeat(rightOf(seat))
 				lastTrickKeyRef.current = ''
@@ -560,7 +633,7 @@ export default function Player() {
 				setTurnSeat(rightOf(seat))
 				return nextTrick
 			}
-			// Trick just completed with 4th card: determine winner and keep trick visible
+			// Trick just completed with 4th card: determine winner, flash briefly, then clear center
 			resolvingRef.current = true
 			const winner = evaluateTrick(nextTrick, effTrump)
 			const key = nextTrick
@@ -569,19 +642,29 @@ export default function Player() {
 			if (lastTrickKeyRef.current === key) {
 				// prevent double-processing the same 4-card trick (e.g., in dev double invoke)
 				resolvingRef.current = false
-				return nextTrick
+				return []
 			}
 			lastTrickKeyRef.current = key
 			if (winner) {
+				setFlashWinner(winner)
+				setTurnSeat(winner)
 				if (effDeclarer) {
 					const isDeclSide = isDeclarerSide(winner, effDeclarer)
 					if (isDeclSide) setTricksDecl((n) => n + 1)
 					else setTricksDef((n) => n + 1)
 				}
-				setTurnSeat(winner)
 			}
-			// Do not clear here; keep visible until next card is played
-			resolvingRef.current = false
+			// Delay clearing the center for a short flash
+			if (flashTimerRef.current) {
+				clearTimeout(flashTimerRef.current)
+				flashTimerRef.current = null
+			}
+			flashTimerRef.current = setTimeout(() => {
+				setTrick([])
+				setFlashWinner(null)
+				resolvingRef.current = false
+				flashTimerRef.current = null
+			}, 450)
 			return nextTrick
 		})
 	}
@@ -632,7 +715,7 @@ export default function Player() {
 		const rounds = []
 		const trump = effTrump
 		const dec = effDeclarer
-		const leaderFromDec = dec ? leftOf(dec) : current?.dealer || 'N'
+		const leaderFromDec = dec ? rightOf(dec) : current?.dealer || 'N'
 		let nextSeat = current?.playLeader || leaderFromDec
 		let cur = []
 		for (let i = 0; i < k; i++) {
@@ -665,102 +748,153 @@ export default function Player() {
 		current?.dealer,
 		current?.playLeader,
 	])
-
+	const derivedCounts = useMemo(() => {
+		if (!effDeclarer) return { decl: tricksDecl, def: tricksDef }
+		let decl = 0
+		let def = 0
+		for (const r of trickHistory) {
+			if (!r.winner) continue
+			if (isDeclarerSide(r.winner, effDeclarer)) decl++
+			else def++
+		}
+		return { decl, def }
+	}, [trickHistory, effDeclarer, tricksDecl, tricksDef])
 	return (
-		<div className="min-h-screen bg-white flex flex-col items-center px-4 py-6">
-			<div className="w-full max-w-5xl">
-				<div className="flex items-center gap-3 mb-3">
-					<input
-						ref={fileRef}
-						type="file"
-						accept=".pbn,text/plain"
-						onChange={onFile}
-						className="hidden"
+		<div className="w-full flex flex-col items-center">
+			{teacherMode ? (
+				<div className="pointer-events-none fixed inset-0 z-10 bg-black/80" />
+			) : null}
+			<div className="relative z-20 w-full max-w-5xl">
+				{!teacherMode ? (
+					<div className="flex items-center gap-3 mb-3">
+						<input
+							ref={fileRef}
+							type="file"
+							accept=".pbn,text/plain"
+							onChange={onFile}
+							className="hidden"
+						/>
+						<button
+							onClick={() => fileRef.current?.click()}
+							className="px-3 py-1.5 rounded bg-sky-600 text-white text-sm hover:bg-sky-700 active:scale-[.98]">
+							Choose PBN…
+						</button>
+						<span className="text-xs px-2 py-1 rounded border bg-white min-w-[180px] text-gray-600">
+							{selectedName || 'No file chosen'}
+						</span>
+						<button
+							disabled={!deals.length}
+							onClick={prev}
+							className="px-2 py-1 rounded border text-sm disabled:opacity-40">
+							Prev
+						</button>
+						<div className="text-sm text-gray-600">
+							{deals.length
+								? `Board ${deals[index]?.board || index + 1} — ${index + 1}/${
+										deals.length
+								  }`
+								: 'No file loaded'}
+							{effContract
+								? ` • Contract: ${effContract}${
+										effDeclarer ? ` (${effDeclarer})` : ''
+								  }`
+								: ' • No bidding found'}
+						</div>
+						<button
+							disabled={!deals.length}
+							onClick={next}
+							className="px-2 py-1 rounded border text-sm disabled:opacity-40">
+							Next
+						</button>
+						<label className="ml-auto text-sm text-gray-700 flex items-center gap-1">
+							<input
+								type="checkbox"
+								checked={hideDefenders}
+								onChange={(e) => setHideDefenders(e.target.checked)}
+							/>{' '}
+							Hide defenders
+						</label>
+						<label className="text-sm text-gray-700 flex items-center gap-1">
+							<input
+								type="checkbox"
+								checked={showSuitTally}
+								onChange={(e) => setShowSuitTally(e.target.checked)}
+							/>{' '}
+							Show suit tally
+						</label>
+						<label className="text-sm text-gray-700 flex items-center gap-1">
+							<input
+								type="checkbox"
+								checked={showHcpWhenHidden}
+								onChange={(e) => setShowHcpWhenHidden(e.target.checked)}
+							/>{' '}
+							Show HCP for declarer/dummy when hidden
+						</label>
+						{validatedAuction?.legal ? (
+							<button
+								onClick={() => setAuctionRevealed((v) => !v)}
+								className={`px-2.5 py-1 rounded border text-sm font-semibold ${
+									auctionRevealed
+										? 'bg-white text-gray-800 border-gray-300'
+										: 'bg-violet-600 text-white border-violet-700'
+								}`}
+								title={auctionRevealed ? 'Hide auction' : 'Reveal the auction'}>
+								{auctionRevealed ? 'Hide Auction' : 'Reveal Auction'}
+							</button>
+						) : null}
+						<button
+							onClick={() => setTeacherMode((v) => !v)}
+							className={`${
+								teacherMode
+									? 'bg-rose-600 text-white border-rose-700'
+									: 'bg-white text-gray-800 border-gray-300'
+							} px-2.5 py-1 rounded border text-sm font-semibold`}
+							title={
+								teacherMode ? 'Disable teacher focus' : 'Enable teacher focus'
+							}>
+							{teacherMode ? 'Teacher Focus: ON' : 'Teacher Focus'}
+						</button>
+					</div>
+				) : null}
+
+				{/* Floating exit for Teacher Focus */}
+				{teacherMode ? (
+					<button
+						onClick={() => setTeacherMode(false)}
+						className="fixed top-2 right-2 z-30 px-2 py-1 rounded bg-rose-600 text-white text-xs shadow"
+						title="Exit teacher focus">
+						Exit Focus
+					</button>
+				) : null}
+
+				{/* Metadata panel (hidden in Teacher Focus) */}
+				{!teacherMode ? (
+					<MetaPanel
+						current={current}
+						effContract={effContract}
+						effDeclarer={effDeclarer}
 					/>
-					<button
-						onClick={() => fileRef.current?.click()}
-						className="px-3 py-1.5 rounded bg-sky-600 text-white text-sm hover:bg-sky-700 active:scale-[.98]">
-						Choose PBN…
-					</button>
-					<span className="text-xs px-2 py-1 rounded border bg-white min-w-[180px] text-gray-600">
-						{selectedName || 'No file chosen'}
-					</span>
-					<button
-						disabled={!deals.length}
-						onClick={prev}
-						className="px-2 py-1 rounded border text-sm disabled:opacity-40">
-						Prev
-					</button>
-					<div className="text-sm text-gray-600">
-						{deals.length
-							? `Board ${deals[index]?.board || index + 1} — ${index + 1}/${
-									deals.length
-							  }`
-							: 'No file loaded'}
-						{effContract
-							? ` • Contract: ${effContract}${
-									effDeclarer ? ` (${effDeclarer})` : ''
-							  }`
-							: ' • No bidding found'}
-					</div>
-					<button
-						disabled={!deals.length}
-						onClick={next}
-						className="px-2 py-1 rounded border text-sm disabled:opacity-40">
-						Next
-					</button>
-					<label className="ml-auto text-sm text-gray-700 flex items-center gap-1">
-						<input
-							type="checkbox"
-							checked={hideDefenders}
-							onChange={(e) => setHideDefenders(e.target.checked)}
-						/>{' '}
-						Hide defenders
-					</label>
-					<label className="text-sm text-gray-700 flex items-center gap-1">
-						<input
-							type="checkbox"
-							checked={showSuitTally}
-							onChange={(e) => setShowSuitTally(e.target.checked)}
-						/>{' '}
-						Show suit tally
-					</label>
-					<label className="text-sm text-gray-700 flex items-center gap-1">
-						<input
-							type="checkbox"
-							checked={showHcpWhenHidden}
-							onChange={(e) => setShowHcpWhenHidden(e.target.checked)}
-						/>{' '}
-						Show HCP for declarer/dummy when hidden
-					</label>
-					<button
-						onClick={() => setTeacherMode((v) => !v)}
-						className={`${teacherMode ? 'bg-rose-600 text-white border-rose-700' : 'bg-white text-gray-800 border-gray-300'} px-2.5 py-1 rounded border text-sm font-semibold`}
-						title={teacherMode ? 'Disable teacher focus' : 'Enable teacher focus'}
-					>
-						{teacherMode ? 'Teacher Focus: ON' : 'Teacher Focus'}
-					</button>
-				</div>
+				) : null}
 
-				{/* Metadata panel */}
-				<MetaPanel current={current} effContract={effContract} effDeclarer={effDeclarer} />
+				{!teacherMode &&
+					hideDefenders &&
+					turnSeat &&
+					isDefender(turnSeat, effDeclarer) && (
+						<div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">
+							Defender's turn is hidden — unhide defenders to choose a card.
+						</div>
+					)}
 
-				{hideDefenders && turnSeat && isDefender(turnSeat, effDeclarer) && (
-					<div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">
-						Defender's turn is hidden — unhide defenders to choose a card.
-					</div>
-				)}
-
-				{validatedAuction?.legal ? (
+				{validatedAuction?.legal && auctionRevealed && !teacherMode ? (
 					<AuctionView
-							dealer={current.auctionDealer || current.dealer}
-							calls={current.auction}
+						dealer={current.auctionDealer || current.dealer}
+						calls={current.auction}
 						finalContract={effContract}
 					/>
 				) : null}
 
 				{/* Manual contract/declarer controls when missing in PBN */}
-				{!current?.contract ? (
+				{!teacherMode && !current?.contract ? (
 					<div className="mb-2 rounded border bg-white p-2 text-xs text-gray-700 flex flex-wrap items-center gap-2">
 						<span className="font-semibold">Set contract:</span>
 						<label className="flex items-center gap-1">
@@ -836,7 +970,7 @@ export default function Player() {
 								// set initial leader from declarer if available, else dealer
 								const leaderFromDec =
 									manualDeclarer || current?.declarer
-										? leftOf(manualDeclarer || current?.declarer)
+										? rightOf(manualDeclarer || current?.declarer)
 										: current?.dealer || 'N'
 								setTurnSeat(current?.playLeader || leaderFromDec)
 							}}
@@ -848,34 +982,36 @@ export default function Player() {
 
 				{/* Trick panel will be placed below South inside the PlayerLayout */}
 
-				{/* Trick history */}
-				{trickHistory.length ? (
-					<div className="mt-2 rounded-lg border bg-white p-2 w-full max-w-[820px] text-xs text-gray-700 relative z-40">
-						<div className="font-semibold mb-1">Trick history</div>
+				{/* Card tally (four columns per trick, in play order) */}
+				{!teacherMode && trickHistory.length ? (
+					<div className="mt-2 rounded-lg border bg-white p-2 w-full max-w-[820px] text-xs text-gray-700">
+						<div className="font-semibold mb-1">Card tally</div>
 						<div className="flex flex-col gap-1">
-							{trickHistory.map((t, i) => (
-								<div key={`th-${i}`} className="leading-tight">
-									{t.cards
-										.map((c, j) => {
+							{trickHistory.map((t, i) => {
+								// Ensure exactly four columns; pad with blanks for partial tricks
+								const cols = [0, 1, 2, 3].map((idx) => t.cards[idx] || null)
+								return (
+									<div key={`ct-${i}`} className="grid grid-cols-4 gap-2">
+										{cols.map((c, j) => {
+											if (!c)
+												return (
+													<span key={`ct-${i}-${j}`} className="text-gray-400">
+														—
+													</span>
+												)
 											const token = `${c.rank}${suitLetter(c.suit)}`
 											const isWin = t.winner && c.seat === t.winner
 											return (
 												<span
-													key={`th-${i}-${j}`}
+													key={`ct-${i}-${j}`}
 													className={isWin ? 'font-bold' : ''}>
 													{token}
 												</span>
 											)
-										})
-										.reduce(
-											(acc, el, idx) =>
-												idx
-													? [...acc, <span key={`sep-${i}-${idx}`}>:</span>, el]
-													: [el],
-											[]
-										)}
-								</div>
-							))}
+										})}
+									</div>
+								)
+							})}
 						</div>
 					</div>
 				) : null}
@@ -897,25 +1033,26 @@ export default function Player() {
 						turnSeat={turnSeat}
 						trick={trick}
 						tally={tally}
-						tricksDecl={tricksDecl}
-						tricksDef={tricksDef}
+						tricksDecl={derivedCounts.decl}
+						tricksDef={derivedCounts.def}
 						neededToSet={neededToSet(effContract)}
 						teacherMode={teacherMode}
-												// Center/stepper props
-												totalMoves={totalMoves}
-												helperText={stepHelper}
-												idx={playIdx}
-												onPrev={() => applyMovesTo(playIdxRef.current - 1)}
-												onNext={() => applyMovesTo(playIdxRef.current + 1)}
-												resultTag={current?.resultTricks}
-												finishedBanner={
-														result && !result.partial
-																? `${result.resultText} • Score ${
-																				result.score > 0 ? '+' : ''
-																	}${result.score}`
-																: null
-												}
-											/>
+						flashWinner={flashWinner}
+						// Center/stepper props
+						totalMoves={totalMoves}
+						helperText={stepHelper}
+						idx={playIdx}
+						onPrev={() => applyMovesTo(playIdxRef.current - 1)}
+						onNext={() => applyMovesTo(playIdxRef.current + 1)}
+						resultTag={current?.resultTricks}
+						finishedBanner={
+							result && !result.partial
+								? `${result.resultText} • Score ${result.score > 0 ? '+' : ''}${
+										result.score
+								  }`
+								: null
+						}
+					/>
 				) : (
 					<PreUploadGrid
 						onChooseFile={() => fileRef.current?.click()}
@@ -923,7 +1060,7 @@ export default function Player() {
 						setExampleMsg={setExampleMsg}
 					/>
 				)}
-				</div>
+			</div>
 		</div>
 	)
 }
@@ -947,6 +1084,7 @@ function PlayerLayout({
 	tricksDef,
 	neededToSet,
 	teacherMode,
+	flashWinner,
 	// Center/stepper props
 	totalMoves = 0,
 	helperText = 'Manual play',
@@ -1053,23 +1191,44 @@ function PlayerLayout({
 						</div>
 						<div />
 					</div>
-					{/* Place the trick panel below South */}
-					<div className="flex items-center justify-center mt-3">
-						<CurrentTrick
-							teacherMode={teacherMode}
-							trick={trick}
-							turnSeat={turnSeat}
-							hasPlay={!!totalMoves}
-							totalMoves={totalMoves}
-							helperText={helperText}
-							idx={idx}
-							onPrev={onPrev}
-							onNext={onNext}
-							resultTag={resultTag}
-							completedTricks={completedTricks}
-							finishedBanner={finishedBanner}
-						/>
-					</div>
+					{/* Trick panel placement: above North in teacher mode, below South otherwise */}
+					{teacherMode ? (
+						<div className="col-span-3 flex items-center justify-center mb-2">
+							<CurrentTrick
+								teacherMode={teacherMode}
+								trick={trick}
+								turnSeat={turnSeat}
+								winnerSeat={flashWinner}
+								hasPlay={!!totalMoves}
+								totalMoves={totalMoves}
+								helperText={helperText}
+								idx={idx}
+								onPrev={onPrev}
+								onNext={onNext}
+								resultTag={resultTag}
+								completedTricks={completedTricks}
+								finishedBanner={finishedBanner}
+							/>
+						</div>
+					) : (
+						<div className="flex items-center justify-center mt-3">
+							<CurrentTrick
+								teacherMode={teacherMode}
+								trick={trick}
+								turnSeat={turnSeat}
+								winnerSeat={flashWinner}
+								hasPlay={!!totalMoves}
+								totalMoves={totalMoves}
+								helperText={helperText}
+								idx={idx}
+								onPrev={onPrev}
+								onNext={onNext}
+								resultTag={resultTag}
+								completedTricks={completedTricks}
+								finishedBanner={finishedBanner}
+							/>
+						</div>
+					)}
 				</div>
 				{/* Right margin: scoreboard */}
 				<div className="w-64 hidden md:flex flex-col gap-2">
@@ -1177,8 +1336,8 @@ function SeatPanel({
 			} ${
 				teacherMode
 					? isTurn
-						? 'relative z-40 bg-gradient-to-br from-white to-rose-100 ring-2 ring-rose-400 shadow-lg'
-						: 'relative z-30 bg-gradient-to-br from-white to-slate-50 ring-1 ring-slate-300'
+						? 'relative z-20 bg-white ring-2 ring-rose-400 shadow-lg'
+						: 'relative z-10 bg-white/95 ring-1 ring-slate-300'
 					: 'bg-white'
 			} ${teacherMode && !isTurn ? 'opacity-90' : ''} w-48`}>
 			<div
@@ -1340,6 +1499,7 @@ function CurrentTrick({
 	teacherMode = false,
 	trick,
 	turnSeat,
+	winnerSeat,
 	hasPlay,
 	totalMoves = 0,
 	helperText = 'Manual play',
@@ -1364,7 +1524,7 @@ function CurrentTrick({
 		<div
 			className={`mt-2 rounded-xl border p-2 w-full max-w-[820px] ${
 				teacherMode
-					? 'relative z-40 bg-white shadow-lg ring-2 ring-rose-200'
+					? 'relative z-20 bg-white shadow-lg ring-2 ring-rose-200'
 					: 'bg-white'
 			}`}>
 			<div className="flex items-center justify-between">
@@ -1392,18 +1552,22 @@ function CurrentTrick({
 						{order.map((seat) => {
 							const t = items.find((x) => x.seat === seat)
 							const isTurn = turnSeat === seat
+							const isWinner =
+								winnerSeat && seat === winnerSeat && items.length === 4
+							const base = teacherMode
+								? isTurn
+									? 'border-red-500 ring-2 ring-rose-400 bg-gradient-to-br from-white to-rose-50'
+									: 'border-slate-200 bg-gradient-to-br from-white to-slate-50'
+								: isTurn
+								? 'border-red-400 bg-red-50'
+								: 'bg-[#FFF8E7]'
+							const winnerClass = isWinner
+								? ' ring-2 ring-emerald-400 border-emerald-500'
+								: ''
 							return (
 								<div
 									key={`ct-${seat}`}
-									className={`w-12 h-12 rounded-lg border flex items-center justify-center ${
-										teacherMode
-											? isTurn
-												? 'border-red-500 ring-2 ring-rose-400 bg-gradient-to-br from-white to-rose-50'
-												: 'border-slate-200 bg-gradient-to-br from-white to-slate-50'
-											: isTurn
-											? 'border-red-400 bg-red-50'
-											: 'bg-[#FFF8E7]'
-									}`}>
+									className={`w-12 h-12 rounded-lg border flex items-center justify-center ${base}${winnerClass}`}>
 									{t ? (
 										<div
 											className={`${
@@ -1430,8 +1594,8 @@ function CurrentTrick({
 				</button>
 			</div>
 			<div className="mt-0.5 text-[10px] text-center text-gray-500">
-				{totalMoves > 0 ? `${safeIdx + 1}/${totalMoves}` : '—'} · Completed tricks:{' '}
-				<span className="font-semibold">{Math.max(0, completed)}</span>
+				{totalMoves > 0 ? `${safeIdx + 1}/${totalMoves}` : '—'} · Completed
+				tricks: <span className="font-semibold">{Math.max(0, completed)}</span>
 			</div>
 			{finishedBanner ? (
 				<div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
@@ -1440,7 +1604,8 @@ function CurrentTrick({
 			) : null}
 			{resultTag != null && idx < totalMoves ? (
 				<div className="mt-2 text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded px-2 py-1">
-					Result tag present: final tricks by declarer = {resultTag}. Play may be truncated in the PBN.
+					Result tag present: final tricks by declarer = {resultTag}. Play may
+					be truncated in the PBN.
 				</div>
 			) : null}
 		</div>
@@ -1883,7 +2048,7 @@ function computeDuplicateScore(contract, declarer, vul, declTricks) {
 
 // Validate an auction sequence: ensure legal progression and end condition; derive final contract and declarer.
 function validateAuction(dealer, calls) {
-	const seats = ['N','E','S','W']
+	const seats = ['N', 'E', 'S', 'W']
 	const startIdx = seats.indexOf(dealer || 'N')
 	const seatFor = (i) => seats[(startIdx + i) % 4]
 	const isPass = (c) => /^P(ASS)?$/i.test(c)
@@ -1905,10 +2070,11 @@ function validateAuction(dealer, calls) {
 			// must overcall the last bid
 			if (lastBid) {
 				const [prevLevel, prevStrain] = lastBid
-				const ord = ['C','D','H','S','NT']
+				const ord = ['C', 'D', 'H', 'S', 'NT']
 				const prevIdx = ord.indexOf(prevStrain)
 				const curIdx = ord.indexOf(strain)
-				const higher = level > prevLevel || (level === prevLevel && curIdx > prevIdx)
+				const higher =
+					level > prevLevel || (level === prevLevel && curIdx > prevIdx)
 				if (!higher) return { legal: false }
 			}
 			lastBid = [level, strain]
@@ -1921,7 +2087,7 @@ function validateAuction(dealer, calls) {
 		if (isX(call)) {
 			// double allowed only if opponents made last bid and no outstanding double on that bid
 			if (!lastBid || !lastBidder) return { legal: false }
-			const oppTeam = (s) => (seats.indexOf(s) % 2)
+			const oppTeam = (s) => seats.indexOf(s) % 2
 			if (oppTeam(seat) === oppTeam(lastBidder)) return { legal: false }
 			if (lastDblBy) return { legal: false }
 			lastDblBy = seat
@@ -1932,7 +2098,7 @@ function validateAuction(dealer, calls) {
 		if (isXX(call)) {
 			// redouble allowed only if partner was doubled and not already redoubled
 			if (!lastDblBy) return { legal: false }
-			const sameTeam = (a,b) => (seats.indexOf(a) % 2) === (seats.indexOf(b) % 2)
+			const sameTeam = (a, b) => seats.indexOf(a) % 2 === seats.indexOf(b) % 2
 			if (!sameTeam(seat, lastBidder)) return { legal: false }
 			if (lastXXBy) return { legal: false }
 			lastXXBy = seat
@@ -1948,9 +2114,18 @@ function validateAuction(dealer, calls) {
 	}
 	// Determine ending: needs a final bid followed by three passes
 	const callsUp = calls.map((c) => c.toUpperCase())
-	const lastBidIdx = [...callsUp].map((c, i) => (bidRe.test(c) ? i : -1)).filter((i) => i >= 0).pop()
+	const lastBidIdx = [...callsUp]
+		.map((c, i) => (bidRe.test(c) ? i : -1))
+		.filter((i) => i >= 0)
+		.pop()
 	if (lastBidIdx == null) return { legal: false }
-	if (!(callsUp[lastBidIdx + 1] === 'PASS' && callsUp[lastBidIdx + 2] === 'PASS' && callsUp[lastBidIdx + 3] === 'PASS')) {
+	if (
+		!(
+			callsUp[lastBidIdx + 1] === 'PASS' &&
+			callsUp[lastBidIdx + 2] === 'PASS' &&
+			callsUp[lastBidIdx + 3] === 'PASS'
+		)
+	) {
 		return { legal: false }
 	}
 	const m = calls[lastBidIdx].toUpperCase().match(bidRe)
