@@ -292,6 +292,10 @@ export default function Player() {
 	const playIdxRef = useRef(0)
 	const lastTrickKeyRef = useRef('')
 	const [pauseAtTrickEnd, setPauseAtTrickEnd] = useState(false)
+	const pauseRef = useRef(false)
+	useEffect(() => {
+		pauseRef.current = pauseAtTrickEnd
+	}, [pauseAtTrickEnd])
 
 	// Manual play timeline when no PBN Play is present
 	const [manualMoves, setManualMoves] = useState([]) // { seat, suit, rank }[]
@@ -473,6 +477,11 @@ export default function Player() {
 		else setAuctionRevealed(true)
 	}, [teacherMode])
 
+	// In teacher mode, default to pausing at trick boundaries for clearer teaching flow
+	useEffect(() => {
+		if (teacherMode) setPauseAtTrickEnd(true)
+	}, [teacherMode])
+
 	// On board change while in teacher mode, keep auction hidden by default
 	useEffect(() => {
 		if (teacherMode) setAuctionRevealed(false)
@@ -626,7 +635,7 @@ export default function Player() {
 			resolvingRef.current = false
 			setFlashWinner(null)
 			const maxK = Math.max(0, Math.min(k, timelineMoves.length))
-			const willPause = pauseAtTrickEnd && maxK > 0 && maxK % 4 === 0
+			const willPause = pauseRef.current && maxK > 0 && maxK % 4 === 0
 			const rem = {
 				N: [...hands.N],
 				E: [...hands.E],
@@ -814,8 +823,9 @@ export default function Player() {
 				.join('|')
 			if (lastTrickKeyRef.current === key) {
 				// prevent double-processing the same 4-card trick (e.g., in dev double invoke)
+				// Preserve the computed 4-card trick rather than falling back to a 3-card state.
 				resolvingRef.current = false
-				return []
+				return nextTrick
 			}
 			lastTrickKeyRef.current = key
 			if (winner) {
@@ -826,13 +836,12 @@ export default function Player() {
 					else setTricksDef((n) => n + 1)
 				}
 			}
-				if (pauseAtTrickEnd) {
+				if (pauseRef.current) {
 					setFlashWinner(winner)
 					resolvingRef.current = false
 					return nextTrick
 				}
 				// Immediate clear
-				setTrick([])
 				setFlashWinner(null)
 				resolvingRef.current = false
 				return []
@@ -1254,6 +1263,9 @@ export default function Player() {
 								  }`
 								: null
 						}
+						// Pause toggle wiring for inline checkbox
+						pauseAtTrickEnd={pauseAtTrickEnd}
+						onTogglePause={(e) => setPauseAtTrickEnd(!!e?.target?.checked)}
 					/>
 				) : (
 					<PreUploadGrid
@@ -1616,7 +1628,10 @@ function SeatPanel({
 							{visible ? (
 								cardsBySuit[suit].length ? (
 									cardsBySuit[suit].map((c) => {
-										const leadSuit = trick.length ? trick[0].card.suit : null
+												const leadSuit =
+													trick.length === 0 || trick.length === 4
+														? null
+														: trick[0].card.suit
 										const hasLead = leadSuit
 											? bySeat.some((x) => x.suit === leadSuit)
 											: false
