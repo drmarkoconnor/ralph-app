@@ -216,6 +216,23 @@ export default function DragDropCards({ meta }) {
 	const [kbSeatIdx, setKbSeatIdx] = useState(0) // 0:N,1:E,2:S,3:W
 	const [kbSuitIdx, setKbSuitIdx] = useState(0) // 0:Clubs,1:Diamonds,2:Hearts,3:Spades
 	const [kbRanks, setKbRanks] = useState([]) // ranks buffer e.g. ['2','10','J','Q']
+	// Refs for stable, up-to-date values in global key handler
+	const kbModeRef = useRef(kbMode)
+	const kbSeatRef = useRef(0)
+	const kbSuitRef = useRef(0)
+	const lastKeyRef = useRef({ key: null, t: 0 })
+	// Deduplication for operations (seat+suit+rank) within a short window
+	const lastOpRef = useRef({ op: null, t: 0 })
+
+	useEffect(() => {
+		kbModeRef.current = kbMode
+	}, [kbMode])
+	useEffect(() => {
+		kbSeatRef.current = kbSeatIdx
+	}, [kbSeatIdx])
+	useEffect(() => {
+		kbSuitRef.current = kbSuitIdx
+	}, [kbSuitIdx])
 	const KB_SEATS = SEATS
 	const KB_SUITS = ['Clubs', 'Diamonds', 'Hearts', 'Spades']
 
@@ -226,11 +243,15 @@ export default function DragDropCards({ meta }) {
 		setKbSeatIdx(0)
 		setKbSuitIdx(0)
 		setKbRanks([])
+		kbSeatRef.current = 0
+		kbSuitRef.current = 0
 	}
 
 	useEffect(() => {
-		if (!kbMode) return
-		const onKey = (e) => {
+		// Global singleton keyboard handler to avoid duplicates across HMR/StrictMode
+		const handler = (e) => {
+			if (!kbModeRef.current) return
+			if (e.isComposing || e.repeat) return
 			const tag = String(e.target?.tagName || '').toLowerCase()
 			if (
 				tag === 'input' ||
@@ -240,17 +261,30 @@ export default function DragDropCards({ meta }) {
 			)
 				return
 			if (e.metaKey || e.ctrlKey || e.altKey) return
+			// Guard against near-duplicate events for the same key
+			const now = Date.now()
+			if (lastKeyRef.current.key === e.key && now - lastKeyRef.current.t < 150) {
+				return
+			}
+			lastKeyRef.current = { key: e.key, t: now }
 			const k = e.key
 			if (k === 'Escape') {
+				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+				e.stopPropagation()
+				e.preventDefault()
 				setKbMode(false)
 				return
 			}
 			if (k === 'Enter') {
+				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+				e.stopPropagation()
 				e.preventDefault()
 				commitKbSelection()
 				return
 			}
 			if (k === 'Backspace') {
+				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+				e.stopPropagation()
 				e.preventDefault()
 				setKbRanks((prev) => prev.slice(0, Math.max(0, prev.length - 1)))
 				return
@@ -264,20 +298,55 @@ export default function DragDropCards({ meta }) {
 			else if (lower === 'k') rank = 'K'
 			else if (lower === 'a') rank = 'A'
 			if (rank) {
+				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+				e.stopPropagation()
 				e.preventDefault()
-				addRankToCurrentSeat(rank)
+				const seat = KB_SEATS[kbSeatRef.current]
+				const suit = KB_SUITS[kbSuitRef.current]
+				// Deduplicate same seat/suit/rank within 300ms
+				const op = `${seat}-${suit}-${rank}`
+				if (lastOpRef.current.op === op && now - lastOpRef.current.t < 300) {
+					return
+				}
+				lastOpRef.current = { op, t: now }
+				addRankToCurrentSeat(rank, seat, suit)
 			}
 		}
-		window.addEventListener('keydown', onKey)
-		return () => window.removeEventListener('keydown', onKey)
-	}, [kbMode])
+		try {
+			const prev = window.__BBC_PBN_KB_HANDLER__
+			if (prev) {
+				window.removeEventListener('keydown', prev)
+			}
+			window.__BBC_PBN_KB_HANDLER__ = handler
+			window.addEventListener('keydown', handler)
+		} catch {
+			window.addEventListener('keydown', handler)
+		}
+		return () => {
+			window.removeEventListener('keydown', handler)
+			try {
+				if (window.__BBC_PBN_KB_HANDLER__ === handler) {
+					delete window.__BBC_PBN_KB_HANDLER__
+				}
+			} catch {
+				/* no-op */
+			}
+		}
+	}, [])
 
 	const advanceKbCursor = () => {
-		if (kbSuitIdx >= KB_SUITS.length - 1) {
+		const curSuit = kbSuitRef.current
+		const curSeat = kbSeatRef.current
+		if (curSuit >= KB_SUITS.length - 1) {
+			const nextSeat = (curSeat + 1) % KB_SEATS.length
 			setKbSuitIdx(0)
-			setKbSeatIdx((i) => (i + 1) % KB_SEATS.length)
+			setKbSeatIdx(nextSeat)
+			kbSuitRef.current = 0
+			kbSeatRef.current = nextSeat
 		} else {
-			setKbSuitIdx((i) => i + 1)
+			const nextSuit = curSuit + 1
+			setKbSuitIdx(nextSuit)
+			kbSuitRef.current = nextSuit
 		}
 	}
 
@@ -288,30 +357,30 @@ export default function DragDropCards({ meta }) {
 	}
 
 	// Immediately move a typed rank from deck to the current seat/suit
-	const addRankToCurrentSeat = (rank) => {
-		const seat = currentKbSeat
-		const suit = currentKbSuit
+	const addRankToCurrentSeat = (rank, seatOverride, suitOverride) => {
+		const seat = seatOverride || currentKbSeat
+		const suit = suitOverride || currentKbSuit
 		// prevent duplicate rank entries in the status buffer
 		setKbRanks((prev) => (prev.includes(rank) ? prev : [...prev, rank]))
-		// add to bucket and remove from deck if available and capacity allows
+		// Capacity and presence checks based on current state (safe to read)
+		const seatNow = bucketCards[seat] || []
+		if (seatNow.length >= 13) return
+		const alreadyPresent = seatNow.some((c) => c.suit === suit && c.rank === rank)
+		// Remove from deck and optionally add to seat in a coordinated way
 		setCards((prevCards) => {
 			const idx = prevCards.findIndex(
-				(c) =>
-					c.suit === suit &&
-					(c.rank === rank || (rank === '10' && c.rank === '10'))
+				(c) => c.suit === suit && (c.rank === rank || (rank === '10' && c.rank === '10'))
 			)
 			if (idx === -1) return prevCards
-			let canAdd = false
 			const card = prevCards[idx]
-			setBucketCards((prevBuckets) => {
-				if (prevBuckets[seat].length >= 13) return prevBuckets
-				canAdd = true
-				return {
+			if (!alreadyPresent) {
+				// Add to bucket if not already present
+				setBucketCards((prevBuckets) => ({
 					...prevBuckets,
 					[seat]: [...prevBuckets[seat], card],
-				}
-			})
-			if (!canAdd) return prevCards
+				}))
+			}
+			// Always remove from deck if the card was found (even if already present) to avoid lingering duplicates
 			const next = prevCards.slice()
 			next.splice(idx, 1)
 			return next

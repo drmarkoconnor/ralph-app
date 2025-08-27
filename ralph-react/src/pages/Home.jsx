@@ -13,12 +13,12 @@ export default function Home() {
 				<Link
 					to="/picker"
 					className="px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-900 text-sm text-center">
-					PBN Picker & Generator
+					PBN Generator (Construct hands)
 				</Link>
 				<Link
 					to="/player"
 					className="px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-900 text-sm text-center">
-					Tournament PBN Player (beta)
+					PBN Player (Load & Teach)
 				</Link>
 			</div>
 			<div className="mt-6 text-sm text-sky-700">

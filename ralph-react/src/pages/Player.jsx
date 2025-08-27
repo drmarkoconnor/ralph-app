@@ -464,6 +464,7 @@ export default function Player() {
 			resolvingRef.current = false
 			setFlashWinner(null)
 			const maxK = Math.max(0, Math.min(k, timelineMoves.length))
+			const pauseAtEnd = maxK > 0 && maxK % 4 === 0
 			const rem = {
 				N: [...hands.N],
 				E: [...hands.E],
@@ -478,6 +479,7 @@ export default function Player() {
 			let nextSeat = current?.playLeader || leaderFromDec
 			let declTricks = 0
 			let defTricks = 0
+			let lastWinnerAtPause = null
 
 			const takeFromSeat = (seat, suit, rank) => {
 				let idx = rem[seat].findIndex((c) => c.suit === suit && c.rank === rank)
@@ -508,8 +510,15 @@ export default function Player() {
 						}
 						nextSeat = winner
 					}
-					// clear completed trick immediately for next round visual
-					trickArr.length = 0
+					// If we're pausing at trick end (k is multiple of 4), keep the 4 cards visible
+					// and remember the winner for highlighting; otherwise clear immediately.
+					const isLastApplied = i === maxK - 1
+					if (isLastApplied && pauseAtEnd) {
+						lastWinnerAtPause = winner
+						// keep trickArr as-is (length 4) so the UI shows the full trick
+					} else {
+						trickArr.length = 0
+					}
 				}
 			}
 
@@ -519,6 +528,8 @@ export default function Player() {
 			setTricksDecl(declTricks)
 			setTricksDef(defTricks)
 			setTurnSeat(nextSeat)
+			// Highlight the winner when paused at the end of a trick; clear otherwise
+			setFlashWinner(pauseAtEnd ? lastWinnerAtPause : null)
 			setPlayIdx(maxK)
 		},
 		[
