@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { EXAMPLE_LIBRARY } from '../data/examples'
 
 // Minimal PBN parser extended to capture metadata (Event/Site/Date) and player names (North/East/South/West)
 function parsePBN(text) {
@@ -290,6 +291,7 @@ export default function Player() {
 	const [auctionRevealed, setAuctionRevealed] = useState(true)
 	const playIdxRef = useRef(0)
 	const lastTrickKeyRef = useRef('')
+	const [pauseAtTrickEnd, setPauseAtTrickEnd] = useState(false)
 
 	// Manual play timeline when no PBN Play is present
 	const [manualMoves, setManualMoves] = useState([]) // { seat, suit, rank }[]
@@ -304,6 +306,166 @@ export default function Player() {
 	const [deals, setDeals] = useState([])
 	const [index, setIndex] = useState(0)
 	const current = deals[index] || null
+
+	// Reset to pre-upload chooser
+	const resetToChooser = useCallback(() => {
+		setDeals([])
+		setIndex(0)
+		setSelectedName('')
+		setExampleMsg('')
+		setTeacherMode(false)
+		setAuctionRevealed(true)
+		// Clear play/manual state
+		setManualMoves([])
+		setManualDeclarer('')
+		setManualLevel('')
+		setManualStrain('')
+		setManualDbl('')
+		setPlayIdx(0)
+		setRemaining(null)
+		setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
+		setTrick([])
+		setTricksDecl(0)
+		setTricksDef(0)
+		setFlashWinner(null)
+	}, [])
+
+	// Complete a partial PBN Deal string (with '-' placeholders) into a full 52-card deal.
+	// Format: "<Dealer>:<seg0> <seg1> <seg2> <seg3>", where segs are per-seat in SHDC order,
+	// starting from the dealer and rotating clockwise (N,E,S,W).
+	const completeDealIfPartial = useCallback((dealStr) => {
+		try {
+			const m = String(dealStr || '').trim().match(/^([NESW]):\s*(.+)$/)
+			if (!m) return dealStr
+			const dealer = m[1]
+			const body = m[2]
+			let segs = body.split(/\s+/)
+			if (segs.length !== 4) return dealStr
+			const seats = ['N', 'E', 'S', 'W']
+			const startIdx = seats.indexOf(dealer)
+			const seatOrder = [
+				seats[startIdx],
+				seats[(startIdx + 1) % 4],
+				seats[(startIdx + 2) % 4],
+				seats[(startIdx + 3) % 4],
+			]
+			const SUITS = ['S', 'H', 'D', 'C']
+			const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
+			// Build full deck
+			const allCards = []
+			for (const s of SUITS) {
+				for (const r of RANKS) allCards.push(`${s}${r}`)
+			}
+			const used = new Set()
+			const seatHands = {
+				N: { S: [], H: [], D: [], C: [] },
+				E: { S: [], H: [], D: [], C: [] },
+				S: { S: [], H: [], D: [], C: [] },
+				W: { S: [], H: [], D: [], C: [] },
+			}
+			// Parse existing segs
+			for (let i = 0; i < 4; i++) {
+				const seat = seatOrder[i]
+				const parts = (segs[i] || '').split('.')
+				for (let si = 0; si < 4; si++) {
+					const p = parts[si] || ''
+					if (p === '-' || p === '') continue
+					const suit = SUITS[si]
+					for (const ch of p) {
+						const rank = ch.toUpperCase()
+						if (!RANKS.includes(rank)) continue
+						const card = `${suit}${rank}`
+						if (used.has(card)) continue
+						used.add(card)
+						seatHands[seat][suit].push(rank)
+					}
+				}
+			}
+			// Remaining cards pool (highest to lowest to make output pretty)
+			const remaining = allCards.filter((c) => !used.has(c))
+			// Distribute remaining to each seat to reach 13 cards
+			for (const seat of seatOrder) {
+				const countSeat = () =>
+					seatHands[seat].S.length +
+					seatHands[seat].H.length +
+					seatHands[seat].D.length +
+					seatHands[seat].C.length
+				while (countSeat() < 13 && remaining.length) {
+					// Pop from top to keep ranks nice
+					const card = remaining.shift()
+					const suit = card[0]
+					const rank = card[1]
+					seatHands[seat][suit].push(rank)
+				}
+			}
+			// If some leftovers (due to heavy specification), distribute round-robin
+			let seatPtr = 0
+			while (remaining.length) {
+				const seat = seatOrder[seatPtr % 4]
+				const card = remaining.shift()
+				const suit = card[0]
+				const rank = card[1]
+				seatHands[seat][suit].push(rank)
+				seatPtr++
+			}
+			// Build segments in SHDC order with ranks in AKQJT.. order
+			const segOut = []
+			for (let i = 0; i < 4; i++) {
+				const seat = seatOrder[i]
+				const parts = SUITS.map((s) =>
+					seatHands[seat][s]
+						.slice()
+						.sort((a, b) => RANKS.indexOf(a) - RANKS.indexOf(b))
+						.join('') || '-'
+				)
+				segOut.push(parts.join('.'))
+			}
+			return `${dealer}:${segOut.join(' ')}`
+		} catch {
+			return dealStr
+		}
+	}, [])
+
+	// Load a built-in example by label
+	const loadExampleByLabel = useCallback((label) => {
+		// Find the example item
+		let found = null
+		for (const group of EXAMPLE_LIBRARY) {
+			for (const item of group.items) {
+				if (item.label === label) {
+					found = item
+					break
+				}
+			}
+			if (found) break
+		}
+		if (!found) {
+			setExampleMsg(`Example not found: ${label}`)
+			return
+		}
+		// Convert the example deals to the same shape as parsePBN outputs
+		const mapped = (found.deals || []).map((d) => ({
+			board: d.board,
+			dealer: d.dealer,
+			vul: d.vul,
+			deal: completeDealIfPartial(d.deal),
+			auction: d.auction,
+			auctionDealer: d.auctionDealer || d.dealer,
+			meta: d.meta || {},
+			notes: d.notes || [],
+		}))
+		setDeals(mapped)
+		setIndex(0)
+		setExampleMsg(`${label}: loaded ${mapped.length} example${mapped.length === 1 ? '' : 's'}.`)
+		// Reset play state
+		setPlayIdx(0)
+		setManualMoves([])
+		setManualDeclarer('')
+		setManualLevel('')
+		setManualStrain('')
+		setManualDbl('')
+		setTeacherMode(true)
+	}, [setDeals, setIndex, setExampleMsg])
 
 	// When teacher focus is toggled on, hide the auction by default; reveal when turning off
 	useEffect(() => {
@@ -456,7 +618,7 @@ export default function Player() {
 	const applyMovesTo = useCallback(
 		(k) => {
 			if (!hands) return
-			// cancel any pending winner flash when stepping
+			// Clear any pending flash
 			if (flashTimerRef.current) {
 				clearTimeout(flashTimerRef.current)
 				flashTimerRef.current = null
@@ -464,7 +626,7 @@ export default function Player() {
 			resolvingRef.current = false
 			setFlashWinner(null)
 			const maxK = Math.max(0, Math.min(k, timelineMoves.length))
-			const pauseAtEnd = maxK > 0 && maxK % 4 === 0
+			const willPause = pauseAtTrickEnd && maxK > 0 && maxK % 4 === 0
 			const rem = {
 				N: [...hands.N],
 				E: [...hands.E],
@@ -510,12 +672,11 @@ export default function Player() {
 						}
 						nextSeat = winner
 					}
-					// If we're pausing at trick end (k is multiple of 4), keep the 4 cards visible
-					// and remember the winner for highlighting; otherwise clear immediately.
-					const isLastApplied = i === maxK - 1
-					if (isLastApplied && pauseAtEnd) {
+					// At boundary, keep visible if pausing
+					const isLast = i === maxK - 1
+					if (isLast && willPause) {
 						lastWinnerAtPause = winner
-						// keep trickArr as-is (length 4) so the UI shows the full trick
+						// keep 4 cards in trickArr
 					} else {
 						trickArr.length = 0
 					}
@@ -528,8 +689,8 @@ export default function Player() {
 			setTricksDecl(declTricks)
 			setTricksDef(defTricks)
 			setTurnSeat(nextSeat)
-			// Highlight the winner when paused at the end of a trick; clear otherwise
-			setFlashWinner(pauseAtEnd ? lastWinnerAtPause : null)
+			// Flash winner at boundary if pausing
+			setFlashWinner(willPause ? lastWinnerAtPause : null)
 			setPlayIdx(maxK)
 		},
 		[
@@ -539,6 +700,7 @@ export default function Player() {
 			effDeclarer,
 			current?.dealer,
 			current?.playLeader,
+			pauseAtTrickEnd,
 		]
 	)
 
@@ -644,8 +806,8 @@ export default function Player() {
 				setTurnSeat(rightOf(seat))
 				return nextTrick
 			}
-			// Trick just completed with 4th card: determine winner, flash briefly, then clear center
-			resolvingRef.current = true
+				// Trick just completed with 4th card: determine winner; optionally pause
+				resolvingRef.current = true
 			const winner = evaluateTrick(nextTrick, effTrump)
 			const key = nextTrick
 				.map((t) => `${t.seat}-${t.card.suit}-${t.card.rank}`)
@@ -657,7 +819,6 @@ export default function Player() {
 			}
 			lastTrickKeyRef.current = key
 			if (winner) {
-				setFlashWinner(winner)
 				setTurnSeat(winner)
 				if (effDeclarer) {
 					const isDeclSide = isDeclarerSide(winner, effDeclarer)
@@ -665,18 +826,16 @@ export default function Player() {
 					else setTricksDef((n) => n + 1)
 				}
 			}
-			// Delay clearing the center for a short flash
-			if (flashTimerRef.current) {
-				clearTimeout(flashTimerRef.current)
-				flashTimerRef.current = null
-			}
-			flashTimerRef.current = setTimeout(() => {
+				if (pauseAtTrickEnd) {
+					setFlashWinner(winner)
+					resolvingRef.current = false
+					return nextTrick
+				}
+				// Immediate clear
 				setTrick([])
 				setFlashWinner(null)
 				resolvingRef.current = false
-				flashTimerRef.current = null
-			}, 450)
-			return nextTrick
+				return []
 		})
 	}
 
@@ -778,6 +937,16 @@ export default function Player() {
 			<div className="relative z-20 w-full max-w-5xl">
 				{!teacherMode ? (
 					<div className="flex items-center gap-3 mb-3">
+						<Link
+							to="/"
+							className="px-2 py-1 rounded border text-sm bg-white hover:bg-gray-50">
+							Home
+						</Link>
+						<button
+							onClick={resetToChooser}
+							className="px-2 py-1 rounded border text-sm bg-white hover:bg-gray-50">
+							Start over
+						</button>
 						<input
 							ref={fileRef}
 							type="file"
@@ -841,6 +1010,14 @@ export default function Player() {
 							/>{' '}
 							Show HCP for declarer/dummy when hidden
 						</label>
+						<label className="text-sm text-gray-700 flex items-center gap-1">
+							<input
+								type="checkbox"
+								checked={pauseAtTrickEnd}
+								onChange={(e) => setPauseAtTrickEnd(e.target.checked)}
+							/>{' '}
+							Pause at trick end
+						</label>
 						{validatedAuction?.legal ? (
 							<button
 								onClick={() => setAuctionRevealed((v) => !v)}
@@ -870,12 +1047,26 @@ export default function Player() {
 
 				{/* Floating exit for Teacher Focus */}
 				{teacherMode ? (
-					<button
-						onClick={() => setTeacherMode(false)}
-						className="fixed top-2 right-2 z-30 px-2 py-1 rounded bg-rose-600 text-white text-xs shadow"
-						title="Exit teacher focus">
-						Exit Focus
-					</button>
+					<div className="fixed top-2 right-2 z-30 flex items-center gap-2">
+						<Link
+							to="/"
+							className="px-2 py-1 rounded bg-white text-gray-800 text-xs border shadow"
+							title="Home">
+							Home
+						</Link>
+						<button
+							onClick={resetToChooser}
+							className="px-2 py-1 rounded bg-white text-gray-800 text-xs border shadow"
+							title="Start over">
+							Start over
+						</button>
+						<button
+							onClick={() => setTeacherMode(false)}
+							className="px-2 py-1 rounded bg-rose-600 text-white text-xs shadow"
+							title="Exit teacher focus">
+							Exit Focus
+						</button>
+					</div>
 				) : null}
 
 				{/* Metadata panel (hidden in Teacher Focus) */}
@@ -1069,6 +1260,7 @@ export default function Player() {
 						onChooseFile={() => fileRef.current?.click()}
 						exampleMsg={exampleMsg}
 						setExampleMsg={setExampleMsg}
+						onLoadExample={loadExampleByLabel}
 					/>
 				)}
 			</div>
@@ -1104,6 +1296,8 @@ function PlayerLayout({
 	onNext,
 	resultTag,
 	finishedBanner,
+	pauseAtTrickEnd,
+	onTogglePause,
 }) {
 	const seats = ['N', 'E', 'S', 'W']
 	// Use the shared seat order (kept for clarity)
@@ -1219,6 +1413,8 @@ function PlayerLayout({
 								resultTag={resultTag}
 								completedTricks={completedTricks}
 								finishedBanner={finishedBanner}
+								pauseAtTrickEnd={pauseAtTrickEnd}
+								onTogglePause={onTogglePause}
 							/>
 						</div>
 					) : (
@@ -1237,6 +1433,8 @@ function PlayerLayout({
 								resultTag={resultTag}
 								completedTricks={completedTricks}
 								finishedBanner={finishedBanner}
+								pauseAtTrickEnd={pauseAtTrickEnd}
+								onTogglePause={onTogglePause}
 							/>
 						</div>
 					)}
@@ -1520,6 +1718,8 @@ function CurrentTrick({
 	finishedBanner,
 	resultTag,
 	completedTricks,
+	pauseAtTrickEnd,
+	onTogglePause,
 }) {
 	const order = ['N', 'E', 'S', 'W']
 	const items = Array.isArray(trick) ? trick : []
@@ -1604,9 +1804,15 @@ function CurrentTrick({
 					Next →
 				</button>
 			</div>
-			<div className="mt-0.5 text-[10px] text-center text-gray-500">
-				{totalMoves > 0 ? `${safeIdx + 1}/${totalMoves}` : '—'} · Completed
-				tricks: <span className="font-semibold">{Math.max(0, completed)}</span>
+			<div className="mt-1 flex items-center justify-center gap-3">
+				<div className="text-[10px] text-gray-500">
+					{totalMoves > 0 ? `${safeIdx + 1}/${totalMoves}` : '—'} · Completed
+					tricks: <span className="font-semibold">{Math.max(0, completed)}</span>
+				</div>
+				<label className="text-[10px] text-gray-700 flex items-center gap-1">
+					<input type="checkbox" checked={!!pauseAtTrickEnd} onChange={onTogglePause} />
+					Pause at trick end
+				</label>
 			</div>
 			{finishedBanner ? (
 				<div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
@@ -1625,31 +1831,8 @@ function CurrentTrick({
 
 // (Removed duplicate AuctionView and old PlayStepper here; single AuctionView is defined above)
 
-function PreUploadGrid({ onChooseFile, exampleMsg, setExampleMsg }) {
-	const examples = [
-		{
-			group: 'Openings',
-			items: [
-				'1NT',
-				'1 of a Suit',
-				'2NT',
-				'2♣ (strong)',
-				'2 of a Suit (weak)',
-				'3 of a Suit (weak)',
-				'Pass',
-			],
-		},
-		{
-			group: 'Conventions',
-			items: [
-				'Slam bidding',
-				'4th Suit Forcing',
-				'Stayman',
-				'Transfers',
-				'Michaels / Unusual 2NT',
-			],
-		},
-	]
+function PreUploadGrid({ onChooseFile, exampleMsg, setExampleMsg, onLoadExample }) {
+	const examples = EXAMPLE_LIBRARY
 	return (
 		<div className="w-full">
 			<div className="rounded-lg border bg-white p-4 mb-3">
@@ -1662,8 +1845,8 @@ function PreUploadGrid({ onChooseFile, exampleMsg, setExampleMsg }) {
 					</button>
 				</div>
 				<div className="text-xs text-gray-600">
-					Load a PBN tournament file or pick an example scenario below. Examples
-					are placeholders; we’ll wire them up next.
+					Load a PBN tournament file or pick an example scenario below. Built‑in
+					examples load instantly and enable Teacher Focus.
 				</div>
 			</div>
 
@@ -1683,16 +1866,12 @@ function PreUploadGrid({ onChooseFile, exampleMsg, setExampleMsg }) {
 								</td>
 								<td className="p-2">
 									<div className="flex flex-wrap gap-2">
-										{row.items.map((label) => (
+										{row.items.map((item) => (
 											<button
-												key={label}
-												onClick={() =>
-													setExampleMsg(
-														`Example selected: ${label} (coming soon)`
-													)
-												}
+												key={item.label}
+												onClick={() => onLoadExample(item.label)}
 												className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
-												{label}
+												{item.label}
 											</button>
 										))}
 									</div>
