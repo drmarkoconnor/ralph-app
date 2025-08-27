@@ -1716,9 +1716,6 @@ const orderSeats = ['N', 'E', 'S', 'W']
 function rightOf(seat) {
 	return orderSeats[(orderSeats.indexOf(seat) + 1) % 4]
 }
-function leftOf(seat) {
-	return orderSeats[(orderSeats.indexOf(seat) + 3) % 4]
-}
 function partnerOf(seat) {
 	return orderSeats[(orderSeats.indexOf(seat) + 2) % 4]
 }

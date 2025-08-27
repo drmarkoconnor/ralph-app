@@ -127,83 +127,20 @@ function sortByPbnRank(cards) {
 	return [...cards].sort((a, b) => order[b.rank] - order[a.rank])
 }
 
-function formatSeatPBN(cards) {
-	const suitOrder = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
-	return suitOrder
-		.map((s) => {
-			const suited = sortByPbnRank(cards.filter((c) => c.suit === s))
-			const txt = suited.map((c) => (c.rank === '10' ? 'T' : c.rank)).join('')
-			return txt || '-'
-		})
-		.join('.')
-}
-
-function buildPBN(hands, startBoard = 1) {
-	const today = new Date()
-	const y = today.getFullYear()
-	const m = String(today.getMonth() + 1).padStart(2, '0')
-	const d = String(today.getDate()).padStart(2, '0')
-	const date = `${y}.${m}.${d}`
-	const crlf = '\r\n'
-	let out = ''
-	hands.forEach((h, i) => {
-		const boardNo = startBoard + i
-		const dealer = dealerForBoard(boardNo)
-		const vul = vulnerabilityForBoard(boardNo)
-		// hands listed starting from dealer, clockwise
-		const orderMap = {
-			N: ['N', 'E', 'S', 'W'],
-			E: ['E', 'S', 'W', 'N'],
-			S: ['S', 'W', 'N', 'E'],
-			W: ['W', 'N', 'E', 'S'],
-		}
-		const order = orderMap[dealer]
-		const handsStr = order.map((seat) => formatSeatPBN(h[seat])).join(' ')
-		const deal = `${dealer}:${handsStr}`
-		out += `[Event "Club Session"]${crlf}`
-		out += `[Site "Local"]${crlf}`
-		out += `[Date "${date}"]${crlf}`
-		out += `[Board "${boardNo}"]${crlf}`
-		out += `[Dealer "${dealer}"]${crlf}`
-		out += `[Vulnerable "${vul}"]${crlf}`
-		out += `[Deal "${deal}"]${crlf}${crlf}`
-	})
-	return out
-}
-
-function buildSinglePBN(hand, boardNo, dateStr) {
-	const dealer = dealerForBoard(boardNo)
-	const vul = vulnerabilityForBoard(boardNo)
-	const orderMap = {
-		N: ['N', 'E', 'S', 'W'],
-		E: ['E', 'S', 'W', 'N'],
-		S: ['S', 'W', 'N', 'E'],
-		W: ['W', 'N', 'E', 'S'],
-	}
-	const order = orderMap[dealer]
-	const handsStr = order.map((seat) => formatSeatPBN(hand[seat])).join(' ')
-	const deal = `${dealer}:${handsStr}`
-	const crlf = '\r\n'
-	return (
-		`[Event "Club Session"]${crlf}` +
-		`[Site "Local"]${crlf}` +
-		`[Date "${dateStr}"]${crlf}` +
-		`[Board "${boardNo}"]${crlf}` +
-		`[Dealer "${dealer}"]${crlf}` +
-		`[Vulnerable "${vul}"]${crlf}` +
-		`[Deal "${deal}"]${crlf}${crlf}`
-	)
-}
-
+// Deprecated string PBN builders were removed in favor of Extended PBN export
 export default function DragDropCards({ meta }) {
-	const [cards, setCards] = useState(initialCards)
-	const [bucketCards, setBucketCards] = useState({ N: [], E: [], S: [], W: [] })
+	// Unified deal state: deck + seat buckets
+	const [deal, setDeal] = useState({ deck: initialCards, buckets: { N: [], E: [], S: [], W: [] } })
+	// DnD state
 	const [draggedCard, setDraggedCard] = useState(null)
 	const [dragSource, setDragSource] = useState(null) // 'deck' | 'N' | 'E' | 'S' | 'W' | null
 	const [activeBucket, setActiveBucket] = useState(null)
+	// Selection under deck
 	const [selected, setSelected] = useState(() => new Set())
-	const [savedHands, setSavedHands] = useState([]) // array of {N,E,S,W}
+	// Saved hands as {N,E,S,W}
+	const [savedHands, setSavedHands] = useState([])
 	const [startBoard, setStartBoard] = useState(1)
+	// Preview / copy state
 	const [showPreview, setShowPreview] = useState(false)
 	const [previewIndex, setPreviewIndex] = useState(0)
 	const [copyState, setCopyState] = useState('idle') // idle | ok | err
@@ -211,7 +148,7 @@ export default function DragDropCards({ meta }) {
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const copyTimerRef = useRef(null)
 
-	// Keyboard entry mode: type ranks for a suit, Enter to commit, advance suits then seats (N→E→S→W)
+	// Keyboard entry mode
 	const [kbMode, setKbMode] = useState(false)
 	const [kbSeatIdx, setKbSeatIdx] = useState(0) // 0:N,1:E,2:S,3:W
 	const [kbSuitIdx, setKbSuitIdx] = useState(0) // 0:Clubs,1:Diamonds,2:Hearts,3:Spades
@@ -220,10 +157,18 @@ export default function DragDropCards({ meta }) {
 	const kbModeRef = useRef(kbMode)
 	const kbSeatRef = useRef(0)
 	const kbSuitRef = useRef(0)
+	const kbRanksRef = useRef([])
 	const lastKeyRef = useRef({ key: null, t: 0 })
+	const inFlightRef = useRef(false)
 	// Deduplication for operations (seat+suit+rank) within a short window
 	const lastOpRef = useRef({ op: null, t: 0 })
+	const KB_SEATS = SEATS
+	const KB_SUITS = ['Clubs', 'Diamonds', 'Hearts', 'Spades']
 
+	const currentKbSeat = KB_SEATS[kbSeatIdx]
+	const currentKbSuit = KB_SUITS[kbSuitIdx]
+
+	// Keep refs in sync with state for robust global key handling
 	useEffect(() => {
 		kbModeRef.current = kbMode
 	}, [kbMode])
@@ -233,11 +178,9 @@ export default function DragDropCards({ meta }) {
 	useEffect(() => {
 		kbSuitRef.current = kbSuitIdx
 	}, [kbSuitIdx])
-	const KB_SEATS = SEATS
-	const KB_SUITS = ['Clubs', 'Diamonds', 'Hearts', 'Spades']
-
-	const currentKbSeat = KB_SEATS[kbSeatIdx]
-	const currentKbSuit = KB_SUITS[kbSuitIdx]
+	useEffect(() => {
+		kbRanksRef.current = kbRanks
+	}, [kbRanks])
 
 	const resetKb = () => {
 		setKbSeatIdx(0)
@@ -263,10 +206,12 @@ export default function DragDropCards({ meta }) {
 			if (e.metaKey || e.ctrlKey || e.altKey) return
 			// Guard against near-duplicate events for the same key
 			const now = Date.now()
-			if (lastKeyRef.current.key === e.key && now - lastKeyRef.current.t < 150) {
+			const keyId = String(e.key || '').toLowerCase()
+			if (inFlightRef.current) return
+			if (lastKeyRef.current.key === keyId && now - lastKeyRef.current.t < 200) {
 				return
 			}
-			lastKeyRef.current = { key: e.key, t: now }
+			lastKeyRef.current = { key: keyId, t: now }
 			const k = e.key
 			if (k === 'Escape') {
 				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
@@ -279,14 +224,47 @@ export default function DragDropCards({ meta }) {
 				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
 				e.stopPropagation()
 				e.preventDefault()
-				commitKbSelection()
+				inFlightRef.current = true
+				queueMicrotask(() => {
+					commitKbSelection()
+					inFlightRef.current = false
+				})
 				return
 			}
 			if (k === 'Backspace') {
 				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
 				e.stopPropagation()
 				e.preventDefault()
-				setKbRanks((prev) => prev.slice(0, Math.max(0, prev.length - 1)))
+				inFlightRef.current = true
+				queueMicrotask(() => {
+					const seatAtKey = KB_SEATS[kbSeatRef.current]
+					const suitAtKey = KB_SUITS[kbSuitRef.current]
+					const buf = kbRanksRef.current
+					const last = buf[buf.length - 1]
+					// Always trim buffer if present
+					if (buf.length > 0) {
+						setKbRanks((prev) => prev.slice(0, prev.length - 1))
+					}
+					if (!last) {
+						inFlightRef.current = false
+						return
+					}
+					setDeal((prev) => {
+						const seatArr = prev.buckets[seatAtKey] || []
+						const idx = seatArr.findIndex(
+							(c) => c.suit === suitAtKey && (c.rank === last || (last === '10' && c.rank === '10'))
+						)
+						if (idx === -1) return prev
+						const card = seatArr[idx]
+						const nextSeat = seatArr.slice()
+						nextSeat.splice(idx, 1)
+						return {
+							deck: sortDeck([...prev.deck, card]),
+							buckets: { ...prev.buckets, [seatAtKey]: nextSeat },
+						}
+					})
+					inFlightRef.current = false
+				})
 				return
 			}
 			const lower = k.toLowerCase()
@@ -301,15 +279,20 @@ export default function DragDropCards({ meta }) {
 				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
 				e.stopPropagation()
 				e.preventDefault()
-				const seat = KB_SEATS[kbSeatRef.current]
-				const suit = KB_SUITS[kbSuitRef.current]
-				// Deduplicate same seat/suit/rank within 300ms
-				const op = `${seat}-${suit}-${rank}`
+				// Capture seat/suit at the time of the keypress to avoid race with cursor advance
+				const seatAtKey = KB_SEATS[kbSeatRef.current]
+				const suitAtKey = KB_SUITS[kbSuitRef.current]
+				// Deduplicate same seat/suit/rank within 300ms (before scheduling)
+				const op = `${seatAtKey}-${suitAtKey}-${rank}`
 				if (lastOpRef.current.op === op && now - lastOpRef.current.t < 300) {
 					return
 				}
 				lastOpRef.current = { op, t: now }
-				addRankToCurrentSeat(rank, seat, suit)
+				inFlightRef.current = true
+				queueMicrotask(() => {
+					addRankToCurrentSeat(rank, seatAtKey, suitAtKey)
+					inFlightRef.current = false
+				})
 			}
 		}
 		try {
@@ -362,28 +345,39 @@ export default function DragDropCards({ meta }) {
 		const suit = suitOverride || currentKbSuit
 		// prevent duplicate rank entries in the status buffer
 		setKbRanks((prev) => (prev.includes(rank) ? prev : [...prev, rank]))
-		// Capacity and presence checks based on current state (safe to read)
-		const seatNow = bucketCards[seat] || []
-		if (seatNow.length >= 13) return
-		const alreadyPresent = seatNow.some((c) => c.suit === suit && c.rank === rank)
-		// Remove from deck and optionally add to seat in a coordinated way
-		setCards((prevCards) => {
-			const idx = prevCards.findIndex(
+		setDeal((prev) => {
+			// If already allocated anywhere, strip any lingering copy from deck
+			const allocated = SEATS.some((s) =>
+				(prev.buckets[s] || []).some(
+					(c) => c.suit === suit && (c.rank === rank || (rank === '10' && c.rank === '10'))
+				)
+			)
+			if (allocated) {
+				const idxInDeck = prev.deck.findIndex(
+					(c) => c.suit === suit && (c.rank === rank || (rank === '10' && c.rank === '10'))
+				)
+				if (idxInDeck === -1) return prev
+				return {
+					deck: prev.deck.filter((_, i) => i !== idxInDeck),
+					buckets: prev.buckets,
+				}
+			}
+			// Otherwise add from deck to target seat if capacity allows
+			if (prev.buckets[seat].length >= 13) return prev
+			const idxInDeck = prev.deck.findIndex(
 				(c) => c.suit === suit && (c.rank === rank || (rank === '10' && c.rank === '10'))
 			)
-			if (idx === -1) return prevCards
-			const card = prevCards[idx]
-			if (!alreadyPresent) {
-				// Add to bucket if not already present
-				setBucketCards((prevBuckets) => ({
-					...prevBuckets,
-					[seat]: [...prevBuckets[seat], card],
-				}))
+			if (idxInDeck === -1) return prev
+			const card = prev.deck[idxInDeck]
+			const existsInSeat = prev.buckets[seat].some((c) => c.suit === suit && c.rank === card.rank)
+			if (existsInSeat) return prev
+			return {
+				deck: prev.deck.filter((_, i) => i !== idxInDeck),
+				buckets: {
+					...prev.buckets,
+					[seat]: [...prev.buckets[seat], card],
+				},
 			}
-			// Always remove from deck if the card was found (even if already present) to avoid lingering duplicates
-			const next = prevCards.slice()
-			next.splice(idx, 1)
-			return next
 		})
 	}
 
@@ -399,7 +393,7 @@ export default function DragDropCards({ meta }) {
 					const txt = await exportBoardPBN(board)
 					if (cancelled) return
 					arr.push(txt)
-				} catch (e) {
+				} catch {
 					// If something goes wrong, still push a minimal placeholder
 					arr.push('// Error generating preview for board ' + (startBoard + i))
 				}
@@ -422,9 +416,9 @@ export default function DragDropCards({ meta }) {
 		document.title = "Bristol Bridge Club's PBN Picker"
 	}, [])
 
-	const remaining = cards.length
+	const remaining = deal.deck.length
 	const selectedCount = useMemo(() => selected.size, [selected])
-	const complete = SEATS.every((s) => bucketCards[s].length === 13)
+	const complete = SEATS.every((s) => deal.buckets[s].length === 13)
 	const nextBoardNo = startBoard + savedHands.length
 	const currentDealer = dealerForBoard(nextBoardNo)
 
@@ -440,8 +434,7 @@ export default function DragDropCards({ meta }) {
 	const clearSelection = () => setSelected(new Set())
 
 	const resetBoard = () => {
-		setCards(initialCards)
-		setBucketCards({ N: [], E: [], S: [], W: [] })
+	setDeal({ deck: initialCards, buckets: { N: [], E: [], S: [], W: [] } })
 		setSelected(new Set())
 	}
 
@@ -486,24 +479,36 @@ export default function DragDropCards({ meta }) {
 		setActiveBucket(null)
 		if (!draggedCard) return
 		if (dragSource === 'deck') {
-			if (bucketCards[bucket].length < 13) {
-				setBucketCards((prev) => ({
-					...prev,
-					[bucket]: [...prev[bucket], draggedCard],
-				}))
-				setCards((prev) => prev.filter((c) => c.id !== draggedCard.id))
-			}
+			setDeal((prev) => {
+				const capOk = prev.buckets[bucket].length < 13
+				if (!capOk) return prev
+				const inDeck = prev.deck.some((c) => c.id === draggedCard.id)
+				if (!inDeck) return prev
+				return {
+					deck: prev.deck.filter((c) => c.id !== draggedCard.id),
+					buckets: {
+						...prev.buckets,
+						[bucket]: [...prev.buckets[bucket], draggedCard],
+					},
+				}
+			})
 		} else if (SEATS.includes(dragSource)) {
-			if (dragSource !== bucket && bucketCards[bucket].length < 13) {
-				setBucketCards((prev) => {
-					const from = dragSource
-					return {
-						...prev,
-						[from]: prev[from].filter((c) => c.id !== draggedCard.id),
-						[bucket]: [...prev[bucket], draggedCard],
-					}
-				})
-			}
+			setDeal((prev) => {
+				if (dragSource === bucket) return prev
+				const capOk = prev.buckets[bucket].length < 13
+				if (!capOk) return prev
+				const fromArr = prev.buckets[dragSource]
+				const exists = fromArr.some((c) => c.id === draggedCard.id)
+				if (!exists) return prev
+				return {
+					deck: prev.deck,
+					buckets: {
+						...prev.buckets,
+						[dragSource]: fromArr.filter((c) => c.id !== draggedCard.id),
+						[bucket]: [...prev.buckets[bucket], draggedCard],
+					},
+				}
+			})
 		}
 		setDraggedCard(null)
 		setDragSource(null)
@@ -512,11 +517,19 @@ export default function DragDropCards({ meta }) {
 	const onDropToDeck = (e) => {
 		if (e && e.preventDefault) e.preventDefault()
 		if (!draggedCard || !SEATS.includes(dragSource)) return
-		setBucketCards((prev) => ({
-			...prev,
-			[dragSource]: prev[dragSource].filter((c) => c.id !== draggedCard.id),
-		}))
-		setCards((prev) => sortDeck([...prev, draggedCard]))
+		setDeal((prev) => {
+			const fromArr = prev.buckets[dragSource]
+			const exists = fromArr.some((c) => c.id === draggedCard.id)
+			if (!exists) return prev
+			const nextDeck = sortDeck([...prev.deck, draggedCard])
+			return {
+				deck: nextDeck,
+				buckets: {
+					...prev.buckets,
+					[dragSource]: fromArr.filter((c) => c.id !== draggedCard.id),
+				},
+			}
+		})
 		setDraggedCard(null)
 		setDragSource(null)
 	}
@@ -548,41 +561,45 @@ export default function DragDropCards({ meta }) {
 
 	const sendSelectedTo = (bucket) => {
 		if (selected.size === 0) return
-		const capacity = 13 - bucketCards[bucket].length
+		// compute using current deal snapshot
+		const capacity = 13 - deal.buckets[bucket].length
 		if (capacity <= 0) return
-		const toMove = cards.filter((c) => selected.has(c.id)).slice(0, capacity)
+		const toMove = deal.deck.filter((c) => selected.has(c.id)).slice(0, capacity)
 		if (toMove.length === 0) return
-		setBucketCards((prev) => ({
-			...prev,
-			[bucket]: [...prev[bucket], ...toMove],
-		}))
 		const movedIds = new Set(toMove.map((c) => c.id))
-		setCards((prev) => prev.filter((c) => !movedIds.has(c.id)))
+		setDeal((prev) => ({
+			deck: prev.deck.filter((c) => !movedIds.has(c.id)),
+			buckets: {
+				...prev.buckets,
+				[bucket]: [...prev.buckets[bucket], ...toMove],
+			},
+		}))
 		setSelected((prev) => {
 			const next = new Set(prev)
-			toMove.forEach((c) => next.delete(c.id))
+			for (const id of movedIds) next.delete(id)
 			return next
 		})
 	}
 
 	const handleRandomComplete = () => {
 		// random fill respecting capacity 13
-		let pool = [...cards]
-		const nextBuckets = { ...bucketCards }
-		while (pool.length) {
-			const idx = Math.floor(Math.random() * pool.length)
-			const [card] = pool.splice(idx, 1)
-			const order = ['N', 'E', 'S', 'W']
-			for (let i = 0; i < 20; i++) {
-				const b = order[Math.floor(Math.random() * 4)]
-				if (nextBuckets[b].length < 13) {
-					nextBuckets[b] = [...nextBuckets[b], card]
-					break
+		setDeal((prev) => {
+			let pool = [...prev.deck]
+			const nextBuckets = { ...prev.buckets }
+			while (pool.length) {
+				const idx = Math.floor(Math.random() * pool.length)
+				const [card] = pool.splice(idx, 1)
+				const order = ['N', 'E', 'S', 'W']
+				for (let i = 0; i < 20; i++) {
+					const b = order[Math.floor(Math.random() * 4)]
+					if (nextBuckets[b].length < 13) {
+						nextBuckets[b] = [...nextBuckets[b], card]
+						break
+					}
 				}
 			}
-		}
-		setBucketCards(nextBuckets)
-		setCards([])
+			return { deck: [], buckets: nextBuckets }
+		})
 		setSelected(new Set())
 	}
 
@@ -591,10 +608,10 @@ export default function DragDropCards({ meta }) {
 		setSavedHands((prev) => [
 			...prev,
 			{
-				N: bucketCards.N,
-				E: bucketCards.E,
-				S: bucketCards.S,
-				W: bucketCards.W,
+				N: deal.buckets.N,
+				E: deal.buckets.E,
+				S: deal.buckets.S,
+				W: deal.buckets.W,
 			},
 		])
 		resetBoard()
@@ -804,7 +821,7 @@ export default function DragDropCards({ meta }) {
 			(vul === 'EW' && (id === 'E' || id === 'W'))
 
 		const rowOrder = ['Clubs', 'Diamonds', 'Hearts', 'Spades']
-		const hcp = hcpOfCards(bucketCards[id])
+	const hcp = hcpOfCards(deal.buckets[id])
 
 		return (
 			<div
@@ -834,7 +851,7 @@ export default function DragDropCards({ meta }) {
 							</span>
 						)}
 						<span className="text-[10px] opacity-80">
-							{bucketCards[id].length}/13
+							{deal.buckets[id].length}/13
 						</span>
 					</span>
 				</div>
@@ -848,7 +865,7 @@ export default function DragDropCards({ meta }) {
 					className={`h-64 p-3 flex flex-col gap-2 items-stretch justify-center`}>
 					{rowOrder.map((suit) => {
 						const suitCards = sortByPbnRank(
-							bucketCards[id].filter((c) => c.suit === suit)
+							deal.buckets[id].filter((c) => c.suit === suit)
 						)
 						const suitColor = SUIT_TEXT[suit]
 						return (
@@ -885,7 +902,7 @@ export default function DragDropCards({ meta }) {
 	}
 
 	// Renders a suit row as a sequence of draggable rank spans; shows '-' when void
-	function suiteRowContent(suitCards, bucketId, suitName) {
+	function suiteRowContent(suitCards, bucketId) {
 		if (!suitCards || suitCards.length === 0) {
 			return <span className="text-base md:text-lg text-gray-500">-</span>
 		}
@@ -941,7 +958,7 @@ export default function DragDropCards({ meta }) {
 					}
 				}}
 				onDrop={onDropToDeck}>
-				{cards.map((card) => {
+				{deal.deck.map((card) => {
 					const isSelected = selected.has(card.id)
 					return (
 						<div
@@ -988,7 +1005,7 @@ export default function DragDropCards({ meta }) {
 				<button
 					className="px-3 py-2 rounded bg-sky-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('N')}
-					disabled={selectedCount === 0 || bucketCards.N.length >= 13}
+					disabled={selectedCount === 0 || deal.buckets.N.length >= 13}
 					title={
 						hintsEnabled ? 'Send selected deck cards to North' : undefined
 					}>
@@ -997,21 +1014,21 @@ export default function DragDropCards({ meta }) {
 				<button
 					className="px-3 py-2 rounded bg-amber-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('W')}
-					disabled={selectedCount === 0 || bucketCards.W.length >= 13}
+					disabled={selectedCount === 0 || deal.buckets.W.length >= 13}
 					title={hintsEnabled ? 'Send selected deck cards to West' : undefined}>
 					Send West
 				</button>
 				<button
 					className="px-3 py-2 rounded bg-rose-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('E')}
-					disabled={selectedCount === 0 || bucketCards.E.length >= 13}
+					disabled={selectedCount === 0 || deal.buckets.E.length >= 13}
 					title={hintsEnabled ? 'Send selected deck cards to East' : undefined}>
 					Send East
 				</button>
 				<button
 					className="px-3 py-2 rounded bg-emerald-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 					onClick={() => sendSelectedTo('S')}
-					disabled={selectedCount === 0 || bucketCards.S.length >= 13}
+					disabled={selectedCount === 0 || deal.buckets.S.length >= 13}
 					title={
 						hintsEnabled ? 'Send selected deck cards to South' : undefined
 					}>
