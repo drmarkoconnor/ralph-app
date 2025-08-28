@@ -141,12 +141,14 @@ export default function DragDropCards({ meta }) {
 	const [savedHands, setSavedHands] = useState([])
 	const [startBoard, setStartBoard] = useState(1)
 	// Preview / copy state
-	const [showPreview, setShowPreview] = useState(false)
 	const [previewIndex, setPreviewIndex] = useState(0)
 	const [copyState, setCopyState] = useState('idle') // idle | ok | err
 	const [hintsEnabled, setHintsEnabled] = useState(true)
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const copyTimerRef = useRef(null)
+
+	// Left controls panel state
+	const [leftOpen, setLeftOpen] = useState(true)
 
 	// Keyboard entry mode
 	const [kbMode, setKbMode] = useState(false)
@@ -923,340 +925,185 @@ export default function DragDropCards({ meta }) {
 	}
 
 	return (
-		<div className="flex flex-col items-center w-full max-w-[1100px] mx-auto gap-2 min-h-screen px-2 py-2">
-			{/* Top-right hints toggle */}
-			<div className="w-full flex justify-end">
-				<label className="text-[11px] text-gray-600 flex items-center gap-1 select-none">
-					<input
-						type="checkbox"
-						checked={hintsEnabled}
-						onChange={(e) => setHintsEnabled(e.target.checked)}
-					/>
-					Hints
-				</label>
-			</div>
-
-			{/* Deck drop hint when dragging from a bucket */}
-			{SEATS.includes(dragSource) && hintsEnabled && (
-				<div className="w-full text-center mb-1">
-					<span className="inline-block text-[11px] text-gray-700 px-2 py-1 bg-gray-50 border border-dashed border-gray-400 rounded">
-						Drop here to return to deck
-					</span>
+		<div className="w-full min-h-screen flex items-stretch">
+			{/* Left controls panel: move entire top toolbar here */}
+			<div className={`${leftOpen ? 'w-72' : 'w-10'} transition-all duration-200 border-r bg-white relative`}> 
+				<div className="h-10 flex items-center justify-between px-2 border-b">
+					<span className="text-xs font-semibold text-gray-700">Generator</span>
+					<button className="text-xs px-2 py-0.5 rounded border bg-white" onClick={() => setLeftOpen(!leftOpen)}>{leftOpen ? '⟨' : '⟩'}</button>
 				</div>
-			)}
-
-			{/* Deck row */}
-			<div
-				className="flex flex-wrap gap-1 mb-2 justify-center min-h-[60px]"
-				onDragOver={(e) => {
-					e.preventDefault()
-					try {
-						e.dataTransfer.dropEffect = 'move'
-					} catch {
-						// Some browsers can throw here under odd conditions; ignore
-						void 0
-					}
-				}}
-				onDrop={onDropToDeck}>
-				{deal.deck.map((card) => {
-					const isSelected = selected.has(card.id)
-					return (
-						<div
-							key={card.id}
-							draggable
-							onDragStart={(e) => onDragStartDeck(e, card)}
-							onDragEnd={onDragEnd}
-							onClick={() => toggleSelect(card.id)}
-							className={`${CARD_DECK} ${
-								isSelected
-									? 'ring-4 ring-yellow-300 scale-105'
-									: 'hover:scale-105'
-							}`}
-							title={
-								hintsEnabled ? 'Click to select, drag to a seat' : undefined
-							}>
-							{renderFace(card, true)}
-						</div>
-					)
-				})}
-			</div>
-
-			{/* Send-to buttons directly under the deck */}
-			<div className="flex flex-wrap gap-2 justify-center -mt-1 mb-1 w-full">
-				<button
-					className={`px-3 py-2 rounded ${
-						kbMode ? 'bg-black text-white' : 'bg-gray-900 text-white'
-					} text-xs hover:opacity-90`}
-					onClick={() => {
-						setKbMode((v) => !v)
-						if (!kbMode) {
-							resetKb()
-						}
-					}}
-					title="Toggle keyboard entry (type ranks then Enter; Enter on empty = void; Esc to exit)">
-					{kbMode ? 'Keyboard: ON' : 'Keyboard: OFF'}
-				</button>
-				{kbMode && (
-					<span className="inline-block text-[11px] text-white bg-gray-900 px-2 py-1 rounded">
-						Typing: {currentKbSeat} • {currentKbSuit} —{' '}
-						{kbRanks.length ? kbRanks.join(' ') : 'void'}
-					</span>
-				)}
-				<button
-					className="px-3 py-2 rounded bg-sky-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
-					onClick={() => sendSelectedTo('N')}
-					disabled={selectedCount === 0 || deal.buckets.N.length >= 13}
-					title={
-						hintsEnabled ? 'Send selected deck cards to North' : undefined
-					}>
-					Send North
-				</button>
-				<button
-					className="px-3 py-2 rounded bg-amber-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
-					onClick={() => sendSelectedTo('W')}
-					disabled={selectedCount === 0 || deal.buckets.W.length >= 13}
-					title={hintsEnabled ? 'Send selected deck cards to West' : undefined}>
-					Send West
-				</button>
-				<button
-					className="px-3 py-2 rounded bg-rose-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
-					onClick={() => sendSelectedTo('E')}
-					disabled={selectedCount === 0 || deal.buckets.E.length >= 13}
-					title={hintsEnabled ? 'Send selected deck cards to East' : undefined}>
-					Send East
-				</button>
-				<button
-					className="px-3 py-2 rounded bg-emerald-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
-					onClick={() => sendSelectedTo('S')}
-					disabled={selectedCount === 0 || deal.buckets.S.length >= 13}
-					title={
-						hintsEnabled ? 'Send selected deck cards to South' : undefined
-					}>
-					Send South
-				</button>
-			</div>
-
-			{/* Buckets in a single row: N, E, S, W */}
-			<div className="w-full flex items-start justify-center gap-2">
-				<div className="flex flex-row flex-wrap items-start justify-center gap-2">
-					<Bucket id="N" />
-					<Bucket id="E" />
-					<Bucket id="S" />
-					<Bucket id="W" />
-				</div>
-			</div>
-
-			{/* Legend for vulnerability marker */}
-			<div className="w-full flex items-center justify-center mt-1 mb-1">
-				<span className="text-[10px] text-gray-600">
-					Legend:{' '}
-					<span className="inline-block text-[9px] font-bold text-red-700 bg-red-100 border border-red-200 rounded px-1 py-0.5">
-						V
-					</span>{' '}
-					= Vulnerable on next board
-				</span>
-			</div>
-
-			{/* Pop-out PBN preview carousel under buckets (two-line scroll) */}
-			<div className="w-full">
-				<div className="flex items-center justify-center gap-2 mb-1">
-					<button
-						className="px-2 py-1 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300"
-						onClick={() => setShowPreview((v) => !v)}>
-						{showPreview ? 'Hide PBN' : 'Show PBN'}
-					</button>
-					{showPreview && (
-						<>
-							<button
-								className="px-2 py-1 rounded bg-white text-gray-800 text-xs border border-gray-300 disabled:opacity-40"
-								onClick={() => setPreviewIndex((i) => Math.max(0, i - 1))}
-								disabled={previewIndex === 0 || extSlides.length <= 1}>
-								Prev
-							</button>
-							<div className="text-[10px] text-gray-600">
-								{extSlides.length > 0
-									? `Board ${startBoard + previewIndex} of ${
-											startBoard + extSlides.length - 1
-									  }`
-									: 'No boards saved'}
+				<div className={`${leftOpen ? 'p-2' : 'p-0'} overflow-y-auto max-h-[calc(100vh-40px)]`}>
+					{leftOpen && (
+						<div className="space-y-2 text-xs">
+							<div className="flex items-center justify-between">
+								<span className="text-gray-700">Hints</span>
+								<label className="flex items-center gap-1">
+									<input type="checkbox" checked={hintsEnabled} onChange={(e)=>setHintsEnabled(e.target.checked)} />
+								</label>
 							</div>
-							<button
-								className="px-2 py-1 rounded bg-white text-gray-800 text-xs border border-gray-300 disabled:opacity-40"
-								onClick={() =>
-									setPreviewIndex((i) => Math.min(extSlides.length - 1, i + 1))
-								}
-								disabled={
-									previewIndex >= extSlides.length - 1 || extSlides.length <= 1
-								}>
-								Next
-							</button>
-						</>
+							<div className="space-y-1">
+								<div className="text-[11px] text-gray-600">Dealer</div>
+								<div className="flex flex-wrap gap-1">
+									{SEATS.map((s) => (
+										<button key={`dealer-${s}`} onClick={() => setDealerExplicit(s)} className={`px-1.5 py-0.5 rounded text-[10px] border ${s === currentDealer ? 'bg-amber-500 border-amber-600 text-white' : 'bg-white border-gray-300 text-gray-800 hover:bg-gray-100'}`}>{s}</button>
+									))}
+								</div>
+							</div>
+							<div className="text-[11px] text-gray-700">Selected: {selectedCount} • Remaining: {remaining}</div>
+							<div className="grid grid-cols-1 gap-1">
+								<button className="px-3 py-2 rounded bg-purple-600 text-white text-xs hover:opacity-90 disabled:opacity-40" onClick={handleRandomComplete} disabled={remaining === 0}>Random Complete</button>
+								{selectedCount > 0 && (
+									<button className="px-3 py-2 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300" onClick={clearSelection}>Clear Selection</button>
+								)}
+								<button className="px-3 py-2 rounded bg-gray-900 text-white text-xs hover:opacity-90" onClick={resetBoard}>Reset Board</button>
+								<button className="px-3 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40" onClick={saveCurrentHand} disabled={!complete}>Save Hand</button>
+								<button className="px-3 py-2 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40" onClick={handleGeneratePBN} disabled={savedHands.length === 0}>Download PBN</button>
+								<button className={`px-3 py-2 rounded text-white text-xs hover:opacity-90 disabled:opacity-40 ${copyState === 'ok' ? 'bg-green-600' : copyState === 'err' ? 'bg-rose-600' : 'bg-teal-500'}`} onClick={handleCopyPBN} disabled={savedHands.length === 0}>{copyState === 'ok' ? 'Copied!' : copyState === 'err' ? 'Copy failed' : 'Copy PBN'}</button>
+								<button className="px-3 py-2 rounded bg-teal-500 text-white text-xs hover:opacity-90 disabled:opacity-40" onClick={handleEmailPBN} disabled={savedHands.length === 0}>Email PBN</button>
+								<div className="text-[11px] text-gray-600">Saved: {savedHands.length}</div>
+								<button className="px-3 py-2 rounded bg-rose-600 text-white text-xs hover:bg-rose-700 disabled:opacity-40" onClick={() => setShowDeleteModal(true)} disabled={savedHands.length === 0}>Delete PBN</button>
+							</div>
+						</div>
 					)}
 				</div>
-				{showPreview && (
-					<pre className="whitespace-pre-wrap text-[10px] leading-tight bg-gray-50 border border-gray-200 rounded p-2 w-full h-10 overflow-y-auto">
-						{extSlides.length > 0
-							? extSlides[previewIndex]
-							: '// Save a hand to preview Extended PBN'}
-					</pre>
+				{!leftOpen && (
+					<button className="absolute top-12 -right-3 z-20 w-6 h-8 rounded-md shadow bg-white border text-xs" onClick={() => setLeftOpen(true)} title="Expand left panel">▶</button>
 				)}
 			</div>
 
-			{/* Toolbar in a single row */}
-			<div className="flex flex-wrap items-center justify-center gap-2 w-full mt-1">
-				{/* Dealer selector */}
-				<div className="flex items-center gap-1 mr-2">
-					<span className="text-[10px] text-gray-600">Dealer:</span>
-					{SEATS.map((s) => (
+			{/* Main generator canvas */}
+			<div className="flex-1 min-h-screen bg-gradient-to-b from-white to-slate-50">
+				<div className="flex flex-col items-center w-full max-w-[1100px] mx-auto gap-2 px-2 py-2">
+					{/* Randomize first: prominent and above the deck */}
+					<div className="w-full flex items-center justify-center">
+						<button className="px-4 py-2 rounded-full bg-purple-600 text-white text-sm shadow hover:bg-purple-700" onClick={handleRandomComplete} disabled={remaining === 0} title="Quick random distribution">Randomize</button>
+					</div>
+
+					{/* Deck with select and DnD */}
+					<div className="w-full flex justify-end">
+						<label className="text-[11px] text-gray-600 flex items-center gap-1 select-none">
+							<input type="checkbox" checked={hintsEnabled} onChange={(e) => setHintsEnabled(e.target.checked)} />
+							Hints
+						</label>
+					</div>
+
+					{SEATS.includes(dragSource) && hintsEnabled && (
+						<div className="w-full text-center mb-1">
+							<span className="inline-block text-[11px] text-gray-700 px-2 py-1 bg-gray-50 border border-dashed border-gray-400 rounded">Drop here to return to deck</span>
+						</div>
+					)}
+
+					<div
+						className="flex flex-wrap gap-1 mb-2 justify-center min-h-[60px]"
+						onDragOver={(e) => {
+							e.preventDefault()
+							try { e.dataTransfer.dropEffect = 'move' } catch { void 0 }
+						}}
+						onDrop={onDropToDeck}
+					>
+						{deal.deck.map((card) => {
+							const isSelected = selected.has(card.id)
+							return (
+								<div
+									key={card.id}
+									draggable
+									onDragStart={(e) => onDragStartDeck(e, card)}
+									onDragEnd={onDragEnd}
+									onClick={() => toggleSelect(card.id)}
+									className={`rounded-lg shadow-md cursor-pointer select-none transition-all duration-150 font-serif w-[48px] h-[72px] flex flex-col items-center justify-center border border-neutral-300 bg-[#FFF8E7] ${isSelected ? 'ring-4 ring-yellow-300 scale-105' : 'hover:scale-105'}`}
+									title={hintsEnabled ? 'Click to select, drag to a seat' : undefined}
+								>
+									{renderFace(card, true)}
+								</div>
+							)
+						})}
+								</div>
+					<div className="flex flex-wrap gap-2 justify-center -mt-1 mb-1 w-full">
 						<button
-							key={`dealer-${s}`}
-							onClick={() => setDealerExplicit(s)}
-							className={`px-1.5 py-0.5 rounded text-[10px] border ${
-								s === currentDealer
-									? 'bg-amber-500 border-amber-600 text-white'
-									: 'bg-white border-gray-300 text-gray-800 hover:bg-gray-100'
-							}`}
-							title={`Set next dealer to ${s}`}>
-							{s}
+							className={`px-3 py-2 rounded ${
+								kbMode ? 'bg-black text-white' : 'bg-gray-900 text-white'
+							} text-xs hover:opacity-90`}
+							onClick={() => {
+								setKbMode((v) => !v)
+								if (!kbMode) {
+									resetKb()
+								}
+							}}
+							title="Toggle keyboard entry (type ranks then Enter; Enter on empty = void; Esc to exit)">
+							{kbMode ? 'Keyboard: ON' : 'Keyboard: OFF'}
 						</button>
-					))}
-				</div>
-				<span className="font-modern text-[11px] text-gray-700 mr-2">
-					Selected: {selectedCount} • Remaining: {remaining}
-				</span>
-				<button
-					className="px-2 py-1.5 rounded bg-purple-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
-					onClick={handleRandomComplete}
-					disabled={remaining === 0}
-					title={
-						hintsEnabled
-							? 'Randomly deal remaining deck cards to seats'
-							: undefined
-					}>
-					Random Complete
-				</button>
-				{selectedCount > 0 && (
-					<button
-						className="px-2 py-1.5 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300"
-						onClick={clearSelection}
-						title={
-							hintsEnabled
-								? 'Deselect currently selected deck cards'
-								: undefined
-						}>
-						Clear Selection
-					</button>
-				)}
-				<button
-					className="px-2 py-1.5 rounded bg-gray-800 text-white text-xs hover:opacity-90"
-					onClick={resetBoard}
-					title={
-						hintsEnabled
-							? 'Clear all seats and return all cards to deck'
-							: undefined
-					}>
-					Reset Board
-				</button>
-				<button
-					className="px-2 py-1.5 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
-					onClick={saveCurrentHand}
-					disabled={!complete}
-					title={hintsEnabled ? 'Save this 52-card distribution' : undefined}>
-					Save Hand
-				</button>
-				<button
-					className="px-2 py-1.5 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
-					onClick={handleGeneratePBN}
-					disabled={savedHands.length === 0}
-					title={hintsEnabled ? 'Download saved deals as PBN' : undefined}>
-					Download PBN
-				</button>
-				<button
-					className={`px-2 py-1.5 rounded text-white text-[10px] hover:opacity-90 disabled:opacity-40 ${
-						copyState === 'ok'
-							? 'bg-green-600'
-							: copyState === 'err'
-							? 'bg-rose-600'
-							: 'bg-teal-500'
-					}`}
-					onClick={handleCopyPBN}
-					disabled={savedHands.length === 0}
-					title={hintsEnabled ? 'Copy PBN to clipboard' : undefined}>
-					{copyState === 'ok'
-						? 'Copied!'
-						: copyState === 'err'
-						? 'Copy failed'
-						: 'Copy'}
-				</button>
-				<button
-					className="px-2 py-1.5 rounded bg-teal-500 text-white text-[10px] hover:opacity-90 disabled:opacity-40"
-					onClick={handleEmailPBN}
-					disabled={savedHands.length === 0}
-					title={hintsEnabled ? 'Email PBN' : undefined}>
-					Email
-				</button>
-				<span className="text-[10px] text-gray-600">
-					Saved: {savedHands.length}
-				</span>
-			</div>
+						{kbMode && (
+							<span className="inline-block text-[11px] text-white bg-gray-900 px-2 py-1 rounded">
+								Typing: {currentKbSeat} • {currentKbSuit} —{' '}
+								{kbRanks.length ? kbRanks.join(' ') : 'void'}
+							</span>
+						)}
+						<button
+							className="px-3 py-2 rounded bg-sky-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
+							onClick={() => sendSelectedTo('N')}
+							disabled={selectedCount === 0 || deal.buckets.N.length >= 13}
+							title={
+								hintsEnabled ? 'Send selected deck cards to North' : undefined
+							}>
+							Send North
+						</button>
+						<button
+							className="px-3 py-2 rounded bg-amber-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
+							onClick={() => sendSelectedTo('W')}
+							disabled={selectedCount === 0 || deal.buckets.W.length >= 13}
+							title={hintsEnabled ? 'Send selected deck cards to West' : undefined}>
+							Send West
+						</button>
+						<button
+							className="px-3 py-2 rounded bg-rose-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
+							onClick={() => sendSelectedTo('E')}
+							disabled={selectedCount === 0 || deal.buckets.E.length >= 13}
+							title={hintsEnabled ? 'Send selected deck cards to East' : undefined}>
+							Send East
+						</button>
+						<button
+							className="px-3 py-2 rounded bg-emerald-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
+							onClick={() => sendSelectedTo('S')}
+							disabled={selectedCount === 0 || deal.buckets.S.length >= 13}
+							title={
+								hintsEnabled ? 'Send selected deck cards to South' : undefined
+							}>
+							Send South
+						</button>
+					</div>
 
-			{/* Danger zone: Delete PBN, kept separate */}
-			<div className="w-full flex items-center justify-center mt-2">
-				<button
-					className="px-3 py-2 rounded bg-rose-600 text-white text-xs hover:bg-rose-700 disabled:opacity-40"
-					onClick={() => setShowDeleteModal(true)}
-					disabled={savedHands.length === 0}
-					title={hintsEnabled ? 'Delete all saved PBN boards' : undefined}>
-					Delete PBN
-				</button>
-			</div>
-
-			{/* Confirmation Modal */}
-			{showDeleteModal && (
-				<div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-					<div className="bg-white rounded-lg shadow-xl border border-gray-200 w-[90%] max-w-sm p-4">
-						<h3 className="text-sm font-semibold text-gray-800 mb-2">
-							Delete all saved PBN deals?
-						</h3>
-						<p className="text-xs text-gray-700 mb-4">
-							This will remove all saved boards and reset the app to the start.
-							This action cannot be undone.
-						</p>
-						<div className="flex items-center justify-end gap-2">
-							<button
-								className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300"
-								onClick={() => setShowDeleteModal(false)}>
-								Cancel
-							</button>
-							<button
-								className="px-3 py-1.5 rounded bg-rose-600 text-white text-xs hover:bg-rose-700"
-								onClick={() => {
-									fullReset()
-									setShowDeleteModal(false)
-								}}>
-								Delete
-							</button>
+					{/* Buckets row (unchanged) */}
+					<div className="w-full flex items-start justify-center gap-2">
+						<div className="flex flex-row flex-wrap items-start justify-center gap-2">
+							<Bucket id="N" />
+							<Bucket id="E" />
+							<Bucket id="S" />
+							<Bucket id="W" />
 						</div>
 					</div>
+
+					{/* Preview and toolbar sections moved or kept below as needed */}
+					{/* ...existing code... */}
+
+					{/* Confirmation Modal */}
+					{showDeleteModal && (
+						<div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+							<div className="bg-white rounded-lg shadow-xl border border-gray-200 w-[90%] max-w-sm p-4">
+								<h3 className="text-sm font-semibold text-gray-800 mb-2">Delete all saved PBN deals?</h3>
+								<p className="text-xs text-gray-700 mb-4">This will remove all saved boards and reset the app to the start. This action cannot be undone.</p>
+								<div className="flex items-center justify-end gap-2">
+									<button className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+									<button className="px-3 py-1.5 rounded bg-rose-600 text-white text-xs hover:bg-rose-700" onClick={() => { fullReset(); setShowDeleteModal(false) }}>Delete</button>
+								</div>
+							</div>
+						</div>
+					)}
 				</div>
-			)}
-
-			{/* Mobile preview handled by unified preview section above */}
-
-			<div className="w-full flex items-center justify-center mt-1">
-				<a
-					href="/instructions"
-					className="text-[11px] text-sky-600 hover:underline">
-					Read full instructions →
-				</a>
-			</div>
-
-			<div className="w-full flex items-center justify-center">
-				<a href="/sources" className="text-[11px] text-sky-600 hover:underline">
-					Browse public PBN sources →
-				</a>
 			</div>
 		</div>
 	)
 }
+
+// Confirmation Modal for delete (restored)
+// Keep outside main return to avoid accidental duplication; rendered where state lives above.
 

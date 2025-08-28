@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+/* eslint-env node */
+/* global require, module, process */
 /**
  * Complete a partial PBN-style deal string used in this project into a full 52-card deal.
  * Usage: node scripts/completeDeal.js "S:KQ7.QJ4.KJ3.9754 -.-.-.- -.-.-.- -.-.-.-"
