@@ -128,9 +128,12 @@ function sortByPbnRank(cards) {
 }
 
 // Deprecated string PBN builders were removed in favor of Extended PBN export
-export default function DragDropCards({ meta }) {
+export default function DragDropCards({ meta, setMeta }) {
 	// Unified deal state: deck + seat buckets
-	const [deal, setDeal] = useState({ deck: initialCards, buckets: { N: [], E: [], S: [], W: [] } })
+	const [deal, setDeal] = useState({
+		deck: initialCards,
+		buckets: { N: [], E: [], S: [], W: [] },
+	})
 	// DnD state
 	const [draggedCard, setDraggedCard] = useState(null)
 	const [dragSource, setDragSource] = useState(null) // 'deck' | 'N' | 'E' | 'S' | 'W' | null
@@ -146,6 +149,57 @@ export default function DragDropCards({ meta }) {
 	const [hintsEnabled, setHintsEnabled] = useState(true)
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const copyTimerRef = useRef(null)
+
+	// Metadata preview (Template)
+	const [exportPreview, setExportPreview] = useState('')
+	const toPbnDate = (iso) => (iso ? String(iso).replace(/-/g, '.') : '')
+	const onExportTemplate = async () => {
+		try {
+			const site =
+				meta?.siteChoice === 'Other'
+					? meta?.siteOther || 'Other'
+					: meta?.siteChoice
+			const theme =
+				meta?.themeChoice === 'Custom…'
+					? meta?.themeCustom || ''
+					: meta?.themeChoice
+			const auctionTokens = String(meta?.auctionText || '')
+				.trim()
+				.split(/\s+/)
+				.filter(Boolean)
+			const sample = BoardZ.parse({
+				event: meta?.event || 'Club Teaching session',
+				site,
+				date: meta?.date || toPbnDate(meta?.dateISO),
+				board: 1,
+				dealer: 'N',
+				vul: 'None',
+				dealPrefix: 'N',
+				hands: {
+					N: { S: [], H: [], D: [], C: [] },
+					E: { S: [], H: [], D: [], C: [] },
+					S: { S: [], H: [], D: [], C: [] },
+					W: { S: [], H: [], D: [], C: [] },
+				},
+				auctionStart: auctionTokens.length ? meta?.auctionStart || 'N' : undefined,
+				auction: auctionTokens.length ? auctionTokens : undefined,
+				ext: {
+					system: meta?.system || undefined,
+					theme: theme || undefined,
+					interf: meta?.interf || undefined,
+					lead: meta?.lead || undefined,
+					ddpar: meta?.ddpar || undefined,
+					scoring: meta?.scoring || undefined,
+					playscript: meta?.playscript || undefined,
+				},
+				notes: meta?.notes && meta.notes.length ? meta.notes : [],
+			})
+			const txt = await exportBoardPBN(sample)
+			setExportPreview(txt)
+		} catch (e) {
+			setExportPreview(String(e))
+		}
+	}
 
 	// Left controls panel state
 	const [leftOpen, setLeftOpen] = useState(true)
@@ -210,20 +264,25 @@ export default function DragDropCards({ meta }) {
 			const now = Date.now()
 			const keyId = String(e.key || '').toLowerCase()
 			if (inFlightRef.current) return
-			if (lastKeyRef.current.key === keyId && now - lastKeyRef.current.t < 200) {
+			if (
+				lastKeyRef.current.key === keyId &&
+				now - lastKeyRef.current.t < 200
+			) {
 				return
 			}
 			lastKeyRef.current = { key: keyId, t: now }
 			const k = e.key
 			if (k === 'Escape') {
-				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+				if (typeof e.stopImmediatePropagation === 'function')
+					e.stopImmediatePropagation()
 				e.stopPropagation()
 				e.preventDefault()
 				setKbMode(false)
 				return
 			}
 			if (k === 'Enter') {
-				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+				if (typeof e.stopImmediatePropagation === 'function')
+					e.stopImmediatePropagation()
 				e.stopPropagation()
 				e.preventDefault()
 				inFlightRef.current = true
@@ -234,7 +293,8 @@ export default function DragDropCards({ meta }) {
 				return
 			}
 			if (k === 'Backspace') {
-				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+				if (typeof e.stopImmediatePropagation === 'function')
+					e.stopImmediatePropagation()
 				e.stopPropagation()
 				e.preventDefault()
 				inFlightRef.current = true
@@ -254,7 +314,9 @@ export default function DragDropCards({ meta }) {
 					setDeal((prev) => {
 						const seatArr = prev.buckets[seatAtKey] || []
 						const idx = seatArr.findIndex(
-							(c) => c.suit === suitAtKey && (c.rank === last || (last === '10' && c.rank === '10'))
+							(c) =>
+								c.suit === suitAtKey &&
+								(c.rank === last || (last === '10' && c.rank === '10'))
 						)
 						if (idx === -1) return prev
 						const card = seatArr[idx]
@@ -278,7 +340,8 @@ export default function DragDropCards({ meta }) {
 			else if (lower === 'k') rank = 'K'
 			else if (lower === 'a') rank = 'A'
 			if (rank) {
-				if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+				if (typeof e.stopImmediatePropagation === 'function')
+					e.stopImmediatePropagation()
 				e.stopPropagation()
 				e.preventDefault()
 				// Capture seat/suit at the time of the keypress to avoid race with cursor advance
@@ -351,12 +414,16 @@ export default function DragDropCards({ meta }) {
 			// If already allocated anywhere, strip any lingering copy from deck
 			const allocated = SEATS.some((s) =>
 				(prev.buckets[s] || []).some(
-					(c) => c.suit === suit && (c.rank === rank || (rank === '10' && c.rank === '10'))
+					(c) =>
+						c.suit === suit &&
+						(c.rank === rank || (rank === '10' && c.rank === '10'))
 				)
 			)
 			if (allocated) {
 				const idxInDeck = prev.deck.findIndex(
-					(c) => c.suit === suit && (c.rank === rank || (rank === '10' && c.rank === '10'))
+					(c) =>
+						c.suit === suit &&
+						(c.rank === rank || (rank === '10' && c.rank === '10'))
 				)
 				if (idxInDeck === -1) return prev
 				return {
@@ -367,11 +434,15 @@ export default function DragDropCards({ meta }) {
 			// Otherwise add from deck to target seat if capacity allows
 			if (prev.buckets[seat].length >= 13) return prev
 			const idxInDeck = prev.deck.findIndex(
-				(c) => c.suit === suit && (c.rank === rank || (rank === '10' && c.rank === '10'))
+				(c) =>
+					c.suit === suit &&
+					(c.rank === rank || (rank === '10' && c.rank === '10'))
 			)
 			if (idxInDeck === -1) return prev
 			const card = prev.deck[idxInDeck]
-			const existsInSeat = prev.buckets[seat].some((c) => c.suit === suit && c.rank === card.rank)
+			const existsInSeat = prev.buckets[seat].some(
+				(c) => c.suit === suit && c.rank === card.rank
+			)
 			if (existsInSeat) return prev
 			return {
 				deck: prev.deck.filter((_, i) => i !== idxInDeck),
@@ -436,7 +507,7 @@ export default function DragDropCards({ meta }) {
 	const clearSelection = () => setSelected(new Set())
 
 	const resetBoard = () => {
-	setDeal({ deck: initialCards, buckets: { N: [], E: [], S: [], W: [] } })
+		setDeal({ deck: initialCards, buckets: { N: [], E: [], S: [], W: [] } })
 		setSelected(new Set())
 	}
 
@@ -566,7 +637,9 @@ export default function DragDropCards({ meta }) {
 		// compute using current deal snapshot
 		const capacity = 13 - deal.buckets[bucket].length
 		if (capacity <= 0) return
-		const toMove = deal.deck.filter((c) => selected.has(c.id)).slice(0, capacity)
+		const toMove = deal.deck
+			.filter((c) => selected.has(c.id))
+			.slice(0, capacity)
 		if (toMove.length === 0) return
 		const movedIds = new Set(toMove.map((c) => c.id))
 		setDeal((prev) => ({
@@ -823,7 +896,7 @@ export default function DragDropCards({ meta }) {
 			(vul === 'EW' && (id === 'E' || id === 'W'))
 
 		const rowOrder = ['Clubs', 'Diamonds', 'Hearts', 'Spades']
-	const hcp = hcpOfCards(deal.buckets[id])
+		const hcp = hcpOfCards(deal.buckets[id])
 
 		return (
 			<div
@@ -927,47 +1000,371 @@ export default function DragDropCards({ meta }) {
 	return (
 		<div className="w-full min-h-screen flex items-stretch">
 			{/* Left controls panel: move entire top toolbar here */}
-			<div className={`${leftOpen ? 'w-72' : 'w-10'} transition-all duration-200 border-r bg-white relative`}> 
+			<div
+				className={`${
+					leftOpen ? 'w-72' : 'w-10'
+				} transition-all duration-200 border-r bg-white relative`}>
 				<div className="h-10 flex items-center justify-between px-2 border-b">
 					<span className="text-xs font-semibold text-gray-700">Generator</span>
-					<button className="text-xs px-2 py-0.5 rounded border bg-white" onClick={() => setLeftOpen(!leftOpen)}>{leftOpen ? '⟨' : '⟩'}</button>
+					<button
+						className="text-xs px-2 py-0.5 rounded border bg-white"
+						onClick={() => setLeftOpen(!leftOpen)}>
+						{leftOpen ? '⟨' : '⟩'}
+					</button>
 				</div>
-				<div className={`${leftOpen ? 'p-2' : 'p-0'} overflow-y-auto max-h-[calc(100vh-40px)]`}>
+				<div
+					className={`${
+						leftOpen ? 'p-2' : 'p-0'
+					} overflow-y-auto max-h-[calc(100vh-40px)]`}>
 					{leftOpen && (
 						<div className="space-y-2 text-xs">
+							{/* Metadata moved from top header to left panel */}
+							<div className="space-y-1">
+								<div className="text-[11px] font-semibold text-gray-800">Metadata</div>
+								<label className="flex items-center justify-between gap-1">
+									<span className="text-[11px] text-gray-600">Event</span>
+									<select
+										className="border rounded px-1 py-0.5 text-[11px] flex-1"
+										value={meta?.event || ''}
+										onChange={(e) => setMeta?.((m) => ({ ...m, event: e.target.value }))}>
+										<option>Club Teaching session</option>
+										<option>Club Tournament</option>
+										<option>Club Social</option>
+									</select>
+								</label>
+								<label className="flex items-center justify-between gap-1">
+									<span className="text-[11px] text-gray-600">Location</span>
+									<select
+										className="border rounded px-1 py-0.5 text-[11px] flex-1"
+										value={meta?.siteChoice || ''}
+										onChange={(e) => setMeta?.((m) => ({ ...m, siteChoice: e.target.value }))}>
+										<option>Bristol Bridge Club</option>
+										<option>Home</option>
+										<option>3rd Party</option>
+										<option>Other</option>
+									</select>
+								</label>
+								{meta?.siteChoice === 'Other' && (
+									<label className="flex items-center justify-between gap-1">
+										<span className="text-[11px] text-gray-600">Location (Other)</span>
+										<input
+											className="border rounded px-1 py-0.5 text-[11px] flex-1"
+											value={meta?.siteOther || ''}
+											onChange={(e) => setMeta?.((m) => ({ ...m, siteOther: e.target.value }))}
+										/>
+									</label>
+								)}
+								<label className="flex items-center justify-between gap-1">
+									<span className="text-[11px] text-gray-600">Date</span>
+									<input
+										type="date"
+										className="border rounded px-1 py-0.5 text-[11px] flex-1"
+										value={meta?.dateISO || ''}
+										onChange={(e) => {
+											const iso = e.target.value
+											setMeta?.((m) => ({ ...m, dateISO: iso, date: toPbnDate(iso) }))
+										}}
+									/>
+								</label>
+								<label className="flex items-center justify-between gap-1">
+									<span className="text-[11px] text-gray-600">System</span>
+									<input
+										className="border rounded px-1 py-0.5 text-[11px] flex-1"
+										value={meta?.system || ''}
+										onChange={(e) => setMeta?.((m) => ({ ...m, system: e.target.value }))}
+										placeholder="Acol 12-14 1NT"
+									/>
+								</label>
+								<label className="flex items-center justify-between gap-1">
+									<span className="text-[11px] text-gray-600">Theme</span>
+									<select
+										className="border rounded px-1 py-0.5 text-[11px] flex-1"
+										value={meta?.themeChoice || ''}
+										onChange={(e) => setMeta?.((m) => ({ ...m, themeChoice: e.target.value }))}>
+										<option>Bidding - Stayman & Transfers</option>
+										<option>Bidding - Overcalls</option>
+										<option>Bidding - Weak Twos</option>
+										<option>Slam Bidding</option>
+										<option>Opening Leads</option>
+										<option>Defence - Signals</option>
+										<option>Declarer - Finesses</option>
+										<option>Declarer - Suit Establishment</option>
+										<option>Declarer - Counting</option>
+										<option>Card Play - Ducking</option>
+										<option>Endplays & Squeezes</option>
+										<option>Interference - Landy</option>
+										<option>Custom…</option>
+									</select>
+								</label>
+								{meta?.themeChoice === 'Custom…' && (
+									<label className="flex items-center justify-between gap-1">
+										<span className="text-[11px] text-gray-600">Theme (Custom)</span>
+										<input
+											className="border rounded px-1 py-0.5 text-[11px] flex-1"
+											value={meta?.themeCustom || ''}
+											onChange={(e) => setMeta?.((m) => ({ ...m, themeCustom: e.target.value }))}
+											placeholder="e.g. Inverted Minors"
+										/>
+									</label>
+								)}
+								<label className="flex items-center justify-between gap-1">
+									<span className="text-[11px] text-gray-600">Interf</span>
+									<input
+										className="border rounded px-1 py-0.5 text-[11px] flex-1"
+										value={meta?.interf || ''}
+										onChange={(e) => setMeta?.((m) => ({ ...m, interf: e.target.value }))}
+										placeholder="Landy 2C"
+									/>
+								</label>
+								<label className="flex items-center justify-between gap-1">
+									<span className="text-[11px] text-gray-600">Lead</span>
+									<input
+										className="border rounded px-1 py-0.5 text-[11px] flex-1"
+										value={meta?.lead || ''}
+										onChange={(e) => setMeta?.((m) => ({ ...m, lead: e.target.value }))}
+										placeholder="W:♠4"
+									/>
+								</label>
+								<label className="flex items-center justify-between gap-1">
+									<span className="text-[11px] text-gray-600">DDPar</span>
+									<input
+										className="border rounded px-1 py-0.5 text-[11px] flex-1"
+										value={meta?.ddpar || ''}
+										onChange={(e) => setMeta?.((m) => ({ ...m, ddpar: e.target.value }))}
+										placeholder="3NT="
+									/>
+								</label>
+								<label className="flex items-center justify-between gap-1">
+									<span className="text-[11px] text-gray-600">Scoring</span>
+									<select
+										className="border rounded px-1 py-0.5 text-[11px] flex-1"
+										value={meta?.scoring || 'MPs'}
+										onChange={(e) => setMeta?.((m) => ({ ...m, scoring: e.target.value }))}>
+										<option value="MPs">MPs</option>
+										<option value="IMPs">IMPs</option>
+									</select>
+								</label>
+
+								{/* Auction & Play */}
+								<div className="pt-1 border-t space-y-1">
+									<div className="text-[11px] font-semibold text-gray-800">Ideal Bidding</div>
+									<div className="flex items-center gap-1">
+										<label className="flex items-center gap-1">
+											<span className="text-[11px] text-gray-600">Start</span>
+											<select
+												className="border rounded px-1 py-0.5 text-[11px]"
+												value={meta?.auctionStart || 'N'}
+												onChange={(e) => setMeta?.((m) => ({ ...m, auctionStart: e.target.value }))}>
+												<option>N</option>
+												<option>E</option>
+												<option>S</option>
+												<option>W</option>
+											</select>
+										</label>
+										<input
+											className="border rounded px-1 py-0.5 text-[11px] flex-1"
+											placeholder="e.g. 1NT Pass 2C … Pass Pass Pass"
+											value={meta?.auctionText || ''}
+											onChange={(e) => setMeta?.((m) => ({ ...m, auctionText: e.target.value }))}
+										/>
+									</div>
+									<div className="text-[10px] text-gray-500">Ends with three Passes.</div>
+								</div>
+								<div className="space-y-1">
+									<div className="text-[11px] font-semibold text-gray-800">PlayScript</div>
+									<textarea
+										className="border rounded px-1 py-0.5 text-[11px] h-16 w-full"
+										placeholder={`One play per line, e.g.\nW:♠4\nN:♠A\nE:♠2\nS:♠7`}
+										value={meta?.playscript || ''}
+										onChange={(e) => setMeta?.((m) => ({ ...m, playscript: e.target.value }))}
+									/>
+								</div>
+
+								{/* Notes */}
+								<div className="pt-1 border-t space-y-1">
+									<div className="text-[11px] font-semibold text-gray-800">Notes</div>
+									<textarea
+										className="border rounded px-1 py-0.5 text-[11px] h-16 w-full"
+										value={meta?.notesDraft || ''}
+										onChange={(e) => setMeta?.((m) => ({ ...m, notesDraft: e.target.value }))}
+										placeholder="Paste teaching notes here..."
+									/>
+									<div className="flex items-center gap-1">
+										<button
+											className="px-2 py-1 rounded border text-[11px]"
+											onClick={() => {
+												const raw = String(meta?.notesDraft || '').trim()
+												if (!raw) return
+												const blocks = raw.split(/\n\s*\n/).filter(Boolean)
+												const chunks = []
+												const pushChunk = (s) => {
+													const trimmed = s.trim()
+													if (!trimmed) return
+													for (let i = 0; i < trimmed.length; i += 280) {
+														chunks.push(trimmed.slice(i, i + 280))
+													}
+												}
+												if (blocks.length > 1) blocks.forEach(pushChunk)
+												else pushChunk(raw)
+												setMeta?.((m) => ({ ...m, notes: chunks.slice(0, 10) }))
+										}}>
+										Split
+										</button>
+										<button
+											className="px-2 py-1 rounded border text-[11px]"
+											onClick={() => setMeta?.((m) => ({ ...m, notes: [], notesDraft: '' }))}>
+										Clear
+										</button>
+									</div>
+									<div className="flex flex-col gap-1">
+										{(meta?.notes || []).map((n, idx) => (
+											<div key={idx} className="flex items-center gap-1">
+												<input
+													className="border rounded px-1 py-0.5 text-[11px] flex-1"
+													value={n}
+													onChange={(e) => {
+														const arr = [...(meta?.notes || [])]
+														arr[idx] = e.target.value
+														setMeta?.((m) => ({ ...m, notes: arr }))
+													}}
+												/>
+												<button
+													className="px-2 py-1 rounded border text-[11px]"
+													onClick={() => {
+														const arr = (meta?.notes || []).filter((_, i) => i !== idx)
+														setMeta?.((m) => ({ ...m, notes: arr }))
+													}}>
+													✕
+												</button>
+											</div>
+										))}
+										{(meta?.notes || []).length < 10 && (
+											<button
+												className="px-2 py-1 rounded border text-[11px] self-start"
+												onClick={() => setMeta?.((m) => ({ ...m, notes: [...(m.notes || []), ''] }))}>
+												+ Add note
+											</button>
+										)}
+									</div>
+								</div>
+
+								<div className="pt-1 border-t space-y-1">
+									<button
+										className="w-full px-2 py-1 rounded border bg-white text-[11px]"
+										onClick={onExportTemplate}>
+										Preview Template
+									</button>
+									{exportPreview && (
+										<pre className="whitespace-pre-wrap text-[10px] leading-tight bg-gray-50 border border-gray-200 rounded p-2 max-h-24 overflow-y-auto">
+											{exportPreview}
+										</pre>
+									)}
+								</div>
+
 							<div className="flex items-center justify-between">
 								<span className="text-gray-700">Hints</span>
 								<label className="flex items-center gap-1">
-									<input type="checkbox" checked={hintsEnabled} onChange={(e)=>setHintsEnabled(e.target.checked)} />
+									<input
+										type="checkbox"
+										checked={hintsEnabled}
+										onChange={(e) => setHintsEnabled(e.target.checked)}
+									/>
 								</label>
 							</div>
 							<div className="space-y-1">
 								<div className="text-[11px] text-gray-600">Dealer</div>
 								<div className="flex flex-wrap gap-1">
 									{SEATS.map((s) => (
-										<button key={`dealer-${s}`} onClick={() => setDealerExplicit(s)} className={`px-1.5 py-0.5 rounded text-[10px] border ${s === currentDealer ? 'bg-amber-500 border-amber-600 text-white' : 'bg-white border-gray-300 text-gray-800 hover:bg-gray-100'}`}>{s}</button>
+										<button
+											key={`dealer-${s}`}
+											onClick={() => setDealerExplicit(s)}
+											className={`px-1.5 py-0.5 rounded text-[10px] border ${
+												s === currentDealer
+													? 'bg-amber-500 border-amber-600 text-white'
+													: 'bg-white border-gray-300 text-gray-800 hover:bg-gray-100'
+											}`}>
+											{s}
+										</button>
 									))}
 								</div>
 							</div>
-							<div className="text-[11px] text-gray-700">Selected: {selectedCount} • Remaining: {remaining}</div>
-							<div className="grid grid-cols-1 gap-1">
-								<button className="px-3 py-2 rounded bg-purple-600 text-white text-xs hover:opacity-90 disabled:opacity-40" onClick={handleRandomComplete} disabled={remaining === 0}>Random Complete</button>
-								{selectedCount > 0 && (
-									<button className="px-3 py-2 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300" onClick={clearSelection}>Clear Selection</button>
-								)}
-								<button className="px-3 py-2 rounded bg-gray-900 text-white text-xs hover:opacity-90" onClick={resetBoard}>Reset Board</button>
-								<button className="px-3 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40" onClick={saveCurrentHand} disabled={!complete}>Save Hand</button>
-								<button className="px-3 py-2 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40" onClick={handleGeneratePBN} disabled={savedHands.length === 0}>Download PBN</button>
-								<button className={`px-3 py-2 rounded text-white text-xs hover:opacity-90 disabled:opacity-40 ${copyState === 'ok' ? 'bg-green-600' : copyState === 'err' ? 'bg-rose-600' : 'bg-teal-500'}`} onClick={handleCopyPBN} disabled={savedHands.length === 0}>{copyState === 'ok' ? 'Copied!' : copyState === 'err' ? 'Copy failed' : 'Copy PBN'}</button>
-								<button className="px-3 py-2 rounded bg-teal-500 text-white text-xs hover:opacity-90 disabled:opacity-40" onClick={handleEmailPBN} disabled={savedHands.length === 0}>Email PBN</button>
-								<div className="text-[11px] text-gray-600">Saved: {savedHands.length}</div>
-								<button className="px-3 py-2 rounded bg-rose-600 text-white text-xs hover:bg-rose-700 disabled:opacity-40" onClick={() => setShowDeleteModal(true)} disabled={savedHands.length === 0}>Delete PBN</button>
+							<div className="text-[11px] text-gray-700">
+								Selected: {selectedCount} • Remaining: {remaining}
 							</div>
+							<div className="grid grid-cols-1 gap-1">
+								<button
+									className="px-3 py-2 rounded bg-purple-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
+									onClick={handleRandomComplete}
+									disabled={remaining === 0}>
+									Random Complete
+								</button>
+								{selectedCount > 0 && (
+									<button
+										className="px-3 py-2 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300"
+										onClick={clearSelection}>
+										Clear Selection
+									</button>
+								)}
+								<button
+									className="px-3 py-2 rounded bg-gray-900 text-white text-xs hover:opacity-90"
+									onClick={resetBoard}>
+									Reset Board
+								</button>
+								<button
+									className="px-3 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
+									onClick={saveCurrentHand}
+									disabled={!complete}>
+									Save Hand
+								</button>
+								<button
+									className="px-3 py-2 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
+									onClick={handleGeneratePBN}
+									disabled={savedHands.length === 0}>
+									Download PBN
+								</button>
+								<button
+									className={`px-3 py-2 rounded text-white text-xs hover:opacity-90 disabled:opacity-40 ${
+										copyState === 'ok'
+											? 'bg-green-600'
+											: copyState === 'err'
+											? 'bg-rose-600'
+											: 'bg-teal-500'
+									}`}
+									onClick={handleCopyPBN}
+									disabled={savedHands.length === 0}>
+									{copyState === 'ok'
+										? 'Copied!'
+										: copyState === 'err'
+										? 'Copy failed'
+										: 'Copy PBN'}
+								</button>
+								<button
+									className="px-3 py-2 rounded bg-teal-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
+									onClick={handleEmailPBN}
+									disabled={savedHands.length === 0}>
+									Email PBN
+								</button>
+								<div className="text-[11px] text-gray-600">
+									Saved: {savedHands.length}
+								</div>
+								<button
+									className="px-3 py-2 rounded bg-rose-600 text-white text-xs hover:bg-rose-700 disabled:opacity-40"
+									onClick={() => setShowDeleteModal(true)}
+									disabled={savedHands.length === 0}>
+									Delete PBN
+								</button>
+							</div>
+						</div>
 						</div>
 					)}
 				</div>
 				{!leftOpen && (
-					<button className="absolute top-12 -right-3 z-20 w-6 h-8 rounded-md shadow bg-white border text-xs" onClick={() => setLeftOpen(true)} title="Expand left panel">▶</button>
+					<button
+						className="absolute top-12 -right-3 z-20 w-6 h-8 rounded-md shadow bg-white border text-xs"
+						onClick={() => setLeftOpen(true)}
+						title="Expand left panel">
+						▶
+					</button>
 				)}
 			</div>
 
@@ -976,20 +1373,22 @@ export default function DragDropCards({ meta }) {
 				<div className="flex flex-col items-center w-full max-w-[1100px] mx-auto gap-2 px-2 py-2">
 					{/* Randomize first: prominent and above the deck */}
 					<div className="w-full flex items-center justify-center">
-						<button className="px-4 py-2 rounded-full bg-purple-600 text-white text-sm shadow hover:bg-purple-700" onClick={handleRandomComplete} disabled={remaining === 0} title="Quick random distribution">Randomize</button>
+						<button
+							className="px-4 py-2 rounded-full bg-purple-600 text-white text-sm shadow hover:bg-purple-700"
+							onClick={handleRandomComplete}
+							disabled={remaining === 0}
+							title="Quick random distribution">
+							Randomize
+						</button>
 					</div>
 
-					{/* Deck with select and DnD */}
-					<div className="w-full flex justify-end">
-						<label className="text-[11px] text-gray-600 flex items-center gap-1 select-none">
-							<input type="checkbox" checked={hintsEnabled} onChange={(e) => setHintsEnabled(e.target.checked)} />
-							Hints
-						</label>
-					</div>
+					{/* Deck with DnD */}
 
 					{SEATS.includes(dragSource) && hintsEnabled && (
 						<div className="w-full text-center mb-1">
-							<span className="inline-block text-[11px] text-gray-700 px-2 py-1 bg-gray-50 border border-dashed border-gray-400 rounded">Drop here to return to deck</span>
+							<span className="inline-block text-[11px] text-gray-700 px-2 py-1 bg-gray-50 border border-dashed border-gray-400 rounded">
+								Drop here to return to deck
+							</span>
 						</div>
 					)}
 
@@ -997,10 +1396,13 @@ export default function DragDropCards({ meta }) {
 						className="flex flex-wrap gap-1 mb-2 justify-center min-h-[60px]"
 						onDragOver={(e) => {
 							e.preventDefault()
-							try { e.dataTransfer.dropEffect = 'move' } catch { void 0 }
+							try {
+								e.dataTransfer.dropEffect = 'move'
+							} catch {
+								void 0
+							}
 						}}
-						onDrop={onDropToDeck}
-					>
+						onDrop={onDropToDeck}>
 						{deal.deck.map((card) => {
 							const isSelected = selected.has(card.id)
 							return (
@@ -1010,14 +1412,49 @@ export default function DragDropCards({ meta }) {
 									onDragStart={(e) => onDragStartDeck(e, card)}
 									onDragEnd={onDragEnd}
 									onClick={() => toggleSelect(card.id)}
-									className={`rounded-lg shadow-md cursor-pointer select-none transition-all duration-150 font-serif w-[48px] h-[72px] flex flex-col items-center justify-center border border-neutral-300 bg-[#FFF8E7] ${isSelected ? 'ring-4 ring-yellow-300 scale-105' : 'hover:scale-105'}`}
-									title={hintsEnabled ? 'Click to select, drag to a seat' : undefined}
-								>
+									className={`rounded-lg shadow-md cursor-pointer select-none transition-all duration-150 font-serif w-[48px] h-[72px] flex flex-col items-center justify-center border border-neutral-300 bg-[#FFF8E7] ${
+										isSelected
+											? 'ring-4 ring-yellow-300 scale-105'
+											: 'hover:scale-105'
+									}`}
+									title={
+										hintsEnabled ? 'Click to select, drag to a seat' : undefined
+									}>
 									{renderFace(card, true)}
 								</div>
 							)
 						})}
-								</div>
+					</div>
+
+					{/* Save and onboarding guidance under the deck */}
+					<div className="w-full max-w-[900px] mx-auto mb-2">
+						<div className="rounded-md border border-gray-200 bg-white p-3 flex flex-col gap-2 items-start">
+							<div className="text-[12px] text-gray-800">
+								{complete ? (
+									<span>
+										Ready to save this board — Board {nextBoardNo} (Dealer {currentDealer}, Vul {vulnerabilityForBoard(nextBoardNo)}).
+									</span>
+								) : (
+									<span>
+										Deal all 52 cards into the four hands. Remaining in deck: {remaining}.
+									</span>
+								)}
+							</div>
+							<div className="flex items-center gap-2">
+								<button
+									className="px-4 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
+									onClick={saveCurrentHand}
+									disabled={!complete}
+									title={complete ? 'Save this complete deal' : 'Finish distributing to enable saving'}>
+									Save Hand
+								</button>
+								<span className="text-[11px] text-gray-600">Saved so far: {savedHands.length}</span>
+							</div>
+							<div className="text-[11px] text-gray-600">
+								Build another hand after saving. When you’re finished adding boards, use Download / Copy / Email in the left panel to export your PBN.
+							</div>
+						</div>
+					</div>
 					<div className="flex flex-wrap gap-2 justify-center -mt-1 mb-1 w-full">
 						<button
 							className={`px-3 py-2 rounded ${
@@ -1031,13 +1468,7 @@ export default function DragDropCards({ meta }) {
 							}}
 							title="Toggle keyboard entry (type ranks then Enter; Enter on empty = void; Esc to exit)">
 							{kbMode ? 'Keyboard: ON' : 'Keyboard: OFF'}
-						</button>
-						{kbMode && (
-							<span className="inline-block text-[11px] text-white bg-gray-900 px-2 py-1 rounded">
-								Typing: {currentKbSeat} • {currentKbSuit} —{' '}
-								{kbRanks.length ? kbRanks.join(' ') : 'void'}
-							</span>
-						)}
+							</button>
 						<button
 							className="px-3 py-2 rounded bg-sky-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 							onClick={() => sendSelectedTo('N')}
@@ -1051,14 +1482,18 @@ export default function DragDropCards({ meta }) {
 							className="px-3 py-2 rounded bg-amber-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 							onClick={() => sendSelectedTo('W')}
 							disabled={selectedCount === 0 || deal.buckets.W.length >= 13}
-							title={hintsEnabled ? 'Send selected deck cards to West' : undefined}>
+							title={
+								hintsEnabled ? 'Send selected deck cards to West' : undefined
+							}>
 							Send West
 						</button>
 						<button
 							className="px-3 py-2 rounded bg-rose-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 							onClick={() => sendSelectedTo('E')}
 							disabled={selectedCount === 0 || deal.buckets.E.length >= 13}
-							title={hintsEnabled ? 'Send selected deck cards to East' : undefined}>
+							title={
+								hintsEnabled ? 'Send selected deck cards to East' : undefined
+							}>
 							Send East
 						</button>
 						<button
@@ -1089,11 +1524,27 @@ export default function DragDropCards({ meta }) {
 					{showDeleteModal && (
 						<div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
 							<div className="bg-white rounded-lg shadow-xl border border-gray-200 w-[90%] max-w-sm p-4">
-								<h3 className="text-sm font-semibold text-gray-800 mb-2">Delete all saved PBN deals?</h3>
-								<p className="text-xs text-gray-700 mb-4">This will remove all saved boards and reset the app to the start. This action cannot be undone.</p>
+								<h3 className="text-sm font-semibold text-gray-800 mb-2">
+									Delete all saved PBN deals?
+								</h3>
+								<p className="text-xs text-gray-700 mb-4">
+									This will remove all saved boards and reset the app to the
+									start. This action cannot be undone.
+								</p>
 								<div className="flex items-center justify-end gap-2">
-									<button className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-									<button className="px-3 py-1.5 rounded bg-rose-600 text-white text-xs hover:bg-rose-700" onClick={() => { fullReset(); setShowDeleteModal(false) }}>Delete</button>
+									<button
+										className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300"
+										onClick={() => setShowDeleteModal(false)}>
+										Cancel
+									</button>
+									<button
+										className="px-3 py-1.5 rounded bg-rose-600 text-white text-xs hover:bg-rose-700"
+										onClick={() => {
+											fullReset()
+											setShowDeleteModal(false)
+										}}>
+										Delete
+									</button>
 								</div>
 							</div>
 						</div>

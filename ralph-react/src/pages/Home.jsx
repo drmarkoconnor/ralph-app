@@ -11,8 +11,9 @@ export default function Home() {
 						Learn, Build, and Teach Bridge
 					</h1>
 					<p className="text-lg text-gray-700 mt-4 max-w-xl">
-						Explore our playful tools for teaching and preparing Bridge sessions.
-						Create hands with the Generator or teach with the live Player.
+						Explore our playful tools for teaching and preparing Bridge
+						sessions. Create hands with the Generator or teach with the live
+						Player.
 					</p>
 					<div className="mt-6 flex flex-wrap gap-3">
 						<Link
