@@ -978,11 +978,28 @@ export default function DragDropCards({ meta, setMeta }) {
 			doc.setFontSize(9)
 			doc.setFont('helvetica', 'normal')
 			doc.text(title, marginX, topY + 10)
-			// Hands diagram region (enlarged & pulled closer)
+
+			// Notes beneath header (left)
+			const m = handObj.meta || meta || {}
+			const rawNotes = Array.isArray(m.notes) ? m.notes : []
+			const maxNoteLines = mode === 'full' ? 10 : 5
+			const notesLines = rawNotes.slice(0, maxNoteLines).map(n=> (n||'').trim()).filter(Boolean)
+			if (notesLines.length) {
+				doc.setFontSize(7.5)
+				doc.setFont('helvetica','bold')
+				doc.text('Notes', marginX, topY + 14)
+				doc.setFont('helvetica','normal')
+				notesLines.forEach((ln,i)=> {
+					doc.text('• ' + ln, marginX, topY + 18 + i*4, { maxWidth: 80 })
+				})
+			}
+			const notesHeight = notesLines.length ? (notesLines.length * 4) + 8 : 0
+
+			// Hands diagram region now placed below notes
 			const centerX = pageW / 2
-			const centerY = topY + blockH / 2 + 4
-			const horizontalOffset = 60 // closer than previous 80
-			const lineHeight = 5.2 // more vertical space for larger text
+			const centerY = topY + 30 + notesHeight
+			const horizontalOffset = 60
+			const lineHeight = 5.2
 			const suitIconSize = 4.2
 			const textOffsetX = suitIconSize + 1.8
 
@@ -1019,41 +1036,27 @@ export default function DragDropCards({ meta, setMeta }) {
 			drawSeat('West', W, centerX - horizontalOffset, centerY + 2, 'left')
 			drawSeat('East', E, centerX + horizontalOffset, centerY + 2, 'right')
 
-			// Teaching / metadata notes area right side
-			const notesX = pageW - marginX - 60
-			const infoY = topY + 14
-			doc.setFont('helvetica', 'bold')
+			// Metadata compact box (right)
+			const metaX = pageW - marginX - 58
+			const metaY = topY + 14
+			doc.setFont('helvetica','bold')
 			doc.setFontSize(8)
-			doc.text('Teaching Notes', notesX, infoY)
-			doc.setFont('helvetica', 'normal')
-			let cursorY = infoY + 4
-			const pushLine = (label, value) => {
-				if (!value) return
-				doc.text(`${label}: ${value}`, notesX, cursorY, { maxWidth: 60 })
-				cursorY += 4
-			}
-			// Prefer per-hand snapshot metadata when available
-			const m = handObj.meta || meta || {}
-			pushLine('Ideal', m.ddpar)
-			pushLine('Lead', m.lead)
-			if (mode === 'full' && m.system) pushLine('System', m.system)
-			if (m.theme) pushLine('Theme', m.theme)
+			doc.text('Meta', metaX, metaY)
+			doc.setFont('helvetica','normal')
+			let my = metaY + 4
+			const metaLine = (label,val) => { if(!val) return; doc.text(`${label}: ${val}`, metaX, my, { maxWidth: 58 }); my += 4 }
+			metaLine('Ideal', m.ddpar)
+			metaLine('Lead', m.lead)
 			if (mode === 'full') {
-				pushLine('Scoring', m.scoring)
-				pushLine('Interf', m.interf)
-				if (m.auctionText) pushLine('Auction', m.auctionText)
+				metaLine('System', m.system)
+				metaLine('Theme', m.theme)
+				metaLine('Score', m.scoring)
+				metaLine('Interf', m.interf)
+				if (m.auctionText) metaLine('Auction', m.auctionText)
 				if (m.playscript) {
 					const firstPlay = String(m.playscript).split(/\n/).filter(Boolean)[0]
-					pushLine('Lead Seq', firstPlay)
+					metaLine('LeadSeq', firstPlay)
 				}
-			}
-			const notesList = Array.isArray(m.notes) && m.notes.length ? m.notes : meta?.notes || []
-			if (notesList.length) {
-				const maxNotes = mode === 'full' ? 8 : 4
-				notesList.slice(0, maxNotes).forEach((n) => {
-					doc.text('• ' + n, notesX, cursorY, { maxWidth: 60 })
-					cursorY += 4
-				})
 			}
 		}
 

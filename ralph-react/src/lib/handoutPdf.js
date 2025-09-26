@@ -100,9 +100,29 @@ export async function generateHandoutPDF(deals, options = {}) {
       pushMeta('DDPar', ddpar)
     }
 
-    // Compass layout center of block
+    // Notes (moved to left under header)
+    let notesLines = []
+    if ((mode === 'full' || autoNotes) && dealObj.notes && dealObj.notes.length) {
+      const maxLines = mode === 'full' ? 12 : 6
+      notesLines = dealObj.notes.slice(0, maxLines).map(n => (n||'').trim()).filter(Boolean)
+    }
+    if (notesLines.length) {
+      doc.setFontSize(7.5)
+      doc.setFont('helvetica','bold')
+      doc.text('Notes', leftX, topY + 10)
+      doc.setFont('helvetica','normal')
+      const wrapWidth = colW - 6
+      notesLines.forEach((ln,i)=> {
+        const text = `• ${ln}`
+        doc.text(text, leftX, topY + 14 + i * 4, { maxWidth: wrapWidth })
+      })
+    }
+
+    // Dynamic vertical offset for diagram based on notes height
+    const notesHeight = notesLines.length ? (notesLines.length * 4) + 10 : 0
+    const diagramTopOffset = 18 + notesHeight
     const centerX = leftX + colW * 0.55
-    const centerY = topY + 30
+    const centerY = topY + diagramTopOffset
     const seatDx = 42
     const seatDy = 27
     const suitLine = 4.3
@@ -152,16 +172,7 @@ export async function generateHandoutPDF(deals, options = {}) {
       })
     }
 
-    // Notes block
-    if ((mode === 'full' || autoNotes) && dealObj.notes && dealObj.notes.length) {
-      doc.setFontSize(7)
-      doc.setFont('helvetica','bold')
-      doc.text('Notes', leftX + colW, topY + 10)
-      doc.setFont('helvetica','normal')
-      const maxLines = mode === 'full' ? 12 : 5
-      const lines = dealObj.notes.slice(0, maxLines).map(n=> (n||'').trim()).filter(Boolean)
-      lines.forEach((ln,i)=>{ doc.text(`• ${ln}`.slice(0,120), leftX + colW, topY + 14 + i*4, { maxWidth: pageW - (leftX+colW) - 4 }) })
-    }
+    // (Notes no longer on right; space reserved for metadata box already drawn.)
   }
 
   deals.forEach((d,i)=>{
