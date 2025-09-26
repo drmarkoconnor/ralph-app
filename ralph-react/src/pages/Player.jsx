@@ -16,6 +16,7 @@ import {
   validateAuction,
   parsePlayMoves,
   parsePlayScript,
+	isSeatVul,
 } from '../lib/bridgeCore'
 import { sanitizePBN, parsePBN } from '../lib/pbn'
 

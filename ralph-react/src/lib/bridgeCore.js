@@ -164,6 +164,15 @@ export function neededToSet(contract) {
 	if (!level) return 0
 	return Math.max(0, 8 - level)
 }
+// Determine if a specific seat is vulnerable given a vulnerability string ("None", "All", "NS", "EW")
+export function isSeatVul(seat, vul) {
+  const v = String(vul || '').toUpperCase()
+  if (v === 'ALL') return true
+  if (v === 'NONE' || v === '') return false
+  if (v === 'NS') return seat === 'N' || seat === 'S'
+  if (v === 'EW') return seat === 'E' || seat === 'W'
+  return false
+}
 export function validateAuction(dealer, calls) {
 	const seats = ['N', 'E', 'S', 'W']
 	const startIdx = seats.indexOf(dealer || 'N')
