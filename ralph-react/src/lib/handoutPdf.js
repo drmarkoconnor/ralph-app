@@ -39,58 +39,77 @@ export async function generateHandoutPDF(deals, options = {}) {
     const topY = marginX + boardOnPage * (blockH + 6)
     const leftX = marginX
     const colW = (pageW - marginX * 2) / 2
-    // Title line
+    // Header
     doc.setFontSize(11)
-    const title = `Board ${dealObj.number ?? ''}`.trim()
-    doc.text(title, leftX, topY + 4)
-    // Dealer/Vul info
+    doc.setFont('helvetica','bold')
+    const titleParts = [ 'Board', dealObj.number ?? '' ]
+    doc.text(titleParts.join(' '), leftX, topY + 4)
     doc.setFontSize(8)
+    doc.setFont('helvetica','normal')
     const info = `Dealer: ${dealObj.dealer || '?'}   Vul: ${dealObj.vul || 'None'}`
     doc.text(info, leftX + colW * 0.55, topY + 4)
 
-    // Hands grid (N at top, E right, S bottom, W left typical diagram). We'll keep simple columns.
-    const north = dealObj.hands?.N || []
-    const south = dealObj.hands?.S || []
-    const east = dealObj.hands?.E || []
-    const west = dealObj.hands?.W || []
-    doc.setFontSize(9)
-    const suitYInc = 4.2
-    const northX = leftX + 2
-    const northY = topY + 10
-    suitOrderDisplay.forEach((suit, i)=>{
-      drawSuitIcon(doc, suit, northX, northY + i*suitYInc - 3.2, 3.2)
-      doc.text(rankString(north, suit), northX + 6, northY + i*suitYInc)
-    })
-    const southY = northY + suitYInc * suitOrderDisplay.length + 2
-    suitOrderDisplay.forEach((suit,i)=>{
-      drawSuitIcon(doc, suit, northX, southY + i*suitYInc - 3.2, 3.2)
-      doc.text(rankString(south, suit), northX + 6, southY + i*suitYInc)
-    })
-    // East / West columns
-    const westX = leftX + colW * 0.55
-    const westY = northY
-    suitOrderDisplay.forEach((suit,i)=>{
-      drawSuitIcon(doc, suit, westX, westY + i*suitYInc - 3.2, 3.2)
-      doc.text(rankString(west,suit), westX + 6, westY + i*suitYInc)
-    })
-    const eastY = westY + suitYInc * suitOrderDisplay.length + 2
-    suitOrderDisplay.forEach((suit,i)=>{
-      drawSuitIcon(doc, suit, westX, eastY + i*suitYInc - 3.2, 3.2)
-      doc.text(rankString(east,suit), westX + 6, eastY + i*suitYInc)
-    })
+    // Compass layout center of block
+    const centerX = leftX + colW * 0.55
+    const centerY = topY + 30
+    const seatDx = 42
+    const seatDy = 27
+    const suitLine = 4.3
+    const fontRanks = 9
+    const seatFont = 9.5
+    const mono = 'courier'
 
-    // Auction (if provided)
-    if (mode === 'full' && Array.isArray(dealObj.calls)) {
-      doc.setFontSize(7)
-      const calls = dealObj.calls.join(' ') || ''
-      doc.text(`Auction: ${calls}`, leftX + 2, topY + blockH - 18, { maxWidth: pageW - marginX*2 - 4 })
+    const seatData = {
+      N: dealObj.hands?.N || [],
+      E: dealObj.hands?.E || [],
+      S: dealObj.hands?.S || [],
+      W: dealObj.hands?.W || [],
     }
 
-    // Notes
-    if ((mode === 'full' || autoNotes) && dealObj.notes) {
+    const seatPos = { N:[centerX, centerY - seatDy], S:[centerX, centerY + seatDy], W:[centerX - seatDx, centerY], E:[centerX + seatDx, centerY] }
+    const drawSeat = (seat) => {
+      const [x,y] = seatPos[seat]
+      doc.setFontSize(seatFont)
+      doc.setFont('helvetica','bold')
+      doc.text(seat, x, y - 2, { align: 'center' })
+      doc.setFontSize(fontRanks)
+      doc.setFont(mono,'normal')
+      suitOrderDisplay.forEach((suit,i)=>{
+        const lineY = y + i * suitLine
+        drawSuitIcon(doc, suit, x - 20, lineY - 3.2, 3.2)
+        doc.text(rankString(seatData[seat], suit) || '—', x - 14, lineY, { align: 'left' })
+      })
+      doc.setFont('helvetica','normal')
+    }
+    ;['N','W','E','S'].forEach(drawSeat)
+
+    // Auction formatting into 4 columns (if full)
+    if (mode === 'full' && Array.isArray(dealObj.calls) && dealObj.calls.length) {
       doc.setFontSize(7)
-      const notes = (dealObj.notes || '').trim().slice(0, 500)
-      doc.text(notes, leftX + 2, topY + blockH - 10, { maxWidth: pageW - marginX*2 - 4 })
+      doc.setFont('helvetica','bold')
+      doc.text('Auction', leftX, centerY + seatDy + 10)
+      doc.setFont('helvetica','normal')
+      const cols = ['N','E','S','W']
+      const colWidth = 18
+      cols.forEach((c,i)=> doc.text(c, leftX + i*colWidth, centerY + seatDy + 14))
+      let row = 0
+      dealObj.calls.forEach((call, idx)=>{
+        const col = idx % 4
+        const r = Math.floor(idx / 4)
+        if (r !== row) row = r
+        doc.text(String(call), leftX + col*colWidth, centerY + seatDy + 18 + r*4)
+      })
+    }
+
+    // Notes block
+    if ((mode === 'full' || autoNotes) && dealObj.notes && dealObj.notes.length) {
+      doc.setFontSize(7)
+      doc.setFont('helvetica','bold')
+      doc.text('Notes', leftX + colW, topY + 10)
+      doc.setFont('helvetica','normal')
+      const maxLines = mode === 'full' ? 10 : 4
+      const lines = dealObj.notes.slice(0, maxLines).map(n=> (n||'').trim()).filter(Boolean)
+      lines.forEach((ln,i)=>{ doc.text(`• ${ln}`.slice(0,90), leftX + colW, topY + 14 + i*4, { maxWidth: pageW - (leftX+colW) - 4 }) })
     }
   }
 
