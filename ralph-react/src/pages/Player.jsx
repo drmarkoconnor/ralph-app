@@ -86,29 +86,34 @@ export default function Player() {
 			const { generateHandoutPDF } = await import('../lib/handoutPdf')
 			const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,'')
 			const themePart = (selectedName || 'session').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')
-				// Normalize deals for PDF (ensure hands + notes + calls)
-				const normalized = deals.map((d, idx) => {
-					let handsMap = d.hands
-					if (!handsMap && d.deal) {
-						try {
-							handsMap = dealToHands(d.deal)
-						} catch { handsMap = null }
-					}
-					const notesArr = Array.isArray(d.notes)
-						? d.notes
-						: (typeof d.notes === 'string'
-								? d.notes.split(/\n+/).filter(Boolean)
-								: [])
-					return {
-						number: d.board || idx + 1,
-							dealer: d.dealer,
-							vul: d.vul,
-							hands: handsMap || { N:[],E:[],S:[],W:[] },
-							notes: notesArr,
-							calls: Array.isArray(d.auction) ? d.auction : [],
-							meta: d.meta || {},
-					}
-				})
+			// Normalize deals for PDF (ensure hands + notes + calls + key metadata)
+			const normalized = deals.map((d, idx) => {
+				let handsMap = d.hands
+				if (!handsMap && d.deal) {
+					try { handsMap = dealToHands(d.deal) } catch { handsMap = null }
+				}
+				const notesArr = Array.isArray(d.notes) ? d.notes : (typeof d.notes === 'string' ? d.notes.split(/\n+/).filter(Boolean) : [])
+				return {
+					number: d.board || idx + 1,
+					dealer: d.dealer,
+					vul: d.vul,
+					hands: handsMap || { N:[],E:[],S:[],W:[] },
+					notes: notesArr,
+					calls: Array.isArray(d.auction) ? d.auction : [],
+					contract: d.contract,
+					declarer: d.declarer,
+					resultText: d.resultText,
+					meta: {
+						...(d.meta || {}),
+						lead: d.meta?.lead || d.lead,
+						theme: d.meta?.theme || d.meta?.themeChoice,
+						ddpar: d.meta?.ddpar || d.ddpar,
+						scoring: d.meta?.scoring,
+						interf: d.meta?.interf,
+						resultText: d.resultText,
+					},
+				}
+			})
 				await generateHandoutPDF(normalized, {
 				mode: handoutMode === 'full' ? 'full' : 'basic',
 				filenameBase: `ralph-${dateStr}-${themePart}-hand`,

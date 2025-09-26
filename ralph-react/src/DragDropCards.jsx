@@ -142,7 +142,7 @@ export default function DragDropCards({ meta, setMeta }) {
 	// Selection under deck
 	const [selected, setSelected] = useState(() => new Set())
 	// Saved hands as {N,E,S,W}
-	const [savedHands, setSavedHands] = useState([])
+	const [savedHands, setSavedHands] = useState([]) // each item: {N,E,S,W, meta?}
 	const [startBoard, setStartBoard] = useState(1)
 	// Preview / copy state
 	const [previewIndex, setPreviewIndex] = useState(0)
@@ -687,16 +687,32 @@ export default function DragDropCards({ meta, setMeta }) {
 
 	const saveCurrentHand = () => {
 		if (!complete) return
+		// Snapshot current teaching metadata so later edits don't retroactively change earlier saved hands
+		const snapshotTheme =
+			meta?.themeChoice === 'Custom…' ? meta?.themeCustom || '' : meta?.themeChoice || ''
+		const snapshot = {
+			event: meta?.event,
+			siteChoice: meta?.siteChoice,
+			siteOther: meta?.siteOther,
+			date: meta?.date,
+			system: meta?.system,
+			theme: snapshotTheme,
+			interf: meta?.interf,
+			lead: meta?.lead,
+			ddpar: meta?.ddpar,
+			scoring: meta?.scoring,
+			auctionStart: meta?.auctionStart,
+			auctionText: meta?.auctionText,
+			playscript: meta?.playscript,
+			notes: meta?.notes ? [...meta.notes] : [],
+		}
 		setSavedHands((prev) => [
 			...prev,
-			{
-				N: deal.buckets.N,
-				E: deal.buckets.E,
-				S: deal.buckets.S,
-				W: deal.buckets.W,
-			},
+			{ N: deal.buckets.N, E: deal.buckets.E, S: deal.buckets.S, W: deal.buckets.W, meta: snapshot },
 		])
 		resetBoard()
+		// Clear notes draft & notes ready for next hand authoring
+		setMeta?.((m) => ({ ...m, notesDraft: '', notes: [] }))
 	}
 
 	const downloadPBN = (content) => {
@@ -752,18 +768,15 @@ export default function DragDropCards({ meta, setMeta }) {
 		const m = String(today.getMonth() + 1).padStart(2, '0')
 		const d = String(today.getDate()).padStart(2, '0')
 		const dateStrDefault = `${y}.${m}.${d}`
-
-		const event = meta?.event || 'Club Teaching session'
-		const siteChoice = meta?.siteChoice || 'Bristol Bridge Club'
-		const site =
-			siteChoice === 'Other' ? meta?.siteOther || 'Other' : siteChoice
-		const dateStr = meta?.date || dateStrDefault
-
-		const theme =
-			meta?.themeChoice === 'Custom…'
-				? meta?.themeCustom || ''
-				: meta?.themeChoice
-		const auctionTokens = (meta?.auctionText || '')
+		const metaSnap = hand.meta || meta || {}
+		const event = metaSnap.event || meta?.event || 'Club Teaching session'
+		const siteChoice = metaSnap.siteChoice || meta?.siteChoice || 'Bristol Bridge Club'
+		const site = siteChoice === 'Other' ? metaSnap.siteOther || meta?.siteOther || 'Other' : siteChoice
+		const dateStr = metaSnap.date || meta?.date || dateStrDefault
+		const theme = metaSnap.theme || (
+			meta?.themeChoice === 'Custom…' ? meta?.themeCustom || '' : meta?.themeChoice
+		)
+		const auctionTokens = (metaSnap.auctionText || meta?.auctionText || '')
 			.trim()
 			.split(/\s+/)
 			.filter(Boolean)
@@ -783,19 +796,19 @@ export default function DragDropCards({ meta, setMeta }) {
 				S: mapSeatHand(hand.S),
 				W: mapSeatHand(hand.W),
 			},
-			notes: meta?.notes && meta.notes.length ? meta.notes : [],
+			notes: metaSnap.notes && metaSnap.notes.length ? metaSnap.notes : meta?.notes || [],
 			auctionStart: auctionTokens.length
-				? meta?.auctionStart || 'N'
+				? metaSnap.auctionStart || meta?.auctionStart || 'N'
 				: undefined,
 			auction: auctionTokens.length ? auctionTokens : undefined,
 			ext: {
-				system: meta?.system || undefined,
+				system: metaSnap.system || meta?.system || undefined,
 				theme: theme || undefined,
-				interf: meta?.interf || undefined,
-				ddpar: meta?.ddpar || undefined,
-				scoring: meta?.scoring || undefined,
-				lead: meta?.lead || undefined,
-				playscript: meta?.playscript || undefined,
+				interf: metaSnap.interf || meta?.interf || undefined,
+				ddpar: metaSnap.ddpar || meta?.ddpar || undefined,
+				scoring: metaSnap.scoring || meta?.scoring || undefined,
+				lead: metaSnap.lead || meta?.lead || undefined,
+				playscript: metaSnap.playscript || meta?.playscript || undefined,
 			},
 		}
 		return BoardZ.parse(boardObj)
@@ -1019,22 +1032,25 @@ export default function DragDropCards({ meta, setMeta }) {
 				doc.text(`${label}: ${value}`, notesX, cursorY, { maxWidth: 60 })
 				cursorY += 4
 			}
-			pushLine('Ideal', meta?.ddpar)
-			pushLine('Lead', meta?.lead)
-			if (mode === 'full' && meta?.system) pushLine('System', meta.system)
-			if (meta?.themeChoice) pushLine('Theme', meta.themeChoice)
+			// Prefer per-hand snapshot metadata when available
+			const m = handObj.meta || meta || {}
+			pushLine('Ideal', m.ddpar)
+			pushLine('Lead', m.lead)
+			if (mode === 'full' && m.system) pushLine('System', m.system)
+			if (m.theme) pushLine('Theme', m.theme)
 			if (mode === 'full') {
-				pushLine('Scoring', meta?.scoring)
-				pushLine('Interf', meta?.interf)
-				if (meta?.auctionText) pushLine('Auction', meta.auctionText)
-				if (meta?.playscript) {
-					const firstPlay = meta.playscript.split(/\n/).filter(Boolean)[0]
+				pushLine('Scoring', m.scoring)
+				pushLine('Interf', m.interf)
+				if (m.auctionText) pushLine('Auction', m.auctionText)
+				if (m.playscript) {
+					const firstPlay = String(m.playscript).split(/\n/).filter(Boolean)[0]
 					pushLine('Lead Seq', firstPlay)
 				}
 			}
-			if (Array.isArray(meta?.notes) && meta.notes.length) {
+			const notesList = Array.isArray(m.notes) && m.notes.length ? m.notes : meta?.notes || []
+			if (notesList.length) {
 				const maxNotes = mode === 'full' ? 8 : 4
-				meta.notes.slice(0, maxNotes).forEach((n) => {
+				notesList.slice(0, maxNotes).forEach((n) => {
 					doc.text('• ' + n, notesX, cursorY, { maxWidth: 60 })
 					cursorY += 4
 				})

@@ -4,11 +4,7 @@
 // Always renders 2 boards per page per latest spec.
 
 export async function generateHandoutPDF(deals, options = {}) {
-  const {
-    mode = 'basic',
-    filenameBase = 'handout',
-    autoNotes = false,
-  } = options
+  const { mode = 'basic', filenameBase = 'handout', autoNotes = false } = options
   if (!Array.isArray(deals) || !deals.length) throw new Error('No deals provided')
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
@@ -35,6 +31,26 @@ export async function generateHandoutPDF(deals, options = {}) {
     if (suit==='Hearts'){ const r=half*0.6; docRef.circle(x+half-r*0.55,y+r,r,'F'); docRef.circle(x+half+r*0.55,y+r,r,'F'); docRef.triangle(x+half,y+size,x+size,y+r+r*0.2,x,y+r+r*0.2,'F'); return }
     if (suit==='Spades'){ const r=half*0.6; docRef.circle(x+half-r*0.55,y+half,r,'F'); docRef.circle(x+half+r*0.55,y+half,r,'F'); docRef.triangle(x+half,y,x+size,y+half+r*0.2,x,y+half+r*0.2,'F'); docRef.rect(x+half-r*0.35,y+half+r*0.4,r*0.7,half+r*0.6,'F') }
   }
+  const deriveContract = (d) => {
+    if (d.contract) return d.contract
+    if (Array.isArray(d.calls) && d.calls.length) {
+      const bidRe = /^([1-7])(C|D|H|S|NT)$/i
+      const calls = d.calls.map(String)
+      let lastBidIdx = -1
+      for (let i = 0; i < calls.length; i++) if (bidRe.test(calls[i])) lastBidIdx = i
+      if (lastBidIdx >= 0) {
+        const mm = calls[lastBidIdx].toUpperCase().match(bidRe)
+        const level = mm[1]
+        const strain = mm[2]
+        const trailer = calls.slice(lastBidIdx + 1, lastBidIdx + 4).map((c) => c.toUpperCase())
+        const hasXX = trailer.includes('XX')
+        const hasX = trailer.includes('X')
+        return `${level}${strain}${hasXX ? 'XX' : hasX ? 'X' : ''}`
+      }
+    }
+    return ''
+  }
+
   const drawBlock = (dealObj) => {
     const topY = marginX + boardOnPage * (blockH + 6)
     const leftX = marginX
@@ -48,6 +64,41 @@ export async function generateHandoutPDF(deals, options = {}) {
     doc.setFont('helvetica','normal')
     const info = `Dealer: ${dealObj.dealer || '?'}   Vul: ${dealObj.vul || 'None'}`
     doc.text(info, leftX + colW * 0.55, topY + 4)
+
+    // Metadata summary box (right side upper corner)
+    const meta = dealObj.meta || {}
+    const contract = deriveContract(dealObj)
+    const declarer = dealObj.declarer || meta.declarer || ''
+    const theme = meta.theme || meta.themeChoice || ''
+    const system = meta.system || ''
+    const ddpar = meta.ddpar || meta.DDPar || meta.ddPar || ''
+    const lead = meta.lead || ''
+    const interf = meta.interf || meta.interference || ''
+    const scoring = meta.scoring || ''
+    const resultTxt = meta.resultText || dealObj.resultText || ''
+    const boxX = leftX + colW + 0.5
+    const boxY = topY + 4
+    const lineStep = 3.4
+    let ly = boxY
+    const pushMeta = (label, value) => {
+      if (!value) return
+      doc.setFontSize(6.5)
+      doc.text(`${label}: ${value}`, boxX, ly, { maxWidth: pageW - boxX - 4 })
+      ly += lineStep
+    }
+    pushMeta('Contract', contract + (declarer ? ` (${declarer})` : ''))
+    pushMeta('Theme', theme)
+    if (mode === 'full') {
+      pushMeta('System', system)
+      pushMeta('Interf', interf)
+      pushMeta('DDPar', ddpar)
+      pushMeta('Lead', lead)
+      pushMeta('Scoring', scoring)
+      pushMeta('Result', resultTxt)
+    } else {
+      pushMeta('Lead', lead)
+      pushMeta('DDPar', ddpar)
+    }
 
     // Compass layout center of block
     const centerX = leftX + colW * 0.55
@@ -107,9 +158,9 @@ export async function generateHandoutPDF(deals, options = {}) {
       doc.setFont('helvetica','bold')
       doc.text('Notes', leftX + colW, topY + 10)
       doc.setFont('helvetica','normal')
-      const maxLines = mode === 'full' ? 10 : 4
+      const maxLines = mode === 'full' ? 12 : 5
       const lines = dealObj.notes.slice(0, maxLines).map(n=> (n||'').trim()).filter(Boolean)
-      lines.forEach((ln,i)=>{ doc.text(`• ${ln}`.slice(0,90), leftX + colW, topY + 14 + i*4, { maxWidth: pageW - (leftX+colW) - 4 }) })
+      lines.forEach((ln,i)=>{ doc.text(`• ${ln}`.slice(0,120), leftX + colW, topY + 14 + i*4, { maxWidth: pageW - (leftX+colW) - 4 }) })
     }
   }
 
