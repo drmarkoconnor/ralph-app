@@ -182,7 +182,9 @@ export default function DragDropCards({ meta, setMeta }) {
 					S: { S: [], H: [], D: [], C: [] },
 					W: { S: [], H: [], D: [], C: [] },
 				},
-				auctionStart: auctionTokens.length ? meta?.auctionStart || 'N' : undefined,
+				auctionStart: auctionTokens.length
+					? meta?.auctionStart || 'N'
+					: undefined,
 				auction: auctionTokens.length ? auctionTokens : undefined,
 				ext: {
 					system: meta?.system || undefined,
@@ -206,6 +208,8 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [leftOpen, setLeftOpen] = useState(true)
 	const isIPhone = useIsIPhone()
 	const [activeSeat, setActiveSeat] = useState('N')
+	const [includeHandout, setIncludeHandout] = useState(false)
+	const [handoutMode, setHandoutMode] = useState('basic') // 'basic' | 'full'
 
 	// Keyboard entry mode
 	const [kbMode, setKbMode] = useState(false)
@@ -700,7 +704,23 @@ export default function DragDropCards({ meta, setMeta }) {
 		const url = URL.createObjectURL(blob)
 		const a = document.createElement('a')
 		a.href = url
-		a.download = 'hands.pbn'
+		// Filename pattern: ralph-DATE-Theme-hand.pbn
+		const now = new Date()
+		const yyyy = now.getFullYear()
+		const mm = String(now.getMonth() + 1).padStart(2, '0')
+		const dd = String(now.getDate()).padStart(2, '0')
+		const datePart = `${yyyy}${mm}${dd}`
+		let themeRaw = ''
+		if (meta?.themeChoice) {
+			if (meta.themeChoice === 'Custom…') themeRaw = meta?.themeCustom || ''
+			else themeRaw = meta.themeChoice
+		}
+		const safeTheme = (themeRaw || 'Session')
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-+|-+$/g, '')
+			.slice(0, 40) || 'session'
+		a.download = `ralph-${datePart}-${safeTheme}-hand.pbn`
 		a.click()
 		URL.revokeObjectURL(url)
 	}
@@ -797,6 +817,24 @@ export default function DragDropCards({ meta, setMeta }) {
 		try {
 			const pbn = await exportSavedBoards()
 			downloadPBN(pbn)
+			if (includeHandout) {
+				try {
+					const pdfBlob = await generateHandoutPDF({
+						savedHands,
+						meta,
+						startBoard,
+						mode: handoutMode,
+					})
+					const url = URL.createObjectURL(pdfBlob)
+					const a = document.createElement('a')
+					a.href = url
+					a.download = 'hands.pdf'
+					a.click()
+					URL.revokeObjectURL(url)
+				} catch (err) {
+					console.error('PDF handout failed', err)
+				}
+			}
 		} catch (e) {
 			console.error('Export failed', e)
 		}
@@ -815,6 +853,205 @@ export default function DragDropCards({ meta, setMeta }) {
 			setCopyState('err')
 			copyTimerRef.current = setTimeout(() => setCopyState('idle'), 2000)
 		}
+	}
+
+	// PDF Handout generator (lazy-load jsPDF)
+	async function generateHandoutPDF({ savedHands, meta, startBoard, mode = 'basic' }) {
+		const { jsPDF } = await import('jspdf')
+		const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+		const pageW = 210
+		const pageH = 297
+		const marginX = 12
+		// Per revised requirement: always 2 boards per page (ignore former 3/page basic mode)
+		const blocksPerPage = 2
+		const usableH = pageH - marginX * 2
+		const blockH = usableH / blocksPerPage - 4
+		const title = meta?.event || 'Bridge Teaching Session'
+		let boardOnPage = 0
+
+		const rankOrder = {
+			A: 14,
+			K: 13,
+			Q: 12,
+			J: 11,
+			T: 10,
+			'10': 10,
+			9: 9,
+			8: 8,
+			7: 7,
+			6: 6,
+			5: 5,
+			4: 4,
+			3: 3,
+			2: 2,
+		}
+		const sortDisplay = (cards) =>
+			[...cards].sort((a, b) => rankOrder[b.rank] - rankOrder[a.rank])
+		// Suits drawn as vector glyphs to ensure visibility in PDF (no font glyph dependency)
+		const suitOrderDisplay = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
+		const rankString = (seatCards, suit) => {
+			const arr = sortDisplay(seatCards.filter((c) => c.suit === suit))
+			if (!arr.length) return '—'
+			return arr.map((c) => (c.rank === '10' ? 'T' : c.rank)).join('')
+		}
+		const drawSuitIcon = (suit, x, y, size = 3.6) => {
+			const half = size / 2
+			doc.setDrawColor(0, 0, 0)
+			if (suit === 'Hearts' || suit === 'Diamonds') doc.setFillColor(190, 0, 0)
+			else doc.setFillColor(0, 0, 0)
+			if (suit === 'Diamonds') {
+				// Diamond: simple rotated square
+				doc.saveGraphicsState?.()
+				doc.triangle(x + half, y, x + size, y + half, x + half, y + size, 'F')
+				doc.triangle(x + half, y, x, y + half, x + half, y + size, 'F')
+				return
+			}
+			if (suit === 'Clubs') {
+				// Three circles + stem
+				const r = half * 0.55
+				doc.circle(x + half, y + r, r, 'F')
+				doc.circle(x + r, y + half + r * 0.1, r, 'F')
+				doc.circle(x + size - r, y + half + r * 0.1, r, 'F')
+				// stem
+				doc.rect(x + half - r * 0.35, y + half, r * 0.7, half + r * 0.6, 'F')
+				return
+			}
+			if (suit === 'Hearts') {
+				// Two circles + inverted triangle
+				const r = half * 0.6
+				doc.circle(x + half - r * 0.55, y + r, r, 'F')
+				doc.circle(x + half + r * 0.55, y + r, r, 'F')
+				doc.triangle(
+					x + half,
+					y + size,
+					x + size,
+					y + r + r * 0.2,
+					x,
+					y + r + r * 0.2,
+					'F'
+				)
+				return
+			}
+			if (suit === 'Spades') {
+				// Inverted heart + stem
+				const r = half * 0.6
+				doc.circle(x + half - r * 0.55, y + half, r, 'F')
+				doc.circle(x + half + r * 0.55, y + half, r, 'F')
+				doc.triangle(
+					x + half,
+					y,
+					x + size,
+					y + half + r * 0.2,
+					x,
+					y + half + r * 0.2,
+					'F'
+				)
+				// stem
+				doc.rect(x + half - r * 0.35, y + half + r * 0.4, r * 0.7, half + r * 0.6, 'F')
+			}
+		}
+
+		const drawBoardBlock = (handObj, boardNo) => {
+			const gap = 6
+			const topY = marginX + boardOnPage * (blockH + gap)
+			// Header
+			doc.setFontSize(11)
+			doc.setFont('helvetica', 'bold')
+			doc.text(
+				`Board ${boardNo}  Dealer ${dealerForBoard(boardNo)}  Vul ${vulnerabilityForBoard(boardNo)}`,
+				marginX,
+				topY + 5
+			)
+			doc.setFontSize(9)
+			doc.setFont('helvetica', 'normal')
+			doc.text(title, marginX, topY + 10)
+			// Hands diagram region (enlarged & pulled closer)
+			const centerX = pageW / 2
+			const centerY = topY + blockH / 2 + 4
+			const horizontalOffset = 60 // closer than previous 80
+			const lineHeight = 5.2 // more vertical space for larger text
+			const suitIconSize = 4.2
+			const textOffsetX = suitIconSize + 1.8
+
+			const drawSeat = (label, cards, x, y, seatAlign = 'center') => {
+				doc.setFont('helvetica', 'bold')
+				doc.setFontSize(10)
+				doc.text(label, x, y, { align: seatAlign })
+				doc.setFont('helvetica', 'normal')
+				doc.setFontSize(9.5)
+				suitOrderDisplay.forEach((s, idx) => {
+					const lineY = y + (idx + 1) * lineHeight
+					// Determine starting X for left/center/right alignment when drawing icon+text manually
+					let startX = x
+					if (seatAlign === 'center') startX = x - 18 // approximate half width
+					if (seatAlign === 'right') startX = x - 36
+					const color = s === 'Hearts' || s === 'Diamonds' ? [180, 0, 0] : [0, 0, 0]
+					doc.setTextColor(0, 0, 0)
+					drawSuitIcon(s, startX, lineY - suitIconSize + 1.2, suitIconSize)
+					doc.setTextColor(...color)
+					doc.text(rankString(cards, s), startX + textOffsetX, lineY)
+				})
+				doc.setTextColor(0, 0, 0)
+			}
+
+			// Extract seat arrays
+			const N = handObj.N
+			const E = handObj.E
+			const S = handObj.S
+			const W = handObj.W
+
+			// Draw seats (N top) with updated spacing
+			drawSeat('North', N, centerX, centerY - 28, 'center')
+			drawSeat('South', S, centerX, centerY + 38, 'center')
+			drawSeat('West', W, centerX - horizontalOffset, centerY + 2, 'left')
+			drawSeat('East', E, centerX + horizontalOffset, centerY + 2, 'right')
+
+			// Teaching / metadata notes area right side
+			const notesX = pageW - marginX - 60
+			const infoY = topY + 14
+			doc.setFont('helvetica', 'bold')
+			doc.setFontSize(8)
+			doc.text('Teaching Notes', notesX, infoY)
+			doc.setFont('helvetica', 'normal')
+			let cursorY = infoY + 4
+			const pushLine = (label, value) => {
+				if (!value) return
+				doc.text(`${label}: ${value}`, notesX, cursorY, { maxWidth: 60 })
+				cursorY += 4
+			}
+			pushLine('Ideal', meta?.ddpar)
+			pushLine('Lead', meta?.lead)
+			if (mode === 'full' && meta?.system) pushLine('System', meta.system)
+			if (meta?.themeChoice) pushLine('Theme', meta.themeChoice)
+			if (mode === 'full') {
+				pushLine('Scoring', meta?.scoring)
+				pushLine('Interf', meta?.interf)
+				if (meta?.auctionText) pushLine('Auction', meta.auctionText)
+				if (meta?.playscript) {
+					const firstPlay = meta.playscript.split(/\n/).filter(Boolean)[0]
+					pushLine('Lead Seq', firstPlay)
+				}
+			}
+			if (Array.isArray(meta?.notes) && meta.notes.length) {
+				const maxNotes = mode === 'full' ? 8 : 4
+				meta.notes.slice(0, maxNotes).forEach((n) => {
+					doc.text('• ' + n, notesX, cursorY, { maxWidth: 60 })
+					cursorY += 4
+				})
+			}
+		}
+
+		for (let i = 0; i < savedHands.length; i++) {
+			if (i !== 0 && i % blocksPerPage === 0) {
+				doc.addPage()
+				boardOnPage = 0
+			}
+			const boardNo = startBoard + i
+			drawBoardBlock(savedHands[i], boardNo)
+			boardOnPage++
+		}
+
+		return doc.output('blob')
 	}
 
 	const handleEmailPBN = async () => {
@@ -943,7 +1180,7 @@ export default function DragDropCards({ meta, setMeta }) {
 					onDragLeave={() => setActiveBucket(null)}
 					onDrop={(e) => onDrop(e, id)}
 					className={`h-64 p-3 flex flex-col gap-2 items-stretch justify-center`}>
-						{displayOrder.map((suit) => {
+					{displayOrder.map((suit) => {
 						const suitCards = sortByPbnRank(
 							deal.buckets[id].filter((c) => c.suit === suit)
 						)
@@ -1025,13 +1262,17 @@ export default function DragDropCards({ meta, setMeta }) {
 						<div className="space-y-2 text-xs">
 							{/* Metadata moved from top header to left panel */}
 							<div className="space-y-1">
-								<div className="text-[11px] font-semibold text-gray-800">Metadata</div>
+								<div className="text-[11px] font-semibold text-gray-800">
+									Metadata
+								</div>
 								<label className="flex items-center justify-between gap-1">
 									<span className="text-[11px] text-gray-600">Event</span>
 									<select
 										className="border rounded px-1 py-0.5 text-[11px] flex-1"
 										value={meta?.event || ''}
-										onChange={(e) => setMeta?.((m) => ({ ...m, event: e.target.value }))}>
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, event: e.target.value }))
+										}>
 										<option>Club Teaching session</option>
 										<option>Club Tournament</option>
 										<option>Club Social</option>
@@ -1042,7 +1283,9 @@ export default function DragDropCards({ meta, setMeta }) {
 									<select
 										className="border rounded px-1 py-0.5 text-[11px] flex-1"
 										value={meta?.siteChoice || ''}
-										onChange={(e) => setMeta?.((m) => ({ ...m, siteChoice: e.target.value }))}>
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, siteChoice: e.target.value }))
+										}>
 										<option>Bristol Bridge Club</option>
 										<option>Home</option>
 										<option>3rd Party</option>
@@ -1051,11 +1294,15 @@ export default function DragDropCards({ meta, setMeta }) {
 								</label>
 								{meta?.siteChoice === 'Other' && (
 									<label className="flex items-center justify-between gap-1">
-										<span className="text-[11px] text-gray-600">Location (Other)</span>
+										<span className="text-[11px] text-gray-600">
+											Location (Other)
+										</span>
 										<input
 											className="border rounded px-1 py-0.5 text-[11px] flex-1"
 											value={meta?.siteOther || ''}
-											onChange={(e) => setMeta?.((m) => ({ ...m, siteOther: e.target.value }))}
+											onChange={(e) =>
+												setMeta?.((m) => ({ ...m, siteOther: e.target.value }))
+											}
 										/>
 									</label>
 								)}
@@ -1067,7 +1314,11 @@ export default function DragDropCards({ meta, setMeta }) {
 										value={meta?.dateISO || ''}
 										onChange={(e) => {
 											const iso = e.target.value
-											setMeta?.((m) => ({ ...m, dateISO: iso, date: toPbnDate(iso) }))
+											setMeta?.((m) => ({
+												...m,
+												dateISO: iso,
+												date: toPbnDate(iso),
+											}))
 										}}
 									/>
 								</label>
@@ -1076,7 +1327,9 @@ export default function DragDropCards({ meta, setMeta }) {
 									<input
 										className="border rounded px-1 py-0.5 text-[11px] flex-1"
 										value={meta?.system || ''}
-										onChange={(e) => setMeta?.((m) => ({ ...m, system: e.target.value }))}
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, system: e.target.value }))
+										}
 										placeholder="Acol 12-14 1NT"
 									/>
 								</label>
@@ -1085,7 +1338,9 @@ export default function DragDropCards({ meta, setMeta }) {
 									<select
 										className="border rounded px-1 py-0.5 text-[11px] flex-1"
 										value={meta?.themeChoice || ''}
-										onChange={(e) => setMeta?.((m) => ({ ...m, themeChoice: e.target.value }))}>
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, themeChoice: e.target.value }))
+										}>
 										<option>Bidding - Stayman & Transfers</option>
 										<option>Bidding - Overcalls</option>
 										<option>Bidding - Weak Twos</option>
@@ -1103,11 +1358,18 @@ export default function DragDropCards({ meta, setMeta }) {
 								</label>
 								{meta?.themeChoice === 'Custom…' && (
 									<label className="flex items-center justify-between gap-1">
-										<span className="text-[11px] text-gray-600">Theme (Custom)</span>
+										<span className="text-[11px] text-gray-600">
+											Theme (Custom)
+										</span>
 										<input
 											className="border rounded px-1 py-0.5 text-[11px] flex-1"
 											value={meta?.themeCustom || ''}
-											onChange={(e) => setMeta?.((m) => ({ ...m, themeCustom: e.target.value }))}
+											onChange={(e) =>
+												setMeta?.((m) => ({
+													...m,
+													themeCustom: e.target.value,
+												}))
+											}
 											placeholder="e.g. Inverted Minors"
 										/>
 									</label>
@@ -1117,7 +1379,9 @@ export default function DragDropCards({ meta, setMeta }) {
 									<input
 										className="border rounded px-1 py-0.5 text-[11px] flex-1"
 										value={meta?.interf || ''}
-										onChange={(e) => setMeta?.((m) => ({ ...m, interf: e.target.value }))}
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, interf: e.target.value }))
+										}
 										placeholder="Landy 2C"
 									/>
 								</label>
@@ -1126,7 +1390,9 @@ export default function DragDropCards({ meta, setMeta }) {
 									<input
 										className="border rounded px-1 py-0.5 text-[11px] flex-1"
 										value={meta?.lead || ''}
-										onChange={(e) => setMeta?.((m) => ({ ...m, lead: e.target.value }))}
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, lead: e.target.value }))
+										}
 										placeholder="W:♠4"
 									/>
 								</label>
@@ -1135,7 +1401,9 @@ export default function DragDropCards({ meta, setMeta }) {
 									<input
 										className="border rounded px-1 py-0.5 text-[11px] flex-1"
 										value={meta?.ddpar || ''}
-										onChange={(e) => setMeta?.((m) => ({ ...m, ddpar: e.target.value }))}
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, ddpar: e.target.value }))
+										}
 										placeholder="3NT="
 									/>
 								</label>
@@ -1144,7 +1412,9 @@ export default function DragDropCards({ meta, setMeta }) {
 									<select
 										className="border rounded px-1 py-0.5 text-[11px] flex-1"
 										value={meta?.scoring || 'MPs'}
-										onChange={(e) => setMeta?.((m) => ({ ...m, scoring: e.target.value }))}>
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, scoring: e.target.value }))
+										}>
 										<option value="MPs">MPs</option>
 										<option value="IMPs">IMPs</option>
 									</select>
@@ -1152,14 +1422,21 @@ export default function DragDropCards({ meta, setMeta }) {
 
 								{/* Auction & Play */}
 								<div className="pt-1 border-t space-y-1">
-									<div className="text-[11px] font-semibold text-gray-800">Ideal Bidding</div>
+									<div className="text-[11px] font-semibold text-gray-800">
+										Ideal Bidding
+									</div>
 									<div className="flex items-center gap-1">
 										<label className="flex items-center gap-1">
 											<span className="text-[11px] text-gray-600">Start</span>
 											<select
 												className="border rounded px-1 py-0.5 text-[11px]"
 												value={meta?.auctionStart || 'N'}
-												onChange={(e) => setMeta?.((m) => ({ ...m, auctionStart: e.target.value }))}>
+												onChange={(e) =>
+													setMeta?.((m) => ({
+														...m,
+														auctionStart: e.target.value,
+													}))
+												}>
 												<option>N</option>
 												<option>E</option>
 												<option>S</option>
@@ -1170,28 +1447,43 @@ export default function DragDropCards({ meta, setMeta }) {
 											className="border rounded px-1 py-0.5 text-[11px] flex-1"
 											placeholder="e.g. 1NT Pass 2C … Pass Pass Pass"
 											value={meta?.auctionText || ''}
-											onChange={(e) => setMeta?.((m) => ({ ...m, auctionText: e.target.value }))}
+											onChange={(e) =>
+												setMeta?.((m) => ({
+													...m,
+													auctionText: e.target.value,
+												}))
+											}
 										/>
 									</div>
-									<div className="text-[10px] text-gray-500">Ends with three Passes.</div>
+									<div className="text-[10px] text-gray-500">
+										Ends with three Passes.
+									</div>
 								</div>
 								<div className="space-y-1">
-									<div className="text-[11px] font-semibold text-gray-800">PlayScript</div>
+									<div className="text-[11px] font-semibold text-gray-800">
+										PlayScript
+									</div>
 									<textarea
 										className="border rounded px-1 py-0.5 text-[11px] h-16 w-full"
 										placeholder={`One play per line, e.g.\nW:♠4\nN:♠A\nE:♠2\nS:♠7`}
 										value={meta?.playscript || ''}
-										onChange={(e) => setMeta?.((m) => ({ ...m, playscript: e.target.value }))}
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, playscript: e.target.value }))
+										}
 									/>
 								</div>
 
 								{/* Notes */}
 								<div className="pt-1 border-t space-y-1">
-									<div className="text-[11px] font-semibold text-gray-800">Notes</div>
+									<div className="text-[11px] font-semibold text-gray-800">
+										Notes
+									</div>
 									<textarea
 										className="border rounded px-1 py-0.5 text-[11px] h-16 w-full"
 										value={meta?.notesDraft || ''}
-										onChange={(e) => setMeta?.((m) => ({ ...m, notesDraft: e.target.value }))}
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, notesDraft: e.target.value }))
+										}
 										placeholder="Paste teaching notes here..."
 									/>
 									<div className="flex items-center gap-1">
@@ -1212,13 +1504,15 @@ export default function DragDropCards({ meta, setMeta }) {
 												if (blocks.length > 1) blocks.forEach(pushChunk)
 												else pushChunk(raw)
 												setMeta?.((m) => ({ ...m, notes: chunks.slice(0, 10) }))
-										}}>
-										Split
+											}}>
+											Split
 										</button>
 										<button
 											className="px-2 py-1 rounded border text-[11px]"
-											onClick={() => setMeta?.((m) => ({ ...m, notes: [], notesDraft: '' }))}>
-										Clear
+											onClick={() =>
+												setMeta?.((m) => ({ ...m, notes: [], notesDraft: '' }))
+											}>
+											Clear
 										</button>
 									</div>
 									<div className="flex flex-col gap-1">
@@ -1236,7 +1530,9 @@ export default function DragDropCards({ meta, setMeta }) {
 												<button
 													className="px-2 py-1 rounded border text-[11px]"
 													onClick={() => {
-														const arr = (meta?.notes || []).filter((_, i) => i !== idx)
+														const arr = (meta?.notes || []).filter(
+															(_, i) => i !== idx
+														)
 														setMeta?.((m) => ({ ...m, notes: arr }))
 													}}>
 													✕
@@ -1246,7 +1542,12 @@ export default function DragDropCards({ meta, setMeta }) {
 										{(meta?.notes || []).length < 10 && (
 											<button
 												className="px-2 py-1 rounded border text-[11px] self-start"
-												onClick={() => setMeta?.((m) => ({ ...m, notes: [...(m.notes || []), ''] }))}>
+												onClick={() =>
+													setMeta?.((m) => ({
+														...m,
+														notes: [...(m.notes || []), ''],
+													}))
+												}>
 												+ Add note
 											</button>
 										)}
@@ -1266,94 +1567,94 @@ export default function DragDropCards({ meta, setMeta }) {
 									)}
 								</div>
 
-							<div className="flex items-center justify-between">
-								<span className="text-gray-700">Hints</span>
-								<label className="flex items-center gap-1">
-									<input
-										type="checkbox"
-										checked={hintsEnabled}
-										onChange={(e) => setHintsEnabled(e.target.checked)}
-									/>
-								</label>
-							</div>
-							<div className="space-y-1">
-								<div className="text-[11px] text-gray-600">Dealer</div>
-								<div className="flex flex-wrap gap-1">
-									{SEATS.map((s) => (
-										<button
-											key={`dealer-${s}`}
-											onClick={() => setDealerExplicit(s)}
-											className={`px-1.5 py-0.5 rounded text-[10px] border ${
-												s === currentDealer
-													? 'bg-amber-500 border-amber-600 text-white'
-													: 'bg-white border-gray-300 text-gray-800 hover:bg-gray-100'
-											}`}>
-											{s}
-										</button>
-									))}
+								<div className="flex items-center justify-between">
+									<span className="text-gray-700">Hints</span>
+									<label className="flex items-center gap-1">
+										<input
+											type="checkbox"
+											checked={hintsEnabled}
+											onChange={(e) => setHintsEnabled(e.target.checked)}
+										/>
+									</label>
 								</div>
-							</div>
-							<div className="text-[11px] text-gray-700">
-								Selected: {selectedCount} • Remaining: {remaining}
-							</div>
-							<div className="grid grid-cols-1 gap-1">
-								<button
-									className="px-3 py-2 rounded bg-purple-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
-									onClick={handleRandomComplete}
-									disabled={remaining === 0}>
-									Random Complete
-								</button>
-								{selectedCount > 0 && (
+								<div className="space-y-1">
+									<div className="text-[11px] text-gray-600">Dealer</div>
+									<div className="flex flex-wrap gap-1">
+										{SEATS.map((s) => (
+											<button
+												key={`dealer-${s}`}
+												onClick={() => setDealerExplicit(s)}
+												className={`px-1.5 py-0.5 rounded text-[10px] border ${
+													s === currentDealer
+														? 'bg-amber-500 border-amber-600 text-white'
+														: 'bg-white border-gray-300 text-gray-800 hover:bg-gray-100'
+												}`}>
+												{s}
+											</button>
+										))}
+									</div>
+								</div>
+								<div className="text-[11px] text-gray-700">
+									Selected: {selectedCount} • Remaining: {remaining}
+								</div>
+								<div className="grid grid-cols-1 gap-1">
 									<button
-										className="px-3 py-2 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300"
-										onClick={clearSelection}>
-										Clear Selection
+										className="px-3 py-2 rounded bg-purple-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
+										onClick={handleRandomComplete}
+										disabled={remaining === 0}>
+										Random Complete
 									</button>
-								)}
-								<button
-									className="px-3 py-2 rounded bg-gray-900 text-white text-xs hover:opacity-90"
-									onClick={resetBoard}>
-									Reset Board
-								</button>
-								<button
-									className="px-3 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
-									onClick={saveCurrentHand}
-									disabled={!complete}>
-									Save Hand
-								</button>
-								<button
-									className={`px-3 py-2 rounded text-white text-xs hover:opacity-90 disabled:opacity-40 ${
-										copyState === 'ok'
-											? 'bg-green-600'
+									{selectedCount > 0 && (
+										<button
+											className="px-3 py-2 rounded bg-gray-200 text-gray-800 text-xs hover:bg-gray-300"
+											onClick={clearSelection}>
+											Clear Selection
+										</button>
+									)}
+									<button
+										className="px-3 py-2 rounded bg-gray-900 text-white text-xs hover:opacity-90"
+										onClick={resetBoard}>
+										Reset Board
+									</button>
+									<button
+										className="px-3 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
+										onClick={saveCurrentHand}
+										disabled={!complete}>
+										Save Hand
+									</button>
+									<button
+										className={`px-3 py-2 rounded text-white text-xs hover:opacity-90 disabled:opacity-40 ${
+											copyState === 'ok'
+												? 'bg-green-600'
+												: copyState === 'err'
+												? 'bg-rose-600'
+												: 'bg-teal-500'
+										}`}
+										onClick={handleCopyPBN}
+										disabled={savedHands.length === 0}>
+										{copyState === 'ok'
+											? 'Copied!'
 											: copyState === 'err'
-											? 'bg-rose-600'
-											: 'bg-teal-500'
-									}`}
-									onClick={handleCopyPBN}
-									disabled={savedHands.length === 0}>
-									{copyState === 'ok'
-										? 'Copied!'
-										: copyState === 'err'
-										? 'Copy failed'
-										: 'Copy PBN'}
-								</button>
-								<button
-									className="px-3 py-2 rounded bg-teal-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
-									onClick={handleEmailPBN}
-									disabled={savedHands.length === 0}>
-									Email PBN
-								</button>
-								<div className="text-[11px] text-gray-600">
-									Saved: {savedHands.length}
+											? 'Copy failed'
+											: 'Copy PBN'}
+									</button>
+									<button
+										className="px-3 py-2 rounded bg-teal-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
+										onClick={handleEmailPBN}
+										disabled={savedHands.length === 0}>
+										Email PBN
+									</button>
+									<div className="text-[11px] text-gray-600">
+										Saved: {savedHands.length}
+									</div>
+									<button
+										className="px-3 py-2 rounded bg-rose-600 text-white text-xs hover:bg-rose-700 disabled:opacity-40"
+										onClick={() => setShowDeleteModal(true)}
+										disabled={savedHands.length === 0}>
+										Delete PBN
+									</button>
 								</div>
-								<button
-									className="px-3 py-2 rounded bg-rose-600 text-white text-xs hover:bg-rose-700 disabled:opacity-40"
-									onClick={() => setShowDeleteModal(true)}
-									disabled={savedHands.length === 0}>
-									Delete PBN
-								</button>
 							</div>
-						</div>
 						</div>
 					)}
 				</div>
@@ -1431,11 +1732,13 @@ export default function DragDropCards({ meta, setMeta }) {
 							<div className="text-[12px] text-gray-800">
 								{complete ? (
 									<span>
-										Ready to save this board — Board {nextBoardNo} (Dealer {currentDealer}, Vul {vulnerabilityForBoard(nextBoardNo)}).
+										Ready to save this board — Board {nextBoardNo} (Dealer{' '}
+										{currentDealer}, Vul {vulnerabilityForBoard(nextBoardNo)}).
 									</span>
 								) : (
 									<span>
-										Deal all 52 cards into the four hands. Remaining in deck: {remaining}.
+										Deal all 52 cards into the four hands. Remaining in deck:{' '}
+										{remaining}.
 									</span>
 								)}
 							</div>
@@ -1445,21 +1748,51 @@ export default function DragDropCards({ meta, setMeta }) {
 										className="px-4 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
 										onClick={saveCurrentHand}
 										disabled={!complete}
-										title={complete ? 'Save this complete deal' : 'Finish distributing to enable saving'}>
+										title={
+											complete
+												? 'Save this complete deal'
+												: 'Finish distributing to enable saving'
+										}>
 										Save Hand
 									</button>
 									<button
 										className="px-4 py-2 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
 										onClick={handleGeneratePBN}
 										disabled={savedHands.length === 0}
-										title={savedHands.length ? 'Generate a PBN file of all saved boards now' : 'Save at least one board first'}>
+										title={
+											savedHands.length
+												? 'Generate a PBN file of all saved boards now'
+												: 'Save at least one board first'
+										}>
 										Save all to PBN now
 									</button>
-									<span className="text-[11px] text-gray-600">Saved: {savedHands.length}</span>
+									<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none">
+										<input
+											type="checkbox"
+											checked={includeHandout}
+											onChange={(e) => setIncludeHandout(e.target.checked)}
+										/>
+										<span>Handout PDF</span>
+									</label>
+									{includeHandout && (
+										<div className="flex items-center gap-1 text-[11px]">
+											<select
+												className="border rounded px-1 py-0.5 text-[11px]"
+												value={handoutMode}
+												onChange={(e) => setHandoutMode(e.target.value)}>
+												<option value="basic">Basic</option>
+												<option value="full">Full detail</option>
+											</select>
+										</div>
+									)}
+									<span className="text-[11px] text-gray-600">
+										Saved: {savedHands.length}
+									</span>
 								</div>
 							</div>
 							<div className="text-[11px] text-gray-600 mt-1">
-								Keep dealing and saving boards. When ready, click "Save all to PBN now" to download your cumulative PBN file.
+								Keep dealing and saving boards. When ready, click "Save all to
+								PBN now" to download your cumulative PBN file.
 							</div>
 						</div>
 					</div>
@@ -1476,7 +1809,7 @@ export default function DragDropCards({ meta, setMeta }) {
 							}}
 							title="Toggle keyboard entry (type ranks then Enter; Enter on empty = void; Esc to exit)">
 							{kbMode ? 'Keyboard: ON' : 'Keyboard: OFF'}
-							</button>
+						</button>
 						<button
 							className="px-3 py-2 rounded bg-sky-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
 							onClick={() => sendSelectedTo('N')}
@@ -1525,7 +1858,7 @@ export default function DragDropCards({ meta, setMeta }) {
 										onClick={() => setActiveSeat(s)}
 										className={`flex-1 px-2 py-1 rounded text-xs border ${
 											activeSeat === s ? 'bg-gray-900 text-white' : 'bg-white'
-										}`}> 
+										}`}>
 										{s}
 									</button>
 								))}

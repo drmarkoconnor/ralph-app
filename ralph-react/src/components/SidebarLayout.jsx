@@ -26,7 +26,9 @@ export default function SidebarLayout({
 				<div
 					className={`${
 						isIPhone
-							? `${leftOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 w-72 max-w-[80vw] z-40`
+							? `${
+									leftOpen ? 'translate-x-0' : '-translate-x-full'
+							  } fixed inset-y-0 left-0 w-72 max-w-[80vw] z-40`
 							: `${leftOpen ? 'w-72' : 'w-10'}`
 					} transition-all duration-200 border-r bg-slate-50 relative`}
 					aria-label="Left sidebar">
@@ -56,9 +58,14 @@ export default function SidebarLayout({
 				</div>
 
 				{/* Main content */}
-				<div className={`flex-1 min-h-screen bg-gradient-to-b from-white to-slate-50 ${isIPhone ? 'pt-10' : ''}`}>
+				<div
+					className={`flex-1 min-h-screen bg-gradient-to-b from-white to-slate-50 ${
+						isIPhone ? 'pt-10' : ''
+					}`}>
 					{isIPhone && (
-						<div className="fixed top-0 inset-x-0 z-30 h-10 bg-white border-b flex items-center justify-between px-2" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+						<div
+							className="fixed top-0 inset-x-0 z-30 h-10 bg-white border-b flex items-center justify-between px-2"
+							style={{ paddingTop: 'env(safe-area-inset-top)' }}>
 							<button
 								className="px-2 py-0.5 rounded border bg-white text-xs"
 								onClick={() => setLeftOpen(true)}
@@ -80,7 +87,9 @@ export default function SidebarLayout({
 				<div
 					className={`${
 						isIPhone
-							? `${rightOpen ? 'translate-x-0' : 'translate-x-full'} fixed inset-y-0 right-0 w-72 max-w-[80vw] z-40`
+							? `${
+									rightOpen ? 'translate-x-0' : 'translate-x-full'
+							  } fixed inset-y-0 right-0 w-72 max-w-[80vw] z-40`
 							: `${rightOpen ? 'w-72' : 'w-10'}`
 					} transition-all duration-200 border-l bg-gray-50 relative`}
 					aria-label="Right sidebar">
