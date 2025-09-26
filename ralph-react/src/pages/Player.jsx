@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import SidebarLayout from '../components/SidebarLayout'
 import { EXAMPLE_LIBRARY } from '../data/examples'
+import useIsIPhone from '../hooks/useIsIPhone'
 
 // ---------- Helpers and parsing ----------
 const SEATS = ['N', 'E', 'S', 'W']
@@ -556,6 +557,7 @@ export default function Player() {
 	const [hintText, setHintText] = useState('')
 
 	const current = deals[index] || null
+	const isIPhone = useIsIPhone()
 
 	// Teacher preferences
 	useEffect(() => {
@@ -1275,16 +1277,18 @@ export default function Player() {
 					) : null}
 					{remaining ? (
 						<>
-							<div className="w-full flex items-center justify-center mb-2">
-								<button
-									onClick={() => {
-										setHintText(makeHint())
-										setShowHint(true)
-									}}
-									className="px-3 py-1.5 rounded-full bg-amber-500 text-white text-sm shadow hover:bg-amber-600">
-									Hint
-								</button>
-							</div>
+							{!isIPhone && (
+								<div className="w-full flex items-center justify-center mb-2">
+									<button
+										onClick={() => {
+											setHintText(makeHint())
+											setShowHint(true)
+										}}
+										className="px-3 py-1.5 rounded-full bg-amber-500 text-white text-sm shadow hover:bg-amber-600">
+										Hint
+									</button>
+								</div>
+							)}
 							<PlayerLayout
 								remaining={remaining}
 								onPlay={onPlayCard}
@@ -1318,6 +1322,11 @@ export default function Player() {
 								}
 								pauseAtTrickEnd={pauseAtTrickEnd}
 								onTogglePause={(e) => setPauseAtTrickEnd(!!e?.target?.checked)}
+								isIPhone={isIPhone}
+								onRequestHint={() => {
+									setHintText(makeHint())
+									setShowHint(true)
+								}}
 							/>
 						</>
 					) : (
@@ -1379,6 +1388,8 @@ function PlayerLayout({
 	finishedBanner,
 	pauseAtTrickEnd,
 	onTogglePause,
+	isIPhone = false,
+	onRequestHint,
 }) {
 	const seats = ['N', 'E', 'S', 'W']
 	let visible = seats
@@ -1390,85 +1401,46 @@ function PlayerLayout({
 		} else visible = ['N', 'S']
 	}
 	const completedTricks = tricksDecl + tricksDef
-	return (
-		<div className="w-full flex flex-col items-stretch gap-2">
-			<div className="w-full flex items-start justify-center gap-3">
-				<div className="w-56 hidden md:flex flex-col gap-2">
-					{showSuitTally && <SuitTally tally={tally} />}
-				</div>
-				<div className="flex-1">
-					<div className="grid grid-cols-3 gap-x-10 gap-y-2 items-center justify-items-center">
-						<div />
-						<div>
-							<SeatPanel
-								id="N"
-								remaining={remaining}
-								onPlay={onPlay}
-								visible={visible.includes('N')}
-								dealer={dealer}
-								vulnerable={vulnerable}
-								turnSeat={turnSeat}
-								trick={trick}
-								declarer={declarer}
-								playerName={players['N']}
-								showHcpWhenHidden={showHcpWhenHidden}
-								teacherMode={teacherMode}
-							/>
-						</div>
-						<div />
-						<div className="justify-self-end mr-2">
-							<SeatPanel
-								id="W"
-								remaining={remaining}
-								onPlay={onPlay}
-								visible={visible.includes('W')}
-								dealer={dealer}
-								vulnerable={vulnerable}
-								turnSeat={turnSeat}
-								trick={trick}
-								declarer={declarer}
-								playerName={players['W']}
-								showHcpWhenHidden={showHcpWhenHidden}
-								teacherMode={teacherMode}
-							/>
-						</div>
-						<div />
-						<div className="justify-self-start ml-2">
-							<SeatPanel
-								id="E"
-								remaining={remaining}
-								onPlay={onPlay}
-								visible={visible.includes('E')}
-								dealer={dealer}
-								vulnerable={vulnerable}
-								turnSeat={turnSeat}
-								trick={trick}
-								declarer={declarer}
-								playerName={players['E']}
-								showHcpWhenHidden={showHcpWhenHidden}
-								teacherMode={teacherMode}
-							/>
-						</div>
-						<div />
-						<div>
-							<SeatPanel
-								id="S"
-								remaining={remaining}
-								onPlay={onPlay}
-								visible={visible.includes('S')}
-								dealer={dealer}
-								vulnerable={vulnerable}
-								turnSeat={turnSeat}
-								trick={trick}
-								declarer={declarer}
-								playerName={players['S']}
-								showHcpWhenHidden={showHcpWhenHidden}
-								teacherMode={teacherMode}
-							/>
-						</div>
-						<div />
+	// Mobile-first: single active seat view with tabs and sticky bottom controls
+	const tabs = ['N', 'E', 'S', 'W']
+	const [activeSeat, setActiveSeat] = useState('N')
+	useEffect(() => {
+		setActiveSeat(turnSeat || 'N')
+	}, [turnSeat])
+
+	if (isIPhone) {
+		return (
+			<div className="w-full flex flex-col items-stretch gap-2 pb-16">
+				<div className="mx-auto w-full max-w-sm">
+					<div className="flex items-center justify-center gap-1 p-1 rounded-lg border bg-white sticky top-0 z-10">
+						{tabs.map((s) => (
+							<button
+								key={`tab-${s}`}
+								onClick={() => setActiveSeat(s)}
+								className={`flex-1 px-2 py-1 rounded text-xs border ${
+									activeSeat === s ? 'bg-gray-900 text-white' : 'bg-white'
+								}`}> 
+								{s}
+							</button>
+						))}
 					</div>
-					<div className="flex items-center justify-center mt-3">
+					<div className="mt-2 flex items-center justify-center">
+						<SeatPanel
+							id={activeSeat}
+							remaining={remaining}
+							onPlay={onPlay}
+							visible={visible.includes(activeSeat)}
+							dealer={dealer}
+							vulnerable={vulnerable}
+							turnSeat={turnSeat}
+							trick={trick}
+							declarer={declarer}
+							playerName={players[activeSeat]}
+							showHcpWhenHidden={showHcpWhenHidden}
+							teacherMode={teacherMode}
+						/>
+					</div>
+					<div className="px-2">
 						<CurrentTrick
 							teacherMode={teacherMode}
 							trick={trick}
@@ -1486,6 +1458,52 @@ function PlayerLayout({
 							pauseAtTrickEnd={pauseAtTrickEnd}
 							onTogglePause={onTogglePause}
 						/>
+					</div>
+				</div>
+				{/* Sticky bottom bar */}
+				<div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+					<div className="max-w-md mx-auto flex items-center justify-between gap-1 p-2">
+						<button onClick={onPrev} className="px-2 py-1 rounded border text-xs">Prev</button>
+						<button onClick={onNext} className="px-2 py-1 rounded border text-xs">Next</button>
+						<label className="text-[10px] text-gray-700 flex items-center gap-1">
+							<input type="checkbox" checked={!!pauseAtTrickEnd} onChange={onTogglePause} />
+							Pause
+						</label>
+						<button onClick={onRequestHint} className="px-2 py-1 rounded bg-amber-500 text-white text-xs">Hint</button>
+					</div>
+				</div>
+			</div>
+		)
+	}
+
+	return (
+		<div className="w-full flex flex-col items-stretch gap-2">
+			<div className="w-full flex items-start justify-center gap-3">
+				<div className="w-56 hidden md:flex flex-col gap-2">
+					{showSuitTally && <SuitTally tally={tally} />}
+				</div>
+				<div className="flex-1">
+					<div className="grid grid-cols-3 gap-x-10 gap-y-2 items-center justify-items-center">
+						<div />
+						<div>
+							<SeatPanel id="N" remaining={remaining} onPlay={onPlay} visible={visible.includes('N')} dealer={dealer} vulnerable={vulnerable} turnSeat={turnSeat} trick={trick} declarer={declarer} playerName={players['N']} showHcpWhenHidden={showHcpWhenHidden} teacherMode={teacherMode} />
+						</div>
+						<div />
+						<div className="justify-self-end mr-2">
+							<SeatPanel id="W" remaining={remaining} onPlay={onPlay} visible={visible.includes('W')} dealer={dealer} vulnerable={vulnerable} turnSeat={turnSeat} trick={trick} declarer={declarer} playerName={players['W']} showHcpWhenHidden={showHcpWhenHidden} teacherMode={teacherMode} />
+						</div>
+						<div />
+						<div className="justify-self-start ml-2">
+							<SeatPanel id="E" remaining={remaining} onPlay={onPlay} visible={visible.includes('E')} dealer={dealer} vulnerable={vulnerable} turnSeat={turnSeat} trick={trick} declarer={declarer} playerName={players['E']} showHcpWhenHidden={showHcpWhenHidden} teacherMode={teacherMode} />
+						</div>
+						<div />
+						<div>
+							<SeatPanel id="S" remaining={remaining} onPlay={onPlay} visible={visible.includes('S')} dealer={dealer} vulnerable={vulnerable} turnSeat={turnSeat} trick={trick} declarer={declarer} playerName={players['S']} showHcpWhenHidden={showHcpWhenHidden} teacherMode={teacherMode} />
+						</div>
+						<div />
+					</div>
+					<div className="flex items-center justify-center mt-3">
+						<CurrentTrick teacherMode={teacherMode} trick={trick} turnSeat={turnSeat} winnerSeat={flashWinner} hasPlay={!!totalMoves} totalMoves={totalMoves} helperText={helperText} idx={idx} onPrev={onPrev} onNext={onNext} resultTag={resultTag} completedTricks={completedTricks} finishedBanner={finishedBanner} pauseAtTrickEnd={pauseAtTrickEnd} onTogglePause={onTogglePause} />
 					</div>
 				</div>
 				{/* Scoreboard lives in the right sidebar panel; removed from main to avoid duplication */}

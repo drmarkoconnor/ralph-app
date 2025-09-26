@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BoardZ } from './schemas/board'
 import { exportBoardPBN } from './pbn/export'
+import useIsIPhone from './hooks/useIsIPhone'
 
 // Deck suit order: Clubs, Diamonds, Hearts, Spades (traditional CDHS)
 const suits = [
@@ -203,6 +204,8 @@ export default function DragDropCards({ meta, setMeta }) {
 
 	// Left controls panel state
 	const [leftOpen, setLeftOpen] = useState(true)
+	const isIPhone = useIsIPhone()
+	const [activeSeat, setActiveSeat] = useState('N')
 
 	// Keyboard entry mode
 	const [kbMode, setKbMode] = useState(false)
@@ -896,6 +899,8 @@ export default function DragDropCards({ meta, setMeta }) {
 			(vul === 'EW' && (id === 'E' || id === 'W'))
 
 		const rowOrder = ['Clubs', 'Diamonds', 'Hearts', 'Spades']
+		// Reversed display order per request: Spades, Hearts, Diamonds, Clubs
+		const displayOrder = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
 		const hcp = hcpOfCards(deal.buckets[id])
 
 		return (
@@ -938,7 +943,7 @@ export default function DragDropCards({ meta, setMeta }) {
 					onDragLeave={() => setActiveBucket(null)}
 					onDrop={(e) => onDrop(e, id)}
 					className={`h-64 p-3 flex flex-col gap-2 items-stretch justify-center`}>
-					{rowOrder.map((suit) => {
+						{displayOrder.map((suit) => {
 						const suitCards = sortByPbnRank(
 							deal.buckets[id].filter((c) => c.suit === suit)
 						)
@@ -1317,12 +1322,6 @@ export default function DragDropCards({ meta, setMeta }) {
 									Save Hand
 								</button>
 								<button
-									className="px-3 py-2 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
-									onClick={handleGeneratePBN}
-									disabled={savedHands.length === 0}>
-									Download PBN
-								</button>
-								<button
 									className={`px-3 py-2 rounded text-white text-xs hover:opacity-90 disabled:opacity-40 ${
 										copyState === 'ok'
 											? 'bg-green-600'
@@ -1440,18 +1439,27 @@ export default function DragDropCards({ meta, setMeta }) {
 									</span>
 								)}
 							</div>
-							<div className="flex items-center gap-2">
-								<button
-									className="px-4 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
-									onClick={saveCurrentHand}
-									disabled={!complete}
-									title={complete ? 'Save this complete deal' : 'Finish distributing to enable saving'}>
-									Save Hand
-								</button>
-								<span className="text-[11px] text-gray-600">Saved so far: {savedHands.length}</span>
+							<div className="flex flex-col md:flex-row md:items-center md:gap-3 w-full">
+								<div className="flex items-center gap-2 flex-wrap">
+									<button
+										className="px-4 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
+										onClick={saveCurrentHand}
+										disabled={!complete}
+										title={complete ? 'Save this complete deal' : 'Finish distributing to enable saving'}>
+										Save Hand
+									</button>
+									<button
+										className="px-4 py-2 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
+										onClick={handleGeneratePBN}
+										disabled={savedHands.length === 0}
+										title={savedHands.length ? 'Generate a PBN file of all saved boards now' : 'Save at least one board first'}>
+										Save all to PBN now
+									</button>
+									<span className="text-[11px] text-gray-600">Saved: {savedHands.length}</span>
+								</div>
 							</div>
-							<div className="text-[11px] text-gray-600">
-								Build another hand after saving. When you’re finished adding boards, use Download / Copy / Email in the left panel to export your PBN.
+							<div className="text-[11px] text-gray-600 mt-1">
+								Keep dealing and saving boards. When ready, click "Save all to PBN now" to download your cumulative PBN file.
 							</div>
 						</div>
 					</div>
@@ -1507,15 +1515,35 @@ export default function DragDropCards({ meta, setMeta }) {
 						</button>
 					</div>
 
-					{/* Buckets row (unchanged) */}
-					<div className="w-full flex items-start justify-center gap-2">
-						<div className="flex flex-row flex-wrap items-start justify-center gap-2">
-							<Bucket id="N" />
-							<Bucket id="E" />
-							<Bucket id="S" />
-							<Bucket id="W" />
+					{/* Buckets row: iPhone tabs vs desktop grid */}
+					{isIPhone ? (
+						<div className="w-full max-w-sm mx-auto">
+							<div className="flex items-center justify-center gap-1 p-1 rounded-lg border bg-white sticky top-0 z-10">
+								{SEATS.map((s) => (
+									<button
+										key={`tab-${s}`}
+										onClick={() => setActiveSeat(s)}
+										className={`flex-1 px-2 py-1 rounded text-xs border ${
+											activeSeat === s ? 'bg-gray-900 text-white' : 'bg-white'
+										}`}> 
+										{s}
+									</button>
+								))}
+							</div>
+							<div className="mt-2 flex items-center justify-center">
+								<Bucket id={activeSeat} />
+							</div>
 						</div>
-					</div>
+					) : (
+						<div className="w-full flex items-start justify-center gap-2">
+							<div className="flex flex-row flex-wrap items-start justify-center gap-2">
+								<Bucket id="N" />
+								<Bucket id="E" />
+								<Bucket id="S" />
+								<Bucket id="W" />
+							</div>
+						</div>
+					)}
 
 					{/* Preview and toolbar sections moved or kept below as needed */}
 					{/* ...existing code... */}
