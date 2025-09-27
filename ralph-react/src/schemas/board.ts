@@ -47,6 +47,7 @@ export const BoardZ = z.object({
 		.array(
 			z.union([
 				z.literal('Pass'),
+				z.literal('P'), // allow short form
 				z.literal('X'),
 				z.literal('XX'),
 				z.string().regex(/^[1-7](C|D|H|S|NT)$/),

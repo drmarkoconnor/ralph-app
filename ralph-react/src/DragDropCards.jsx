@@ -151,65 +151,15 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const copyTimerRef = useRef(null)
 
-	// Metadata preview (Template)
-	const [exportPreview, setExportPreview] = useState('')
-	const toPbnDate = (iso) => (iso ? String(iso).replace(/-/g, '.') : '')
-	const onExportTemplate = async () => {
-		try {
-			const site =
-				meta?.siteChoice === 'Other'
-					? meta?.siteOther || 'Other'
-					: meta?.siteChoice
-			const theme =
-				meta?.themeChoice === 'Custom…'
-					? meta?.themeCustom || ''
-					: meta?.themeChoice
-			const auctionTokens = String(meta?.auctionText || '')
-				.trim()
-				.split(/\s+/)
-				.filter(Boolean)
-			const sample = BoardZ.parse({
-				event: meta?.event || 'Club Teaching session',
-				site,
-				date: meta?.date || toPbnDate(meta?.dateISO),
-				board: 1,
-				dealer: 'N',
-				vul: 'None',
-				dealPrefix: 'N',
-				hands: {
-					N: { S: [], H: [], D: [], C: [] },
-					E: { S: [], H: [], D: [], C: [] },
-					S: { S: [], H: [], D: [], C: [] },
-					W: { S: [], H: [], D: [], C: [] },
-				},
-				auctionStart: auctionTokens.length
-					? meta?.auctionStart || 'N'
-					: undefined,
-				auction: auctionTokens.length ? auctionTokens : undefined,
-				ext: {
-					system: meta?.system || undefined,
-					theme: theme || undefined,
-					interf: meta?.interf || undefined,
-					lead: meta?.lead || undefined,
-					ddpar: meta?.ddpar || undefined,
-					scoring: meta?.scoring || undefined,
-					playscript: meta?.playscript || undefined,
-				},
-				notes: meta?.notes && meta.notes.length ? meta.notes : [],
-			})
-			const txt = await exportBoardPBN(sample)
-			setExportPreview(txt)
-		} catch (e) {
-			setExportPreview(String(e))
-		}
-	}
+  const toPbnDate = (iso) => (iso ? String(iso).replace(/-/g, '.') : '')
 
 	// Left controls panel state
 	const [leftOpen, setLeftOpen] = useState(true)
 	const isIPhone = useIsIPhone()
 	const [activeSeat, setActiveSeat] = useState('N')
 	const [includeHandout, setIncludeHandout] = useState(false)
-	const [handoutMode, setHandoutMode] = useState('basic') // 'basic' | 'full'
+	// handoutMode deprecated – always full now
+	const handoutMode = 'full'
 
 	// Keyboard entry mode
 	const [kbMode, setKbMode] = useState(false)
@@ -786,6 +736,7 @@ export default function DragDropCards({ meta, setMeta }) {
 			.trim()
 			.split(/\s+/)
 			.filter(Boolean)
+			.map(t => (t === 'P' ? 'Pass' : t))
 
 		// dealPrefix aligns with dealer by default
 		const boardObj = {
@@ -850,6 +801,7 @@ export default function DragDropCards({ meta, setMeta }) {
 							.trim()
 							.split(/\s+/)
 							.filter(Boolean)
+							.map(t => (t === 'P' ? 'Pass' : t))
 						return {
 							number: boardNo,
 							dealer,
@@ -887,9 +839,9 @@ export default function DragDropCards({ meta, setMeta }) {
 						.slice(0, 40) || 'session'
 					const base = `ralph-${yyyy}${mm}${dd}-${safeTheme}-hand`
 					await generateHandoutPDF(dealsForPdf, {
-						mode: handoutMode === 'full' ? 'full' : 'basic',
+						mode: 'full',
 						filenameBase: base,
-						autoNotes: handoutMode === 'full',
+						autoNotes: true,
 					})
 				} catch (err) {
 					console.error('PDF handout failed', err)
@@ -1371,18 +1323,7 @@ export default function DragDropCards({ meta, setMeta }) {
 									)}
 								</div>
 
-								<div className="pt-1 border-t space-y-1">
-									<button
-										className="w-full px-2 py-1 rounded border bg-white text-[11px]"
-										onClick={onExportTemplate}>
-										Preview Template
-									</button>
-									{exportPreview && (
-										<pre className="whitespace-pre-wrap text-[10px] leading-tight bg-gray-50 border border-gray-200 rounded p-2 max-h-24 overflow-y-auto">
-											{exportPreview}
-										</pre>
-									)}
-								</div>
+				          {/* Preview template removed per user request */}
 
 								<div className="flex items-center justify-between">
 									<span className="text-gray-700">Hints</span>
@@ -1589,19 +1530,8 @@ export default function DragDropCards({ meta, setMeta }) {
 											checked={includeHandout}
 											onChange={(e) => setIncludeHandout(e.target.checked)}
 										/>
-										<span>Handout PDF</span>
+										<span>Full Handout PDF</span>
 									</label>
-									{includeHandout && (
-										<div className="flex items-center gap-1 text-[11px]">
-											<select
-												className="border rounded px-1 py-0.5 text-[11px]"
-												value={handoutMode}
-												onChange={(e) => setHandoutMode(e.target.value)}>
-												<option value="basic">Basic</option>
-												<option value="full">Full detail</option>
-											</select>
-										</div>
-									)}
 									<span className="text-[11px] text-gray-600">
 										Saved: {savedHands.length}
 									</span>
