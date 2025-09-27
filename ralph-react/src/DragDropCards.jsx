@@ -690,6 +690,12 @@ export default function DragDropCards({ meta, setMeta }) {
 		// Snapshot current teaching metadata so later edits don't retroactively change earlier saved hands
 		const snapshotTheme =
 			meta?.themeChoice === 'Custom…' ? meta?.themeCustom || '' : meta?.themeChoice || ''
+		// Auto-promote notesDraft to notes if user forgot to click Set Notes
+		let effectiveNotes = meta?.notes && meta.notes.length ? [...meta.notes] : []
+		if ((!effectiveNotes || !effectiveNotes.length) && meta?.notesDraft) {
+			const raw = String(meta.notesDraft).trim()
+			if (raw) effectiveNotes = [raw]
+		}
 		const snapshot = {
 			event: meta?.event,
 			siteChoice: meta?.siteChoice,
@@ -704,7 +710,7 @@ export default function DragDropCards({ meta, setMeta }) {
 			auctionStart: meta?.auctionStart,
 			auctionText: meta?.auctionText,
 			playscript: meta?.playscript,
-			notes: meta?.notes ? [...meta.notes] : [],
+			notes: effectiveNotes,
 		}
 		setSavedHands((prev) => [
 			...prev,
@@ -832,18 +838,59 @@ export default function DragDropCards({ meta, setMeta }) {
 			downloadPBN(pbn)
 			if (includeHandout) {
 				try {
-					const pdfBlob = await generateHandoutPDF({
-						savedHands,
-						meta,
-						startBoard,
-						mode: handoutMode,
+					// Use shared PDF generator for consistency
+					const { generateHandoutPDF } = await import('./lib/handoutPdf')
+					// Normalize saved hands into shared format
+					const dealsForPdf = savedHands.map((h, i) => {
+						const boardNo = startBoard + i
+						const dealer = dealerForBoard(boardNo)
+						const vul = vulnerabilityForBoard(boardNo)
+						const notes = h.meta?.notes || []
+						const auctionTokens = (h.meta?.auctionText || '')
+							.trim()
+							.split(/\s+/)
+							.filter(Boolean)
+						return {
+							number: boardNo,
+							dealer,
+							vul,
+							hands: { N: h.N, E: h.E, S: h.S, W: h.W },
+							notes,
+							calls: auctionTokens,
+							contract: h.meta?.contract, // rarely set here
+							declarer: h.meta?.declarer,
+							meta: {
+								system: h.meta?.system,
+								theme: h.meta?.theme,
+								ddpar: h.meta?.ddpar,
+								lead: h.meta?.lead,
+								scoring: h.meta?.scoring,
+								interf: h.meta?.interf,
+								playscript: h.meta?.playscript,
+								auctionText: h.meta?.auctionText,
+							},
+						}
 					})
-					const url = URL.createObjectURL(pdfBlob)
-					const a = document.createElement('a')
-					a.href = url
-					a.download = 'hands.pdf'
-					a.click()
-					URL.revokeObjectURL(url)
+					const now = new Date()
+					const yyyy = now.getFullYear()
+					const mm = String(now.getMonth() + 1).padStart(2, '0')
+					const dd = String(now.getDate()).padStart(2, '0')
+					let themeRaw = ''
+					if (meta?.themeChoice) {
+						if (meta.themeChoice === 'Custom…') themeRaw = meta?.themeCustom || ''
+						else themeRaw = meta.themeChoice
+					}
+					const safeTheme = (themeRaw || 'Session')
+						.toLowerCase()
+						.replace(/[^a-z0-9]+/g, '-')
+						.replace(/^-+|-+$/g, '')
+						.slice(0, 40) || 'session'
+					const base = `ralph-${yyyy}${mm}${dd}-${safeTheme}-hand`
+					await generateHandoutPDF(dealsForPdf, {
+						mode: handoutMode === 'full' ? 'full' : 'basic',
+						filenameBase: base,
+						autoNotes: handoutMode === 'full',
+					})
 				} catch (err) {
 					console.error('PDF handout failed', err)
 				}
@@ -868,210 +915,7 @@ export default function DragDropCards({ meta, setMeta }) {
 		}
 	}
 
-	// PDF Handout generator (lazy-load jsPDF)
-	async function generateHandoutPDF({ savedHands, meta, startBoard, mode = 'basic' }) {
-		const { jsPDF } = await import('jspdf')
-		const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-		const pageW = 210
-		const pageH = 297
-		const marginX = 12
-		// Per revised requirement: always 2 boards per page (ignore former 3/page basic mode)
-		const blocksPerPage = 2
-		const usableH = pageH - marginX * 2
-		const blockH = usableH / blocksPerPage - 4
-		const title = meta?.event || 'Bridge Teaching Session'
-		let boardOnPage = 0
-
-		const rankOrder = {
-			A: 14,
-			K: 13,
-			Q: 12,
-			J: 11,
-			T: 10,
-			'10': 10,
-			9: 9,
-			8: 8,
-			7: 7,
-			6: 6,
-			5: 5,
-			4: 4,
-			3: 3,
-			2: 2,
-		}
-		const sortDisplay = (cards) =>
-			[...cards].sort((a, b) => rankOrder[b.rank] - rankOrder[a.rank])
-		// Suits drawn as vector glyphs to ensure visibility in PDF (no font glyph dependency)
-		const suitOrderDisplay = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
-		const rankString = (seatCards, suit) => {
-			const arr = sortDisplay(seatCards.filter((c) => c.suit === suit))
-			if (!arr.length) return '—'
-			return arr.map((c) => (c.rank === '10' ? 'T' : c.rank)).join('')
-		}
-		const drawSuitIcon = (suit, x, y, size = 3.6) => {
-			const half = size / 2
-			doc.setDrawColor(0, 0, 0)
-			if (suit === 'Hearts' || suit === 'Diamonds') doc.setFillColor(190, 0, 0)
-			else doc.setFillColor(0, 0, 0)
-			if (suit === 'Diamonds') {
-				// Diamond: simple rotated square
-				doc.saveGraphicsState?.()
-				doc.triangle(x + half, y, x + size, y + half, x + half, y + size, 'F')
-				doc.triangle(x + half, y, x, y + half, x + half, y + size, 'F')
-				return
-			}
-			if (suit === 'Clubs') {
-				// Three circles + stem
-				const r = half * 0.55
-				doc.circle(x + half, y + r, r, 'F')
-				doc.circle(x + r, y + half + r * 0.1, r, 'F')
-				doc.circle(x + size - r, y + half + r * 0.1, r, 'F')
-				// stem
-				doc.rect(x + half - r * 0.35, y + half, r * 0.7, half + r * 0.6, 'F')
-				return
-			}
-			if (suit === 'Hearts') {
-				// Two circles + inverted triangle
-				const r = half * 0.6
-				doc.circle(x + half - r * 0.55, y + r, r, 'F')
-				doc.circle(x + half + r * 0.55, y + r, r, 'F')
-				doc.triangle(
-					x + half,
-					y + size,
-					x + size,
-					y + r + r * 0.2,
-					x,
-					y + r + r * 0.2,
-					'F'
-				)
-				return
-			}
-			if (suit === 'Spades') {
-				// Inverted heart + stem
-				const r = half * 0.6
-				doc.circle(x + half - r * 0.55, y + half, r, 'F')
-				doc.circle(x + half + r * 0.55, y + half, r, 'F')
-				doc.triangle(
-					x + half,
-					y,
-					x + size,
-					y + half + r * 0.2,
-					x,
-					y + half + r * 0.2,
-					'F'
-				)
-				// stem
-				doc.rect(x + half - r * 0.35, y + half + r * 0.4, r * 0.7, half + r * 0.6, 'F')
-			}
-		}
-
-		const drawBoardBlock = (handObj, boardNo) => {
-			const gap = 6
-			const topY = marginX + boardOnPage * (blockH + gap)
-			// Header
-			doc.setFontSize(11)
-			doc.setFont('helvetica', 'bold')
-			doc.text(
-				`Board ${boardNo}  Dealer ${dealerForBoard(boardNo)}  Vul ${vulnerabilityForBoard(boardNo)}`,
-				marginX,
-				topY + 5
-			)
-			doc.setFontSize(9)
-			doc.setFont('helvetica', 'normal')
-			doc.text(title, marginX, topY + 10)
-
-			// Notes beneath header (left)
-			const m = handObj.meta || meta || {}
-			const rawNotes = Array.isArray(m.notes) ? m.notes : []
-			const maxNoteLines = mode === 'full' ? 10 : 5
-			const notesLines = rawNotes.slice(0, maxNoteLines).map(n=> (n||'').trim()).filter(Boolean)
-			if (notesLines.length) {
-				doc.setFontSize(7.5)
-				doc.setFont('helvetica','bold')
-				doc.text('Notes', marginX, topY + 14)
-				doc.setFont('helvetica','normal')
-				notesLines.forEach((ln,i)=> {
-					doc.text('• ' + ln, marginX, topY + 18 + i*4, { maxWidth: 80 })
-				})
-			}
-			const notesHeight = notesLines.length ? (notesLines.length * 4) + 8 : 0
-
-			// Hands diagram region now placed below notes
-			const centerX = pageW / 2
-			const centerY = topY + 30 + notesHeight
-			const horizontalOffset = 60
-			const lineHeight = 5.2
-			const suitIconSize = 4.2
-			const textOffsetX = suitIconSize + 1.8
-
-			const drawSeat = (label, cards, x, y, seatAlign = 'center') => {
-				doc.setFont('helvetica', 'bold')
-				doc.setFontSize(10)
-				doc.text(label, x, y, { align: seatAlign })
-				doc.setFont('helvetica', 'normal')
-				doc.setFontSize(9.5)
-				suitOrderDisplay.forEach((s, idx) => {
-					const lineY = y + (idx + 1) * lineHeight
-					// Determine starting X for left/center/right alignment when drawing icon+text manually
-					let startX = x
-					if (seatAlign === 'center') startX = x - 18 // approximate half width
-					if (seatAlign === 'right') startX = x - 36
-					const color = s === 'Hearts' || s === 'Diamonds' ? [180, 0, 0] : [0, 0, 0]
-					doc.setTextColor(0, 0, 0)
-					drawSuitIcon(s, startX, lineY - suitIconSize + 1.2, suitIconSize)
-					doc.setTextColor(...color)
-					doc.text(rankString(cards, s), startX + textOffsetX, lineY)
-				})
-				doc.setTextColor(0, 0, 0)
-			}
-
-			// Extract seat arrays
-			const N = handObj.N
-			const E = handObj.E
-			const S = handObj.S
-			const W = handObj.W
-
-			// Draw seats (N top) with updated spacing
-			drawSeat('North', N, centerX, centerY - 28, 'center')
-			drawSeat('South', S, centerX, centerY + 38, 'center')
-			drawSeat('West', W, centerX - horizontalOffset, centerY + 2, 'left')
-			drawSeat('East', E, centerX + horizontalOffset, centerY + 2, 'right')
-
-			// Metadata compact box (right)
-			const metaX = pageW - marginX - 58
-			const metaY = topY + 14
-			doc.setFont('helvetica','bold')
-			doc.setFontSize(8)
-			doc.text('Meta', metaX, metaY)
-			doc.setFont('helvetica','normal')
-			let my = metaY + 4
-			const metaLine = (label,val) => { if(!val) return; doc.text(`${label}: ${val}`, metaX, my, { maxWidth: 58 }); my += 4 }
-			metaLine('Ideal', m.ddpar)
-			metaLine('Lead', m.lead)
-			if (mode === 'full') {
-				metaLine('System', m.system)
-				metaLine('Theme', m.theme)
-				metaLine('Score', m.scoring)
-				metaLine('Interf', m.interf)
-				if (m.auctionText) metaLine('Auction', m.auctionText)
-				if (m.playscript) {
-					const firstPlay = String(m.playscript).split(/\n/).filter(Boolean)[0]
-					metaLine('LeadSeq', firstPlay)
-				}
-			}
-		}
-
-		for (let i = 0; i < savedHands.length; i++) {
-			if (i !== 0 && i % blocksPerPage === 0) {
-				doc.addPage()
-				boardOnPage = 0
-			}
-			const boardNo = startBoard + i
-			drawBoardBlock(savedHands[i], boardNo)
-			boardOnPage++
-		}
-
-		return doc.output('blob')
-	}
+	// NOTE: Inline PDF generator removed in favor of shared lib/handoutPdf.js
 
 	const handleEmailPBN = async () => {
 		if (savedHands.length === 0) return
