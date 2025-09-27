@@ -17,6 +17,7 @@ import {
 	parsePlayMoves,
 	parsePlayScript,
 	isSeatVul,
+	isDeclarerSide,
 } from '../lib/bridgeCore'
 import { sanitizePBN, parsePBN } from '../lib/pbn'
 

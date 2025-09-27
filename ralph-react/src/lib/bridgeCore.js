@@ -14,6 +14,12 @@ export function isDefender(seat, declarer) {
 	const opp = partnerOf(declarer)
 	return seat !== declarer && seat !== opp
 }
+// Returns true if the seat belongs to declarer's partnership
+export function isDeclarerSide(seat, declarer) {
+    if (!declarer) return false
+    const p = partnerOf(declarer)
+    return seat === declarer || seat === p
+}
 export function hcpValue(rank) {
 	if (rank === 'A') return 4
 	if (rank === 'K') return 3
@@ -65,12 +71,18 @@ function rankValue(rank) {
 export function evaluateTrick(trickArr, trumpSuit) {
 	if (!Array.isArray(trickArr) || trickArr.length === 0) return null
 	const leadSuit = trickArr[0].card.suit
-	const pool = trumpSuit
-		? trickArr.filter((p) => p.card.suit === trumpSuit)
-		: trickArr.filter((p) => p.card.suit === leadSuit)
+	// If any trump cards were played, only they can win; otherwise use lead suit cards
+	let pool = []
+	if (trumpSuit) {
+		const trumpsPlayed = trickArr.filter(p => p.card.suit === trumpSuit)
+		if (trumpsPlayed.length) pool = trumpsPlayed
+	}
+	if (!pool.length) pool = trickArr.filter(p => p.card.suit === leadSuit)
+	if (!pool.length) return null
 	let best = pool[0]
-	for (let i = 1; i < pool.length; i++)
+	for (let i = 1; i < pool.length; i++) {
 		if (rankValue(pool[i].card.rank) > rankValue(best.card.rank)) best = pool[i]
+	}
 	return best.seat
 }
 export function dealToHands(dealStr) {
