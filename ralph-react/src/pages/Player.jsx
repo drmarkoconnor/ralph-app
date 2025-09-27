@@ -1420,6 +1420,13 @@ function SeatPanel({
 		])
 	)
 	const isTurn = turnSeat === id
+	// Determine current trick's lead suit (only when trick in progress with 1-3 cards)
+	const leadSuit = trick && trick.length > 0 && trick.length < 4 ? trick[0].card.suit : null
+	const hasLead = leadSuit ? bySeat.some((x) => x.suit === leadSuit) : false
+	// Precompute if any card would be legal under normal rules
+	const anyLegal = bySeat.some(
+		(c) => !isTurn || !leadSuit || !hasLead || c.suit === leadSuit
+	)
 	return (
 		<div
 			className={`rounded-2xl overflow-hidden shadow-md border ${
@@ -1498,16 +1505,10 @@ function SeatPanel({
 							{visible ? (
 								cardsBySuit[suit].length ? (
 									cardsBySuit[suit].map((c) => {
-										const leadSuit =
-											trick.length === 0 || trick.length === 4
-												? null
-												: trick[0].card.suit
-										const hasLead = leadSuit
-											? bySeat.some((x) => x.suit === leadSuit)
-											: false
-										const legal =
-											turnSeat === id &&
-											(!leadSuit || !hasLead || c.suit === leadSuit)
+										const normalLegal =
+											turnSeat === id && (!leadSuit || !hasLead || c.suit === leadSuit)
+										// Fallback: if it's this seat's turn but no cards qualified (edge case), allow play
+										const legal = normalLegal || (turnSeat === id && !anyLegal)
 										return (
 											<button
 												key={c.id}
