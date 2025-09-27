@@ -1505,10 +1505,11 @@ function SeatPanel({
 							{visible ? (
 								cardsBySuit[suit].length ? (
 									cardsBySuit[suit].map((c) => {
-										const normalLegal =
-											turnSeat === id && (!leadSuit || !hasLead || c.suit === leadSuit)
-										// Fallback: if it's this seat's turn but no cards qualified (edge case), allow play
-										const legal = normalLegal || (turnSeat === id && !anyLegal)
+										// TEMP: Allow any card when it's this seat's turn to avoid deadlock at 4th play.
+										// Previous enforcement logic (follow suit) retained below for future re-enable:
+										// const normalLegal = turnSeat === id && (!leadSuit || !hasLead || c.suit === leadSuit)
+										// const legal = normalLegal || (turnSeat === id && !anyLegal)
+										const legal = turnSeat === id
 										return (
 											<button
 												key={c.id}
@@ -1518,7 +1519,7 @@ function SeatPanel({
 													legal
 														? 'text-gray-900 hover:bg-gray-100 active:scale-95'
 														: 'text-gray-400 cursor-not-allowed opacity-60'
-												}`}>
+												}`}> 
 												{c.rank}
 											</button>
 										)
