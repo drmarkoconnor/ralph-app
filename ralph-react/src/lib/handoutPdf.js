@@ -54,18 +54,24 @@ export async function generateHandoutPDF(deals, options = {}) {
   const drawBlock = (dealObj) => {
     const topY = marginX + boardOnPage * (blockH + 6)
     const leftX = marginX
-    const colW = (pageW - marginX * 2) / 2
+    const availW = pageW - marginX * 2
+    // Layout columns
+    const notesW = 60        // left notes column width
+    const metaW = 55         // right metadata box width
+    const gutter = 4
+    const diagramAreaW = Math.max(58, availW - notesW - metaW - gutter * 2)
+    const diagramCenterX = leftX + notesW + gutter + diagramAreaW / 2
+    const metaX = leftX + notesW + gutter + diagramAreaW + gutter
+
     // Header
     doc.setFontSize(11)
     doc.setFont('helvetica','bold')
-    const titleParts = [ 'Board', dealObj.number ?? '' ]
-    doc.text(titleParts.join(' '), leftX, topY + 4)
+    doc.text(`Board ${dealObj.number ?? ''}`, leftX, topY + 4)
     doc.setFontSize(8)
     doc.setFont('helvetica','normal')
-    const info = `Dealer: ${dealObj.dealer || '?'}   Vul: ${dealObj.vul || 'None'}`
-    doc.text(info, leftX + colW * 0.55, topY + 4)
+    doc.text(`Dealer: ${dealObj.dealer || '?'}  Vul: ${dealObj.vul || 'None'}`, leftX + 24, topY + 4)
 
-    // Metadata summary box (right side upper corner)
+    // Metadata summary
     const meta = dealObj.meta || {}
     const contract = deriveContract(dealObj)
     const declarer = dealObj.declarer || meta.declarer || ''
@@ -76,14 +82,12 @@ export async function generateHandoutPDF(deals, options = {}) {
     const interf = meta.interf || meta.interference || ''
     const scoring = meta.scoring || ''
     const resultTxt = meta.resultText || dealObj.resultText || ''
-    const boxX = leftX + colW + 0.5
-    const boxY = topY + 4
-    const lineStep = 3.4
-    let ly = boxY
+    const lineStep = 3.6
+    let ly = topY + 6
     const pushMeta = (label, value) => {
       if (!value) return
       doc.setFontSize(6.5)
-      doc.text(`${label}: ${value}`, boxX, ly, { maxWidth: pageW - boxX - 4 })
+      doc.text(`${label}: ${value}`, metaX, ly, { maxWidth: metaW - 2 })
       ly += lineStep
     }
     pushMeta('Contract', contract + (declarer ? ` (${declarer})` : ''))
@@ -100,32 +104,36 @@ export async function generateHandoutPDF(deals, options = {}) {
       pushMeta('DDPar', ddpar)
     }
 
-    // Notes (moved to left under header)
-    let notesLines = []
+    // Notes (left column with precise wrapping)
+    let wrappedLineCount = 0
     if ((mode === 'full' || autoNotes) && dealObj.notes && dealObj.notes.length) {
-      const maxLines = mode === 'full' ? 12 : 6
-      notesLines = dealObj.notes.slice(0, maxLines).map(n => (n||'').trim()).filter(Boolean)
-    }
-    if (notesLines.length) {
       doc.setFontSize(7.5)
       doc.setFont('helvetica','bold')
       doc.text('Notes', leftX, topY + 10)
       doc.setFont('helvetica','normal')
-      const wrapWidth = colW - 6
-      notesLines.forEach((ln,i)=> {
-        const text = `• ${ln}`
-        doc.text(text, leftX, topY + 14 + i * 4, { maxWidth: wrapWidth })
-      })
+      const maxRenderLines = mode === 'full' ? 36 : 16 // wrapped lines, not note entries
+      const lineGap = 3.2
+      let cursorY = topY + 14
+      for (const raw of dealObj.notes) {
+        if (wrappedLineCount >= maxRenderLines) break
+        const base = String(raw || '').trim()
+        if (!base) continue
+        const pieces = doc.splitTextToSize('• ' + base, notesW - 2)
+        for (const seg of pieces) {
+          if (wrappedLineCount >= maxRenderLines) break
+            doc.text(seg, leftX, cursorY, { maxWidth: notesW - 2 })
+            cursorY += lineGap
+            wrappedLineCount++
+        }
+      }
     }
+    const notesHeight = wrappedLineCount ? (wrappedLineCount * 3.2) + 8 : 0
 
-    // Dynamic vertical offset for diagram based on notes height
-    const notesHeight = notesLines.length ? (notesLines.length * 4) + 10 : 0
-    const diagramTopOffset = 18 + notesHeight
-    const centerX = leftX + colW * 0.55
-    const centerY = topY + diagramTopOffset
-    const seatDx = 42
-    const seatDy = 27
-    const suitLine = 4.3
+    // Diagram positioning below the taller of header or notes block
+    const diagramTopY = topY + 18 + notesHeight
+    const seatDy = 25
+    const seatDx = Math.min(34, diagramAreaW / 2.4) // adapt if diagram area narrows
+    const suitLine = 4.1
     const fontRanks = 9
     const seatFont = 9.5
     const mono = 'courier'
@@ -136,8 +144,12 @@ export async function generateHandoutPDF(deals, options = {}) {
       S: dealObj.hands?.S || [],
       W: dealObj.hands?.W || [],
     }
-
-    const seatPos = { N:[centerX, centerY - seatDy], S:[centerX, centerY + seatDy], W:[centerX - seatDx, centerY], E:[centerX + seatDx, centerY] }
+    const seatPos = {
+      N:[diagramCenterX, diagramTopY - seatDy],
+      S:[diagramCenterX, diagramTopY + seatDy],
+      W:[diagramCenterX - seatDx, diagramTopY],
+      E:[diagramCenterX + seatDx, diagramTopY]
+    }
     const drawSeat = (seat) => {
       const [x,y] = seatPos[seat]
       doc.setFontSize(seatFont)
@@ -147,32 +159,29 @@ export async function generateHandoutPDF(deals, options = {}) {
       doc.setFont(mono,'normal')
       suitOrderDisplay.forEach((suit,i)=>{
         const lineY = y + i * suitLine
-        drawSuitIcon(doc, suit, x - 20, lineY - 3.2, 3.2)
-        doc.text(rankString(seatData[seat], suit) || '—', x - 14, lineY, { align: 'left' })
+        drawSuitIcon(doc, suit, x - 18, lineY - 3.1, 3.1)
+        doc.text(rankString(seatData[seat], suit) || '—', x - 12, lineY, { align: 'left' })
       })
       doc.setFont('helvetica','normal')
     }
     ;['N','W','E','S'].forEach(drawSeat)
 
-    // Auction formatting into 4 columns (if full)
+    // Auction (full mode) placed under diagram spanning notes + diagram width (leave meta column untouched)
     if (mode === 'full' && Array.isArray(dealObj.calls) && dealObj.calls.length) {
+      const auctionTop = diagramTopY + seatDy + 10
       doc.setFontSize(7)
       doc.setFont('helvetica','bold')
-      doc.text('Auction', leftX, centerY + seatDy + 10)
+      doc.text('Auction', leftX, auctionTop)
       doc.setFont('helvetica','normal')
       const cols = ['N','E','S','W']
-      const colWidth = 18
-      cols.forEach((c,i)=> doc.text(c, leftX + i*colWidth, centerY + seatDy + 14))
-      let row = 0
+      const colWidth = 16
+      cols.forEach((c,i)=> doc.text(c, leftX + i*colWidth, auctionTop + 4))
       dealObj.calls.forEach((call, idx)=>{
         const col = idx % 4
         const r = Math.floor(idx / 4)
-        if (r !== row) row = r
-        doc.text(String(call), leftX + col*colWidth, centerY + seatDy + 18 + r*4)
+        doc.text(String(call), leftX + col*colWidth, auctionTop + 8 + r*4)
       })
     }
-
-    // (Notes no longer on right; space reserved for metadata box already drawn.)
   }
 
   deals.forEach((d,i)=>{
