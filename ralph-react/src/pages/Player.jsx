@@ -96,6 +96,18 @@ export default function Player() {
 		playIdxRef.current = playIdx
 	}, [playIdx])
 	const [flashWinner, setFlashWinner] = useState(null)
+	// Debug log to surface play flow issues (temporary)
+	const [debugMsgs, setDebugMsgs] = useState([])
+	const logDebug = useCallback((msg) => {
+		setDebugMsgs((d) => {
+			const next = [...d, msg]
+			return next.slice(-20) // keep last 20
+		})
+		if (typeof window !== 'undefined') {
+			window.__RALPH_DEBUG__ = window.__RALPH_DEBUG__ || []
+			window.__RALPH_DEBUG__.push(`${new Date().toISOString()} ${msg}`)
+		}
+	}, [])
 
 	// Hint modal
 	const [showHint, setShowHint] = useState(false)
@@ -577,11 +589,30 @@ export default function Player() {
 	// Manual play
 	const onPlayCard = useCallback(
 		(seat, cardId) => {
-			if (!remaining || !turnSeat || seat !== turnSeat) return
+			if (!remaining) {
+				logDebug(`Ignored play (${seat} ${cardId}) – no remaining state`)
+				return
+			}
+			if (!turnSeat) {
+				logDebug(`Ignored play (${seat} ${cardId}) – turnSeat is null`)
+				return
+			}
+			if (seat !== turnSeat) {
+				logDebug(
+					`Ignored play (${seat} ${cardId}) – not ${turnSeat}'s turn (click allowed due to TEMP rules but logic blocked)`
+				)
+				return
+			}
 			const hand = remaining[seat] || []
 			const idx = hand.findIndex((c) => c.id === cardId)
-			if (idx < 0) return
+			if (idx < 0) {
+				logDebug(`Ignored play (${seat} ${cardId}) – card not found in hand`)
+				return
+			}
 			const card = hand[idx]
+			logDebug(
+				`Play accepted: ${seat} plays ${card.rank}${card.suit[0]} (trickLen=${trick.length})`
+			)
 			const newRemaining = {
 				...remaining,
 				[seat]: [...hand.slice(0, idx), ...hand.slice(idx + 1)],
@@ -599,16 +630,19 @@ export default function Player() {
 			if (nextTrick.length === 4) {
 				const winner = evaluateTrick(nextTrick, effTrump)
 				if (winner) {
+					logDebug(`Trick completed. Winner = ${winner}`)
 					if (isDeclarerSide(winner, effDeclarer)) d++
 					else f++
 					nextTurn = winner
 					if (pauseRef.current) flash = winner
 				}
+				else logDebug('Trick completed but no winner determined')
 			}
 			setRemaining(newRemaining)
 			setTally(newTally)
 			setTrick(nextTrick.length === 4 && !pauseRef.current ? [] : nextTrick)
 			setTurnSeat(nextTurn)
+			logDebug(`Next turn -> ${nextTurn}; decl=${d} def=${f}; trickSize=${nextTrick.length}`)
 			setTricksDecl(d)
 			setTricksDef(f)
 			setFlashWinner(flash)
@@ -626,6 +660,7 @@ export default function Player() {
 			tricksDef,
 			effTrump,
 			effDeclarer,
+			logDebug,
 		]
 	)
 
@@ -1019,6 +1054,13 @@ export default function Player() {
 					) : null}
 					{remaining ? (
 						<>
+							{debugMsgs.length > 0 && (
+								<div className="mb-2 text-[10px] font-mono whitespace-pre-wrap max-h-32 overflow-auto border rounded bg-gray-50 p-1">
+									{debugMsgs.map((m, i) => (
+										<div key={i}>{m}</div>
+									))}
+								</div>
+							)}
 							{!isIPhone && (
 								<div className="w-full flex items-center justify-center mb-2">
 									<button
