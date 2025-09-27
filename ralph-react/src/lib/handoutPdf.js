@@ -104,16 +104,17 @@ export async function generateHandoutPDF(deals, options = {}) {
       pushMeta('DDPar', ddpar)
     }
 
-    // Notes (left column with precise wrapping)
-    let wrappedLineCount = 0
+    // Notes (left column) with actual cursor measurement
+    let cursorY = topY + 14
+    let renderedAnyNote = false
     if ((mode === 'full' || autoNotes) && dealObj.notes && dealObj.notes.length) {
-      doc.setFontSize(7.5)
+      doc.setFontSize(8)
       doc.setFont('helvetica','bold')
       doc.text('Notes', leftX, topY + 10)
       doc.setFont('helvetica','normal')
-      const maxRenderLines = mode === 'full' ? 36 : 16 // wrapped lines, not note entries
-      const lineGap = 3.2
-      let cursorY = topY + 14
+      const maxRenderLines = mode === 'full' ? 42 : 18 // allow a few more lines (wrapped)
+      const lineGap = 3.5
+      let wrappedLineCount = 0
       for (const raw of dealObj.notes) {
         if (wrappedLineCount >= maxRenderLines) break
         const base = String(raw || '').trim()
@@ -121,22 +122,24 @@ export async function generateHandoutPDF(deals, options = {}) {
         const pieces = doc.splitTextToSize('• ' + base, notesW - 2)
         for (const seg of pieces) {
           if (wrappedLineCount >= maxRenderLines) break
-            doc.text(seg, leftX, cursorY, { maxWidth: notesW - 2 })
-            cursorY += lineGap
-            wrappedLineCount++
+          doc.text(seg, leftX, cursorY, { maxWidth: notesW - 2 })
+          cursorY += lineGap
+          wrappedLineCount++
+          renderedAnyNote = true
         }
       }
     }
-    const notesHeight = wrappedLineCount ? (wrappedLineCount * 3.2) + 8 : 0
+    const notesBottomY = renderedAnyNote ? cursorY : topY + 14
 
-    // Diagram positioning below the taller of header or notes block
-    const diagramTopY = topY + 18 + notesHeight
-    const seatDy = 25
-    const seatDx = Math.min(34, diagramAreaW / 2.4) // adapt if diagram area narrows
-    const suitLine = 4.1
-    const fontRanks = 9
-    const seatFont = 9.5
-    const mono = 'courier'
+    // Diagram positioning: ensure clear gap below notes
+    const diagramTopY = Math.max(topY + 26, notesBottomY + 6)
+    // Compact seat spacing while enlarging ranks for legibility
+    const seatDy = 23
+    const seatDx = Math.min(30, diagramAreaW / 2.6)
+    const suitLine = 4.8 // more vertical space for larger rank text
+    const fontRanks = 10.2
+    const seatFont = 10.5
+    const mono = 'helvetica' // switch from courier to helvetica for cleaner look
 
     const seatData = {
       N: dealObj.hands?.N || [],
@@ -154,13 +157,13 @@ export async function generateHandoutPDF(deals, options = {}) {
       const [x,y] = seatPos[seat]
       doc.setFontSize(seatFont)
       doc.setFont('helvetica','bold')
-      doc.text(seat, x, y - 2, { align: 'center' })
+      doc.text(seat, x, y - 2.2, { align: 'center' })
       doc.setFontSize(fontRanks)
-      doc.setFont(mono,'normal')
+      doc.setFont(mono,'bold')
       suitOrderDisplay.forEach((suit,i)=>{
         const lineY = y + i * suitLine
-        drawSuitIcon(doc, suit, x - 18, lineY - 3.1, 3.1)
-        doc.text(rankString(seatData[seat], suit) || '—', x - 12, lineY, { align: 'left' })
+        drawSuitIcon(doc, suit, x - 19, lineY - 3.3, 3.4)
+        doc.text(rankString(seatData[seat], suit) || '—', x - 13.5, lineY, { align: 'left' })
       })
       doc.setFont('helvetica','normal')
     }
