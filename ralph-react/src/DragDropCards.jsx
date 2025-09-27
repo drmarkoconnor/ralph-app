@@ -151,7 +151,7 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const copyTimerRef = useRef(null)
 
-  const toPbnDate = (iso) => (iso ? String(iso).replace(/-/g, '.') : '')
+	const toPbnDate = (iso) => (iso ? String(iso).replace(/-/g, '.') : '')
 
 	// Left controls panel state
 	const [leftOpen, setLeftOpen] = useState(true)
@@ -639,7 +639,9 @@ export default function DragDropCards({ meta, setMeta }) {
 		if (!complete) return
 		// Snapshot current teaching metadata so later edits don't retroactively change earlier saved hands
 		const snapshotTheme =
-			meta?.themeChoice === 'Custom…' ? meta?.themeCustom || '' : meta?.themeChoice || ''
+			meta?.themeChoice === 'Custom…'
+				? meta?.themeCustom || ''
+				: meta?.themeChoice || ''
 		// Auto-promote notesDraft to notes if user forgot to click Set Notes
 		let effectiveNotes = meta?.notes && meta.notes.length ? [...meta.notes] : []
 		if ((!effectiveNotes || !effectiveNotes.length) && meta?.notesDraft) {
@@ -664,7 +666,13 @@ export default function DragDropCards({ meta, setMeta }) {
 		}
 		setSavedHands((prev) => [
 			...prev,
-			{ N: deal.buckets.N, E: deal.buckets.E, S: deal.buckets.S, W: deal.buckets.W, meta: snapshot },
+			{
+				N: deal.buckets.N,
+				E: deal.buckets.E,
+				S: deal.buckets.S,
+				W: deal.buckets.W,
+				meta: snapshot,
+			},
 		])
 		resetBoard()
 		// Clear notes draft & notes ready for next hand authoring
@@ -687,11 +695,12 @@ export default function DragDropCards({ meta, setMeta }) {
 			if (meta.themeChoice === 'Custom…') themeRaw = meta?.themeCustom || ''
 			else themeRaw = meta.themeChoice
 		}
-		const safeTheme = (themeRaw || 'Session')
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, '-')
-			.replace(/^-+|-+$/g, '')
-			.slice(0, 40) || 'session'
+		const safeTheme =
+			(themeRaw || 'Session')
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '-')
+				.replace(/^-+|-+$/g, '')
+				.slice(0, 40) || 'session'
 		a.download = `ralph-${datePart}-${safeTheme}-hand.pbn`
 		a.click()
 		URL.revokeObjectURL(url)
@@ -726,17 +735,23 @@ export default function DragDropCards({ meta, setMeta }) {
 		const dateStrDefault = `${y}.${m}.${d}`
 		const metaSnap = hand.meta || meta || {}
 		const event = metaSnap.event || meta?.event || 'Club Teaching session'
-		const siteChoice = metaSnap.siteChoice || meta?.siteChoice || 'Bristol Bridge Club'
-		const site = siteChoice === 'Other' ? metaSnap.siteOther || meta?.siteOther || 'Other' : siteChoice
+		const siteChoice =
+			metaSnap.siteChoice || meta?.siteChoice || 'Bristol Bridge Club'
+		const site =
+			siteChoice === 'Other'
+				? metaSnap.siteOther || meta?.siteOther || 'Other'
+				: siteChoice
 		const dateStr = metaSnap.date || meta?.date || dateStrDefault
-		const theme = metaSnap.theme || (
-			meta?.themeChoice === 'Custom…' ? meta?.themeCustom || '' : meta?.themeChoice
-		)
+		const theme =
+			metaSnap.theme ||
+			(meta?.themeChoice === 'Custom…'
+				? meta?.themeCustom || ''
+				: meta?.themeChoice)
 		const auctionTokens = (metaSnap.auctionText || meta?.auctionText || '')
 			.trim()
 			.split(/\s+/)
 			.filter(Boolean)
-			.map(t => (t === 'P' ? 'Pass' : t))
+			.map((t) => (t === 'P' ? 'Pass' : t))
 
 		// dealPrefix aligns with dealer by default
 		const boardObj = {
@@ -753,7 +768,10 @@ export default function DragDropCards({ meta, setMeta }) {
 				S: mapSeatHand(hand.S),
 				W: mapSeatHand(hand.W),
 			},
-			notes: metaSnap.notes && metaSnap.notes.length ? metaSnap.notes : meta?.notes || [],
+			notes:
+				metaSnap.notes && metaSnap.notes.length
+					? metaSnap.notes
+					: meta?.notes || [],
 			auctionStart: auctionTokens.length
 				? metaSnap.auctionStart || meta?.auctionStart || 'N'
 				: undefined,
@@ -801,7 +819,7 @@ export default function DragDropCards({ meta, setMeta }) {
 							.trim()
 							.split(/\s+/)
 							.filter(Boolean)
-							.map(t => (t === 'P' ? 'Pass' : t))
+							.map((t) => (t === 'P' ? 'Pass' : t))
 						return {
 							number: boardNo,
 							dealer,
@@ -829,14 +847,16 @@ export default function DragDropCards({ meta, setMeta }) {
 					const dd = String(now.getDate()).padStart(2, '0')
 					let themeRaw = ''
 					if (meta?.themeChoice) {
-						if (meta.themeChoice === 'Custom…') themeRaw = meta?.themeCustom || ''
+						if (meta.themeChoice === 'Custom…')
+							themeRaw = meta?.themeCustom || ''
 						else themeRaw = meta.themeChoice
 					}
-					const safeTheme = (themeRaw || 'Session')
-						.toLowerCase()
-						.replace(/[^a-z0-9]+/g, '-')
-						.replace(/^-+|-+$/g, '')
-						.slice(0, 40) || 'session'
+					const safeTheme =
+						(themeRaw || 'Session')
+							.toLowerCase()
+							.replace(/[^a-z0-9]+/g, '-')
+							.replace(/^-+|-+$/g, '')
+							.slice(0, 40) || 'session'
 					const base = `ralph-${yyyy}${mm}${dd}-${safeTheme}-hand`
 					await generateHandoutPDF(dealsForPdf, {
 						mode: 'full',
@@ -1296,7 +1316,9 @@ export default function DragDropCards({ meta, setMeta }) {
 									<textarea
 										className="border rounded px-1 py-0.5 text-[11px] h-24 w-full"
 										value={meta?.notesDraft || ''}
-										onChange={(e) => setMeta?.((m) => ({ ...m, notesDraft: e.target.value }))}
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, notesDraft: e.target.value }))
+										}
 										placeholder="Teaching notes for this hand..."
 									/>
 									<div className="flex items-center gap-1">
@@ -1312,7 +1334,9 @@ export default function DragDropCards({ meta, setMeta }) {
 										</button>
 										<button
 											className="px-2 py-1 rounded border text-[11px]"
-											onClick={() => setMeta?.((m) => ({ ...m, notes: [], notesDraft: '' }))}>
+											onClick={() =>
+												setMeta?.((m) => ({ ...m, notes: [], notesDraft: '' }))
+											}>
 											Clear
 										</button>
 									</div>
@@ -1323,7 +1347,7 @@ export default function DragDropCards({ meta, setMeta }) {
 									)}
 								</div>
 
-				          {/* Preview template removed per user request */}
+								{/* Preview template removed per user request */}
 
 								<div className="flex items-center justify-between">
 									<span className="text-gray-700">Hints</span>

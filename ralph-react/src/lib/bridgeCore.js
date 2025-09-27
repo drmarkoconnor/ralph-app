@@ -45,7 +45,21 @@ export function parseTrump(contract) {
 	return null
 }
 function rankValue(rank) {
-	const map = { 2:2,3:3,4:4,5:5,6:6,7:7,8:8,9:9,10:10,J:11,Q:12,K:13,A:14 }
+	const map = {
+		2: 2,
+		3: 3,
+		4: 4,
+		5: 5,
+		6: 6,
+		7: 7,
+		8: 8,
+		9: 9,
+		10: 10,
+		J: 11,
+		Q: 12,
+		K: 13,
+		A: 14,
+	}
 	return map[rank] || 0
 }
 export function evaluateTrick(trickArr, trumpSuit) {
@@ -78,7 +92,9 @@ export function dealToHands(dealStr) {
 				.map((ch) => ch.toUpperCase())
 				.filter((ch) => /^(?:[AKQJT2-9])$/.test(ch))
 				.map((ch) => ({
-					id: `${seat}-${suitName}-${ch}-${Math.random().toString(36).slice(2,7)}`,
+					id: `${seat}-${suitName}-${ch}-${Math.random()
+						.toString(36)
+						.slice(2, 7)}`,
 					suit: suitName,
 					rank: ch === 'T' ? '10' : ch,
 				}))
@@ -94,7 +110,9 @@ export function dealToHands(dealStr) {
 }
 export function computeDuplicateScore(contract, declarer, vul, declTricks) {
 	if (!contract) return { partial: true }
-	const m = String(contract).toUpperCase().match(/^(\d)(C|D|H|S|NT)(X{0,2})?$/)
+	const m = String(contract)
+		.toUpperCase()
+		.match(/^(\d)(C|D|H|S|NT)(X{0,2})?$/)
 	if (!m) return { partial: true }
 	const level = parseInt(m[1], 10)
 	const strain = m[2]
@@ -140,14 +158,22 @@ export function computeDuplicateScore(contract, declarer, vul, declTricks) {
 	let resultText = ''
 	if (made >= 0) {
 		const contractValue = trickValue(level)
-		const trickScore = dbl === 'XX' ? contractValue * 4 : dbl === 'X' ? contractValue * 2 : contractValue
+		const trickScore =
+			dbl === 'XX'
+				? contractValue * 4
+				: dbl === 'X'
+				? contractValue * 2
+				: contractValue
 		const over = overValue(made)
 		const insult = dbl === 'XX' ? 100 : dbl === 'X' ? 50 : 0
 		const game = contractValue >= 100
-		const slamBonus = level === 6 ? (vul ? 750 : 500) : level === 7 ? (vul ? 1500 : 1000) : 0
+		const slamBonus =
+			level === 6 ? (vul ? 750 : 500) : level === 7 ? (vul ? 1500 : 1000) : 0
 		const gamePartScore = game ? (vul ? 500 : 300) : 50
 		score = trickScore + over + insult + slamBonus + gamePartScore
-		resultText = `${level}${strain}${dbl ? dbl : ''}=${made === 0 ? '' : `+${made}`}`
+		resultText = `${level}${strain}${dbl ? dbl : ''}=${
+			made === 0 ? '' : `+${made}`
+		}`
 	} else {
 		const down = -made
 		const penalty = underPenalty(down)
@@ -166,12 +192,12 @@ export function neededToSet(contract) {
 }
 // Determine if a specific seat is vulnerable given a vulnerability string ("None", "All", "NS", "EW")
 export function isSeatVul(seat, vul) {
-  const v = String(vul || '').toUpperCase()
-  if (v === 'ALL') return true
-  if (v === 'NONE' || v === '') return false
-  if (v === 'NS') return seat === 'N' || seat === 'S'
-  if (v === 'EW') return seat === 'E' || seat === 'W'
-  return false
+	const v = String(vul || '').toUpperCase()
+	if (v === 'ALL') return true
+	if (v === 'NONE' || v === '') return false
+	if (v === 'NS') return seat === 'N' || seat === 'S'
+	if (v === 'EW') return seat === 'E' || seat === 'W'
+	return false
 }
 export function validateAuction(dealer, calls) {
 	const seats = ['N', 'E', 'S', 'W']
@@ -181,7 +207,10 @@ export function validateAuction(dealer, calls) {
 	const isX = (c) => /^X$/i.test(c)
 	const isXX = (c) => /^XX$/i.test(c)
 	const bidRe = /^([1-7])(C|D|H|S|NT)$/i
-	let lastBid = null, lastBidder = null, lastDblBy = null, lastXXBy = null
+	let lastBid = null,
+		lastBidder = null,
+		lastDblBy = null,
+		lastXXBy = null
 	for (let i = 0; i < calls.length; i++) {
 		const call = calls[i]
 		const seat = seatFor(i)
@@ -194,7 +223,8 @@ export function validateAuction(dealer, calls) {
 				const ord = ['C', 'D', 'H', 'S', 'NT']
 				const prevIdx = ord.indexOf(prevStrain)
 				const curIdx = ord.indexOf(strain)
-				const higher = level > prevLevel || (level === prevLevel && curIdx > prevIdx)
+				const higher =
+					level > prevLevel || (level === prevLevel && curIdx > prevIdx)
 				if (!higher) return { legal: false }
 			}
 			lastBid = [level, strain]
@@ -224,14 +254,27 @@ export function validateAuction(dealer, calls) {
 		return { legal: false }
 	}
 	const callsUp = calls.map((c) => String(c).toUpperCase())
-	const lastBidIdx = [...callsUp].map((c, i) => (bidRe.test(c) ? i : -1)).filter((i) => i >= 0).pop()
+	const lastBidIdx = [...callsUp]
+		.map((c, i) => (bidRe.test(c) ? i : -1))
+		.filter((i) => i >= 0)
+		.pop()
 	if (lastBidIdx == null) return { legal: false }
-	if (!(callsUp[lastBidIdx + 1] === 'PASS' && callsUp[lastBidIdx + 2] === 'PASS' && callsUp[lastBidIdx + 3] === 'PASS'))
+	if (
+		!(
+			callsUp[lastBidIdx + 1] === 'PASS' &&
+			callsUp[lastBidIdx + 2] === 'PASS' &&
+			callsUp[lastBidIdx + 3] === 'PASS'
+		)
+	)
 		return { legal: false }
 	const mm = calls[lastBidIdx].toUpperCase().match(bidRe)
 	const level = parseInt(mm[1], 10)
 	const strain = mm[2]
-	const dbl = callsUp.slice(lastBidIdx + 1).includes('XX') ? 'XX' : callsUp.slice(lastBidIdx + 1).includes('X') ? 'X' : ''
+	const dbl = callsUp.slice(lastBidIdx + 1).includes('XX')
+		? 'XX'
+		: callsUp.slice(lastBidIdx + 1).includes('X')
+		? 'X'
+		: ''
 	const contract = `${level}${strain}${dbl}`
 	const declaringTeam = seats.indexOf(lastBidder) % 2
 	let declarer = null
@@ -269,7 +312,8 @@ export function parsePlayMoves(playLeader, lines, contract) {
 		if (m3) return { suit: suitName(m3[1]), rank: normalizeRank(m3[2]) }
 		const m4 = t.match(/^([SHDC])$/i)
 		if (m4) return { suit: suitName(m4[1]), rank: null }
-		if (/^(10|[AKQJT2-9])$/i.test(t)) return { suit: null, rank: normalizeRank(t) }
+		if (/^(10|[AKQJT2-9])$/i.test(t))
+			return { suit: null, rank: normalizeRank(t) }
 		return null
 	}
 	const trump = parseTrump(contract)
@@ -297,16 +341,28 @@ export function parsePlayMoves(playLeader, lines, contract) {
 		}
 	}
 	for (const raw of lines || []) {
-		const line = String(raw || '').replace(/([;%].*)$/g, '').trim()
+		const line = String(raw || '')
+			.replace(/([;%].*)$/g, '')
+			.trim()
 		if (!line) continue
 		const parts = line.split(/\s+/).filter(Boolean)
 		let pendingSuit = null
 		for (const p of parts) {
 			const tok = parseToken(p)
 			if (!tok) continue
-			if (tok.suit && tok.rank) { carry.push(tok); continue }
-			if (tok.suit && !tok.rank) { pendingSuit = tok.suit; continue }
-			if (!tok.suit && tok.rank && pendingSuit) { carry.push({ suit: pendingSuit, rank: tok.rank }); pendingSuit = null; continue }
+			if (tok.suit && tok.rank) {
+				carry.push(tok)
+				continue
+			}
+			if (tok.suit && !tok.rank) {
+				pendingSuit = tok.suit
+				continue
+			}
+			if (!tok.suit && tok.rank && pendingSuit) {
+				carry.push({ suit: pendingSuit, rank: tok.rank })
+				pendingSuit = null
+				continue
+			}
 		}
 		flushCarry()
 	}
@@ -350,3 +406,4 @@ export function parsePlayScript(text) {
 	}
 	return out
 }
+
