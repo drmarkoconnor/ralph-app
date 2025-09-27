@@ -1498,12 +1498,10 @@ export default function DragDropCards({ meta, setMeta }) {
 										Notes
 									</div>
 									<textarea
-										className="border rounded px-1 py-0.5 text-[11px] h-16 w-full"
+										className="border rounded px-1 py-0.5 text-[11px] h-24 w-full"
 										value={meta?.notesDraft || ''}
-										onChange={(e) =>
-											setMeta?.((m) => ({ ...m, notesDraft: e.target.value }))
-										}
-										placeholder="Paste teaching notes here..."
+										onChange={(e) => setMeta?.((m) => ({ ...m, notesDraft: e.target.value }))}
+										placeholder="Teaching notes for this hand..."
 									/>
 									<div className="flex items-center gap-1">
 										<button
@@ -1511,66 +1509,22 @@ export default function DragDropCards({ meta, setMeta }) {
 											onClick={() => {
 												const raw = String(meta?.notesDraft || '').trim()
 												if (!raw) return
-												const blocks = raw.split(/\n\s*\n/).filter(Boolean)
-												const chunks = []
-												const pushChunk = (s) => {
-													const trimmed = s.trim()
-													if (!trimmed) return
-													for (let i = 0; i < trimmed.length; i += 280) {
-														chunks.push(trimmed.slice(i, i + 280))
-													}
-												}
-												if (blocks.length > 1) blocks.forEach(pushChunk)
-												else pushChunk(raw)
-												setMeta?.((m) => ({ ...m, notes: chunks.slice(0, 10) }))
+												// Single block stored as one element; PDF will wrap
+												setMeta?.((m) => ({ ...m, notes: [raw] }))
 											}}>
-											Split
+											Set Notes
 										</button>
 										<button
 											className="px-2 py-1 rounded border text-[11px]"
-											onClick={() =>
-												setMeta?.((m) => ({ ...m, notes: [], notesDraft: '' }))
-											}>
+											onClick={() => setMeta?.((m) => ({ ...m, notes: [], notesDraft: '' }))}>
 											Clear
 										</button>
 									</div>
-									<div className="flex flex-col gap-1">
-										{(meta?.notes || []).map((n, idx) => (
-											<div key={idx} className="flex items-center gap-1">
-												<input
-													className="border rounded px-1 py-0.5 text-[11px] flex-1"
-													value={n}
-													onChange={(e) => {
-														const arr = [...(meta?.notes || [])]
-														arr[idx] = e.target.value
-														setMeta?.((m) => ({ ...m, notes: arr }))
-													}}
-												/>
-												<button
-													className="px-2 py-1 rounded border text-[11px]"
-													onClick={() => {
-														const arr = (meta?.notes || []).filter(
-															(_, i) => i !== idx
-														)
-														setMeta?.((m) => ({ ...m, notes: arr }))
-													}}>
-													✕
-												</button>
-											</div>
-										))}
-										{(meta?.notes || []).length < 10 && (
-											<button
-												className="px-2 py-1 rounded border text-[11px] self-start"
-												onClick={() =>
-													setMeta?.((m) => ({
-														...m,
-														notes: [...(m.notes || []), ''],
-													}))
-												}>
-												+ Add note
-											</button>
-										)}
-									</div>
+									{(meta?.notes || []).length > 0 && (
+										<div className="mt-1 text-[10px] text-gray-600 line-clamp-4 whitespace-pre-wrap break-words border rounded p-1 bg-gray-50">
+											{meta?.notes[0]}
+										</div>
+									)}
 								</div>
 
 								<div className="pt-1 border-t space-y-1">

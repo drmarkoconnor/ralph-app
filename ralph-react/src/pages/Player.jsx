@@ -93,12 +93,14 @@ export default function Player() {
 					try { handsMap = dealToHands(d.deal) } catch { handsMap = null }
 				}
 				const notesArr = Array.isArray(d.notes) ? d.notes : (typeof d.notes === 'string' ? d.notes.split(/\n+/).filter(Boolean) : [])
+				// Merge any ext-based note lines if future tags store them (placeholder for parity with generator snapshots)
+				const combinedNotes = notesArr
 				return {
 					number: d.board || idx + 1,
 					dealer: d.dealer,
 					vul: d.vul,
 					hands: handsMap || { N:[],E:[],S:[],W:[] },
-					notes: notesArr,
+					notes: combinedNotes,
 					calls: Array.isArray(d.auction) ? d.auction : [],
 					contract: d.contract,
 					declarer: d.declarer,
