@@ -101,8 +101,24 @@ export default function Player() {
 				if (!handsMap && d.deal) {
 					try { handsMap = dealToHands(d.deal) } catch { handsMap = null }
 				}
-				const notesArr = Array.isArray(d.notes) ? d.notes : (typeof d.notes === 'string' ? d.notes.split(/\n+/).filter(Boolean) : [])
-				const combinedNotes = notesArr
+				// Collect notes: explicit notes array + any Note / Notes / NoteX tags in ext
+				let notesArr = Array.isArray(d.notes) ? d.notes : (typeof d.notes === 'string' ? d.notes.split(/\n+/).filter(Boolean) : [])
+				if (d.ext) {
+					// Single [Note "..."] tag
+					if (d.ext.Note && typeof d.ext.Note === 'string') notesArr.push(d.ext.Note)
+					// Sometimes multiple Note tags: Note0 / Note1 etc.
+					Object.keys(d.ext).forEach(k => {
+						if (/^Note\d+$/.test(k) && typeof d.ext[k] === 'string') notesArr.push(d.ext[k])
+					})
+					if (d.ext.Notes && typeof d.ext.Notes === 'string') {
+						const multi = d.ext.Notes.split(/\n+/).map(s=>s.trim()).filter(Boolean)
+						notesArr.push(...multi)
+					}
+				}
+				// De-duplicate & trim
+				notesArr = notesArr.map(s=>s.trim()).filter(Boolean)
+				const seen = new Set()
+				const combinedNotes = notesArr.filter(n=> { if (seen.has(n)) return false; seen.add(n); return true })
 				return {
 					number: d.board || idx + 1,
 					dealer: d.dealer,
