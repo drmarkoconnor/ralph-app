@@ -189,6 +189,7 @@ export default function Player(){
 	const [planEvaluated,setPlanEvaluated]=useState(false)
 	const [preAnalysis,setPreAnalysis]=useState(null) // snapshot info for planning panel
 	const [showAuctionModal,setShowAuctionModal]=useState(false)
+	const [planningOpen,setPlanningOpen]=useState(true)
 	const playIdxRef=useRef(0)
 	const pauseRef=useRef(false)
 	const fileRef=useRef(null)
@@ -216,7 +217,7 @@ export default function Player(){
 	} catch { initialTrumpRef.current=null }
 	},[hands,effTrump,effDeclarer])
 	// Planning approximations + snapshot analysis
-	useEffect(()=>{ if(!hands || !effDeclarer){ setActualWinners(null); setActualLosers(null); setPreAnalysis(null); setPlanSubmitted(false); setPlanEvaluated(false); setPlanWinners(''); setPlanLosers(''); return } try { const p=partnerOf(effDeclarer); const seats=[effDeclarer,p]; const suitList=['Spades','Hearts','Diamonds','Clubs']; const hi=['A','K','Q','J','10','9','8','7','6','5','4','3','2']; const gather=s=> seats.flatMap(seat=> hands[seat].filter(c=> c.suit===s)).sort((a,b)=> hi.indexOf(a.rank)-hi.indexOf(b.rank)); let winners=0,losers=0; const perSuit={}; for(const suit of suitList){ const cards=gather(suit); if(!cards.length){ perSuit[suit]={winners:0,losers:0,length:0}; continue } let w=0; if(cards.find(c=> c.rank==='A')) w++; if(cards.length>=2 && cards.find(c=> c.rank==='K')) w++; if(cards.length>=3 && cards.find(c=> c.rank==='Q') && (cards.find(c=> c.rank==='A')||cards.find(c=> c.rank==='K'))) w++; const top3=cards.slice(0,3); const honors=top3.filter(c=> ['A','K','Q'].includes(c.rank)).length; const l = Math.min(top3.length, 3-honors); winners+=w; losers+=l; perSuit[suit]={winners:w,losers:l,length:cards.length}; }
+	useEffect(()=>{ if(!hands || !effDeclarer){ setActualWinners(null); setActualLosers(null); setPreAnalysis(null); setPlanSubmitted(false); setPlanEvaluated(false); setPlanWinners(''); setPlanLosers(''); setPlanningOpen(true); return } try { const p=partnerOf(effDeclarer); const seats=[effDeclarer,p]; const suitList=['Spades','Hearts','Diamonds','Clubs']; const hi=['A','K','Q','J','10','9','8','7','6','5','4','3','2']; const gather=s=> seats.flatMap(seat=> hands[seat].filter(c=> c.suit===s)).sort((a,b)=> hi.indexOf(a.rank)-hi.indexOf(b.rank)); let winners=0,losers=0; const perSuit={}; for(const suit of suitList){ const cards=gather(suit); if(!cards.length){ perSuit[suit]={winners:0,losers:0,length:0}; continue } let w=0; if(cards.find(c=> c.rank==='A')) w++; if(cards.length>=2 && cards.find(c=> c.rank==='K')) w++; if(cards.length>=3 && cards.find(c=> c.rank==='Q') && (cards.find(c=> c.rank==='A')||cards.find(c=> c.rank==='K'))) w++; const top3=cards.slice(0,3); const honors=top3.filter(c=> ['A','K','Q'].includes(c.rank)).length; const l = Math.min(top3.length, 3-honors); winners+=w; losers+=l; perSuit[suit]={winners:w,losers:l,length:cards.length}; }
 		setActualWinners(winners); setActualLosers(losers);
 		// HCP + shapes
 		const hcpMap={'A':4,'K':3,'Q':2,'J':1}; const countHcp=hand=> hand.reduce((s,c)=> s+(hcpMap[c.rank]||0),0);
@@ -348,7 +349,7 @@ export default function Player(){
 				{current && hands && (
 					<div className='flex flex-col gap-6 items-center'>
 						{/* Planning Panel */}
-						{effDeclarer && history.length===0 && <div className='w-full max-w-xl rounded-lg border bg-white/70 backdrop-blur p-4 text-[12px] shadow-sm'>
+						{effDeclarer && history.length===0 && planningOpen && <div className='w-full max-w-xl rounded-lg border bg-white/70 backdrop-blur p-4 text-[12px] shadow-sm'>
 							<div className='flex items-center justify-between mb-2'><h3 className='font-semibold text-indigo-700'>Pre-Play Planning</h3>{planSubmitted && <span className='text-[10px] text-emerald-600 font-medium'>Submitted</span>}</div>
 							{(current?.theme || current?.system || (current?.notes||[]).length>0) && <div className='mb-3 text-[11px] space-y-1'>
 								{current?.theme && <div><span className='font-semibold text-indigo-600'>Theme:</span> {current.theme}</div>}
@@ -373,6 +374,10 @@ export default function Player(){
 							<div className='flex gap-2'>
 								<button disabled={planSubmitted || planWinners==='' || planLosers===''} onClick={()=>{ setPlanSubmitted(true); // evaluate plan
 									const w=parseInt(planWinners,10), l=parseInt(planLosers,10); if(actualWinners!=null && actualLosers!=null){ const wDiff=w-actualWinners; const lDiff=l-actualLosers; let quality='neutral'; let whyCat='planNeutral'; if(Math.abs(wDiff)<=1 && Math.abs(lDiff)<=1){ quality='good'; whyCat='planGood' } else if(Math.abs(wDiff)<=2 && Math.abs(lDiff)<=2){ quality='neutral'; whyCat='planNeutral' } else { quality='bad'; whyCat='planBad' } const planBanks={ planGood:['Great — your numbers are almost spot on.','Nice! You read the hand really well.','Awesome — very close to the reference count.'], planNeutral:['Pretty good first guess; you can tweak later.','Not bad; small adjustments later.','Decent start — refine after a trick or two.'], planBad:['Numbers look off; re-count your top cards and losers.','Try again: re-check each suit for winners/losers.','Off target — slow down and re-count carefully.'] }; const why=pickVariant(whyCat, planBanks[whyCat]); const next=pickVariant('planNext',['Turn losers into winners (ruff, finesse, discard).','Figure how to fix losers while keeping entries.','Plan how each loser might disappear.']); const principle=`Reference: winners ${actualWinners} / losers ${actualLosers}`; setAdviceEntries(list=> [...list,{ id: Date.now()+Math.random().toString(36).slice(2,7), quality, why, next, seat: effDeclarer, card:'', principle }]); setPlanEvaluated(true) } }} className='px-2 py-1 text-[11px] rounded bg-indigo-600 disabled:opacity-40 text-white'>Submit Plan</button>
+								<button onClick={()=>{ // skip / start immediately
+									if(!planSubmitted){ setPlanSubmitted(true); setAdviceEntries(list=> [...list,{ id: Date.now()+Math.random().toString(36).slice(2,7), quality:'neutral', why:'You skipped detailed planning. Try still counting winners/losers as you play.', next:'Track remaining trumps & spot ways to turn losers into winners.', seat: effDeclarer, card:'', principle:'Started without plan' }]) }
+									setPlanningOpen(false)
+								}} className='px-2 py-1 text-[11px] rounded border bg-white'>Start Play</button>
 								{planSubmitted && <button onClick={()=>{ setPlanSubmitted(false); setPlanEvaluated(false); setPlanWinners(''); setPlanLosers(''); }} className='px-2 py-1 text-[11px] rounded border'>Adjust</button>}
 							</div>
 							{actualWinners!=null && planSubmitted && <div className='mt-2 text-[11px] text-gray-600'>Reference count: <span className='font-semibold'>{actualWinners}</span> winners / <span className='font-semibold'>{actualLosers}</span> losers</div>}
@@ -396,7 +401,7 @@ export default function Player(){
 						{/* Cross layout with advice panel to left of North */}
 						<div className='flex items-start gap-6'>
 							{showAdvice && <div className='pt-1'><AdvicePanel entries={adviceEntries} /></div>}
-							<div className='grid grid-cols-3 grid-rows-3 gap-4 relative'>
+								<div className={`grid grid-cols-3 grid-rows-3 relative ${showAdvice? 'gap-3 -ml-2':'gap-4'}`}>
 								<div className='col-start-2 row-start-1 flex justify-center'>
 									<SeatPanel id='N' compact remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='N' || partnerOf(effDeclarer)==='N'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='N'|| partnerOf(effDeclarer)==='N')} lastAutoSeat={lastAutoSeat} />
 								</div>
