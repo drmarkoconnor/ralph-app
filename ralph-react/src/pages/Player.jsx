@@ -37,7 +37,7 @@ function parsePbn(text){
 }
 
 // --- UI Atoms ---
-function SeatPanel({ id, remaining, turnSeat, trick, onPlay, visible, dealer, vul, declarer, showHCP, lastAutoSeat, compact }){
+function SeatPanel({ id, remaining, turnSeat, trick, onPlay, visible, dealer, vul, declarer, showHCP, lastAutoSeat, highlight }){
 	const hand=remaining?.[id]||[]
 	const hcp=hand.reduce((s,c)=> s + hcpValue(c.rank),0)
 	const suitOrder=['Spades','Hearts','Diamonds','Clubs'] // reversed order requirement
@@ -45,7 +45,7 @@ function SeatPanel({ id, remaining, turnSeat, trick, onPlay, visible, dealer, vu
 	const leadSuit = trick.length>0 && trick.length<4 ? trick[0].card.suit : null
 	const mustFollow = leadSuit && hand.some(c=> c.suit===leadSuit)
 	const isTurn=turnSeat===id
-	return <div className={`rounded-xl border ${compact?'w-52':'w-60'} overflow-hidden bg-white ${compact?'text-[11px]':''} ${isTurn?'border-red-500':'border-gray-300'} ${lastAutoSeat===id?'ring-2 ring-sky-300 animate-pulse':''}`}>
+	return <div className={`rounded-xl border w-60 overflow-hidden bg-white flex flex-col ${isTurn?'border-red-500':'border-gray-300'} ${lastAutoSeat===id?'ring-2 ring-sky-300 animate-pulse':''} ${highlight? 'relative z-20 shadow-xl shadow-yellow-200/30 ring-2 ring-yellow-300':''}`}>
 		<div className={`px-2 py-1 text-[11px] font-semibold flex items-center justify-between ${isTurn?'bg-red-50': (id==='N'||id==='S')? 'bg-indigo-50':'bg-gray-50'}`}>
 			<span>{seatName(id)}{dealer===id && <span className='ml-1 text-[9px] bg-amber-500 text-white px-1 rounded'>D</span>}</span>
 			<span className='flex items-center gap-1'>
@@ -57,7 +57,7 @@ function SeatPanel({ id, remaining, turnSeat, trick, onPlay, visible, dealer, vu
 			{suitOrder.map(s => <div key={s} className='flex items-center gap-2'>
 				<div className={`w-6 text-center text-xl ${s==='Hearts'||s==='Diamonds'?'text-red-600':'text-black'}`}>{suitSymbol(s)}</div>
 				<div className='flex flex-wrap gap-1 flex-1'>
-					{visible ? grouped[s].map(c=>{ const legal=!isTurn || !leadSuit || !mustFollow || c.suit===leadSuit; return <button key={c.id} disabled={!legal||!isTurn} onClick={()=> onPlay(id,c.id)} className={`px-1 text-sm rounded ${legal&&isTurn? 'hover:bg-gray-100':'opacity-40 cursor-not-allowed'}`}>{c.rank}</button> }) : <span className='italic text-gray-400 text-sm'>hidden</span>}
+					{visible ? grouped[s].map(c=>{ const legal=!isTurn || !leadSuit || !mustFollow || c.suit===leadSuit; return <button key={c.id} disabled={!legal||!isTurn} onClick={()=> onPlay(id,c.id)} className={`px-1 text-sm rounded ${legal&&isTurn? 'hover:bg-gray-100':'opacity-40 cursor-not-allowed'} ${highlight? 'bg-white/90':''}`}>{c.rank}</button> }) : <span className='italic text-gray-400 text-sm'>hidden</span>}
 					{visible && grouped[s].length===0 && <span className='text-gray-300'>-</span>}
 				</div>
 			</div>)}
@@ -90,16 +90,16 @@ function MiniTrick({ trick, winner, turnSeat, lastAutoPlay }){
 }
 
 // Cross style current trick display (N at top, S bottom, W left, E right)
-function CrossTrick({ trick=[], winner, turnSeat, lastAutoPlay }){
+function CrossTrick({ trick=[], winner, turnSeat, lastAutoPlay, highlight }){
 	const cardFor = seat => trick.find(t=> t.seat===seat)
 	const CardBox = ({seat}) => { const t=cardFor(seat); const win = winner===seat && trick.length===4; const turn = turnSeat===seat; return (
-		<div className={`w-16 h-20 rounded-md border flex flex-col items-center justify-center text-[11px] font-semibold shadow-sm ${win? 'border-emerald-500 ring-2 ring-emerald-400':'border-gray-300'} ${turn? 'bg-yellow-50':'bg-white'}`}>
+		<div className={`w-16 h-20 rounded-md border flex flex-col items-center justify-center text-[11px] font-semibold shadow-sm ${win? 'border-emerald-500 ring-2 ring-emerald-400':'border-gray-300'} ${turn? 'bg-yellow-50':'bg-white'} ${highlight? 'shadow-xl ring-1 ring-yellow-300 bg-white/95':''}`}>
 			<div className='text-[9px] text-gray-500 mb-0.5'>{seat}</div>
 			{t? <div className={`text-base ${t.card.suit==='Hearts'||t.card.suit==='Diamonds'?'text-red-600':'text-gray-900'}`}>{t.card.rank}{suitSymbol(t.card.suit)}</div> : <span className='text-gray-300 text-sm'>—</span>}
 		</div>
 	) }
 	return (
-		<div className='relative w-64 h-64 mx-auto rounded-xl border bg-white/80 backdrop-blur-sm shadow-inner flex items-center justify-center'>
+		<div className={`relative w-64 h-64 mx-auto rounded-xl border bg-white/80 backdrop-blur-sm shadow-inner flex items-center justify-center ${highlight? 'z-20 ring-2 ring-yellow-300 shadow-xl':''}`}>
 			<div className='absolute top-2 left-1/2 -translate-x-1/2'><CardBox seat='N' /></div>
 			<div className='absolute bottom-2 left-1/2 -translate-x-1/2'><CardBox seat='S' /></div>
 			<div className='absolute left-2 top-1/2 -translate-y-1/2'><CardBox seat='W' /></div>
@@ -180,6 +180,8 @@ export default function Player(){
 	const [adviceEntries,setAdviceEntries]=useState([]) // learning feedback entries
 	const [showAdvice,setShowAdvice]=useState(true)
 	const [showCompletedTricks,setShowCompletedTricks]=useState(true)
+	// Teacher focus mode (collapses sidebar, darkens background, highlights seats & trick area)
+	const [teacherFocus,setTeacherFocus]=useState(false)
 	// Planning state
 	const [planWinners,setPlanWinners]=useState('')
 	const [planLosers,setPlanLosers]=useState('')
@@ -279,8 +281,11 @@ export default function Player(){
 	const next=()=> setIndex(i=> Math.min(deals.length-1,i+1))
 	const reset=()=> { setDeals([]); setIndex(0); setSelectedName('') }
 
+	// Escape key exits teacher focus mode
+	useEffect(()=>{ if(!teacherFocus) return; const handler=e=> { if(e.key==='Escape') setTeacherFocus(false) }; window.addEventListener('keydown',handler); return ()=> window.removeEventListener('keydown',handler) },[teacherFocus])
+
 	return (
-		<div className='min-h-screen bg-gray-100 flex'>
+		<div className='min-h-screen bg-gray-100 flex relative'>
 			{showAuctionModal && <div className='fixed inset-0 z-50 flex items-center justify-center'>
 				<div className='absolute inset-0 bg-black/30 backdrop-blur-sm' />
 				<div className='relative bg-white rounded-xl shadow-lg w-full max-w-md p-5 space-y-4'>
@@ -289,8 +294,12 @@ export default function Player(){
 					<button onClick={()=> setShowAuctionModal(false)} className='px-3 py-1.5 rounded bg-indigo-600 text-white text-sm'>Got it</button>
 				</div>
 			</div>}
+			{teacherFocus && <>
+				<div className='fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-10 pointer-events-none' />
+				<button onClick={()=> setTeacherFocus(false)} className='fixed top-2 left-2 z-30 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-semibold px-3 py-1 rounded shadow'>Exit Focus (Esc)</button>
+			</>}
 			{/* Sidebar */}
-			<div className='w-72 p-3 border-r bg-gray-50 flex flex-col gap-3 text-[11px]'>
+			<div className={`w-72 p-3 border-r bg-gray-50 flex flex-col gap-3 text-[11px] transition-all duration-300 ${teacherFocus? 'opacity-0 -translate-x-full pointer-events-none':''}`}>
 				<div className='flex items-center justify-between'>
 					<Link to='/' className='text-sky-600 hover:underline text-[12px]'>← Home</Link>
 					<Link to='/player/help' className='text-sky-600 hover:underline text-[12px]'>Help</Link>
@@ -318,6 +327,7 @@ export default function Player(){
 					<label className='flex items-center gap-1'><input type='checkbox' checked={pauseAtTrickEnd} onChange={e=> { setPauseAtTrickEnd(e.target.checked); pauseRef.current=e.target.checked }} /> <span>Pause at trick end</span></label>
 					<label className='flex items-center gap-1'><input type='checkbox' checked={showAdvice} onChange={e=> setShowAdvice(e.target.checked)} /> <span>Show advice panel</span></label>
 					<label className='flex items-center gap-1'><input type='checkbox' checked={showCompletedTricks} onChange={e=> setShowCompletedTricks(e.target.checked)} /> <span>Show completed tricks</span></label>
+					{!teacherFocus && <button onClick={()=> setTeacherFocus(true)} className='mt-1 w-full px-2 py-1 rounded bg-yellow-500 hover:bg-yellow-600 text-white font-semibold shadow'>Teacher focus</button>}
 				</div>
 				{!current?.contract && <div className='space-y-1 border-t pt-2'>
 					<div className='font-semibold'>Set contract</div>
@@ -344,7 +354,7 @@ export default function Player(){
 				</div>}
 			</div>
 			{/* Main content */}
-			<div className='flex-1 p-4 flex flex-col gap-4'>
+			<div className='flex-1 p-4 flex flex-col gap-4 relative'>
 				{!current && deals.length===0 && <PreUpload onChooseFile={()=> fileRef.current?.click()} />}
 				{current && hands && (
 					<div className='flex flex-col gap-6 items-center'>
@@ -401,26 +411,26 @@ export default function Player(){
 						</div>}
 						{/* Cross layout with advice panel to left of North */}
 						<div className='flex items-start gap-6'>
-							{showAdvice && <div className='pt-1'><AdvicePanel entries={adviceEntries} /></div>}
-								<div className={`grid grid-cols-3 grid-rows-3 relative ${showAdvice? 'gap-3 -ml-2':'gap-4'}`}>
+							{showAdvice && !teacherFocus && <div className='pt-1'><AdvicePanel entries={adviceEntries} /></div>}
+								<div className={`grid grid-cols-3 grid-rows-3 relative ${showAdvice && !teacherFocus? 'gap-3 -ml-6':'gap-4 -ml-4'} ${teacherFocus? 'z-20':''}`}>
 								<div className='col-start-2 row-start-1 flex justify-center'>
-									<SeatPanel id='N' compact remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='N' || partnerOf(effDeclarer)==='N'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='N'|| partnerOf(effDeclarer)==='N')} lastAutoSeat={lastAutoSeat} />
+									<SeatPanel id='N' highlight={teacherFocus} remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='N' || partnerOf(effDeclarer)==='N'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='N'|| partnerOf(effDeclarer)==='N')} lastAutoSeat={lastAutoSeat} />
 								</div>
 									{/* Contract badge to right of North (col 3, row 1) */}
-									{effContract && <div className='col-start-3 row-start-1 flex justify-start items-start'>
-										<ContractBadge contract={effContract} declarer={effDeclarer} />
+									{(effContract || (current?.auction?.length)) && <div className='col-start-3 row-start-1 flex justify-start items-start'>
+										<AuctionGraphic auction={current?.auction||[]} dealer={current?.auctionDealer||current?.dealer} contract={effContract} declarer={effDeclarer} />
 									</div>}
 								<div className='col-start-1 row-start-2 flex justify-center items-center'>
-									<SeatPanel id='W' remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='W' || partnerOf(effDeclarer)==='W'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='W'|| partnerOf(effDeclarer)==='W')} lastAutoSeat={lastAutoSeat} />
+									<SeatPanel id='W' highlight={teacherFocus} remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='W' || partnerOf(effDeclarer)==='W'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='W'|| partnerOf(effDeclarer)==='W')} lastAutoSeat={lastAutoSeat} />
 								</div>
 								<div className='col-start-3 row-start-2 flex justify-center items-center'>
-									<SeatPanel id='E' remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='E' || partnerOf(effDeclarer)==='E'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='E'|| partnerOf(effDeclarer)==='E')} lastAutoSeat={lastAutoSeat} />
+									<SeatPanel id='E' highlight={teacherFocus} remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='E' || partnerOf(effDeclarer)==='E'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='E'|| partnerOf(effDeclarer)==='E')} lastAutoSeat={lastAutoSeat} />
 								</div>
 								<div className='col-start-2 row-start-3 flex justify-center'>
-									<SeatPanel id='S' compact remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='S' || partnerOf(effDeclarer)==='S'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='S'|| partnerOf(effDeclarer)==='S')} lastAutoSeat={lastAutoSeat} />
+									<SeatPanel id='S' highlight={teacherFocus} remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='S' || partnerOf(effDeclarer)==='S'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='S'|| partnerOf(effDeclarer)==='S')} lastAutoSeat={lastAutoSeat} />
 								</div>
 								<div className='col-start-2 row-start-2 flex items-center justify-center'>
-									<CrossTrick trick={trick} winner={flashWinner} turnSeat={turnSeat} lastAutoPlay={lastAutoPlay} />
+									<CrossTrick trick={trick} winner={flashWinner} turnSeat={turnSeat} lastAutoPlay={lastAutoPlay} highlight={teacherFocus} />
 								</div>
 							</div>
 						</div>
@@ -436,17 +446,49 @@ function ContractBadge({ contract, declarer }){
 	if(!contract) return null
 	// parse contract like 4S, 3NT, 2HX, 5DXX
 	const m=contract.match(/^(\d)([CDHSN]{1,2})(X{0,2})$/i)
-	if(!m) return <div className='rounded-lg border bg-white px-3 py-2 text-sm font-semibold'>{contract}</div>
+	if(!m) return <div className='rounded-xl border-2 border-indigo-300 bg-gradient-to-br from-sky-50 to-indigo-50 px-5 py-3 text-xl font-bold tracking-wide'>{contract}</div>
 	const level=m[1]; let strain=m[2].toUpperCase(); const dbl=m[3];
 	const suitMap={ C:'♣', D:'♦', H:'♥', S:'♠', NT:'NT', N:'NT' };
 	if(strain==='N') strain='NT'
 	const sym=suitMap[strain]||strain; const isRed = strain==='H'||strain==='D'
-	const colorClass=isRed? 'text-rose-600':'text-gray-800'
-	const bgGrad=isRed? 'from-rose-50 to-amber-50':'from-emerald-50 to-sky-50'
-	return <div className={`relative rounded-xl border-2 border-indigo-300 bg-gradient-to-br ${bgGrad} shadow px-4 py-3 flex flex-col items-center min-w-[90px]`}>
-		<div className='text-[10px] tracking-wide text-indigo-600 font-semibold mb-0.5'>CONTRACT</div>
-		<div className={`text-3xl font-bold leading-none ${colorClass}`}>{level}{sym}{dbl && <span className='text-indigo-700 text-2xl ml-0.5'>{dbl}</span>}</div>
-		{declarer && <div className='mt-1 text-[11px] font-medium text-indigo-700'>Decl: {declarer}</div>}
+	const colorClass=isRed? 'text-rose-600 drop-shadow-sm':'text-slate-800 drop-shadow-sm'
+	const bgGrad=isRed? 'from-rose-100 via-amber-50 to-rose-50':'from-emerald-100 via-sky-50 to-indigo-100'
+	return <div className={`relative rounded-2xl border-4 border-indigo-300/70 bg-gradient-to-br ${bgGrad} shadow-lg px-6 py-4 flex flex-col items-center justify-center min-w-[120px]`}> 
+		<div className='text-[11px] tracking-wider text-indigo-700 font-semibold mb-1'>FINAL CONTRACT</div>
+		<div className={`text-5xl font-extrabold leading-none ${colorClass}`}>{level}{sym}{dbl && <span className='text-indigo-700 text-3xl ml-1'>{dbl}</span>}</div>
+		{declarer && <div className='mt-2 text-[12px] font-semibold text-indigo-700 bg-white/60 px-2 py-0.5 rounded-full shadow-inner'>Declarer {declarer}</div>}
 	</div>
+}
+
+// Auction graphic (bigger, color-coded) including final contract
+function AuctionGraphic({ auction=[], dealer='N', contract, declarer }){
+	if(!auction.length && !contract) return null
+	// Build seats order per round
+	const seats=['N','E','S','W']
+	const startIdx=seats.indexOf(dealer||'N')
+	const orderedSeats=[0,1,2,3].map(i=> seats[(startIdx+i)%4])
+	// chunk auction into rounds of 4 (pad with blanks)
+	const rounds=[]; for(let i=0;i<auction.length;i+=4){ rounds.push(auction.slice(i,i+4)) }
+	while(rounds.length && rounds[rounds.length-1].length<4) rounds[rounds.length-1].push('')
+	const callClass=c=> c===''? 'text-gray-300' : /^(P|Pass)$/i.test(c)? 'text-gray-500' : /^(X|XX)$/.test(c)? 'text-indigo-700 font-semibold': 'font-semibold'
+	return (
+		<div className='flex items-center gap-6'>
+			<div className='rounded-2xl border-2 border-indigo-200 bg-white/80 backdrop-blur px-4 py-3 shadow-inner'>
+				<div className='text-[11px] font-semibold tracking-wide text-indigo-600 mb-1'>AUCTION (Dealer {dealer})</div>
+				<table className='text-sm font-medium'>
+					<thead>
+						<tr>{orderedSeats.map(s=> <th key={s} className='px-2 py-1 text-indigo-700 font-semibold'>{s}</th>)}</tr>
+					</thead>
+					<tbody>
+						{rounds.map((r,i)=> <tr key={i}>{orderedSeats.map((seat,idx)=>{ const call=r[idx]||''; const final=call && (i*4+idx===auction.length-1); const base=`px-2 py-0.5 text-center rounded transition-colors ${callClass(call)}`; return <td key={seat} className='p-0'>
+							<span className={`${base} ${final? 'bg-yellow-200/70 ring-2 ring-yellow-400 shadow font-bold':''}`}>{call||'—'}</span>
+						</td> })}</tr>)}
+					</tbody>
+				</table>
+				{!auction.length && <div className='text-[11px] italic text-gray-500'>No auction provided (manual contract)</div>}
+			</div>
+			<ContractBadge contract={contract} declarer={declarer} />
+		</div>
+	)
 }
 

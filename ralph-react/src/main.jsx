@@ -7,11 +7,13 @@ import Instructions from './pages/Instructions.jsx'
 import Sources from './pages/Sources.jsx'
 import Home from './pages/Home.jsx'
 import Player from './pages/Player.jsx'
+import PlayerHelp from './pages/PlayerHelp.jsx'
 
 const router = createBrowserRouter([
 	{ path: '/', element: <Home /> },
 	{ path: '/picker', element: <App /> },
 	{ path: '/player', element: <Player /> },
+	{ path: '/player/help', element: <PlayerHelp /> },
 	{ path: '/instructions', element: <Instructions /> },
 	{ path: '/sources', element: <Sources /> },
 ])

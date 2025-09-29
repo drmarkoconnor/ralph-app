@@ -85,6 +85,12 @@ export function evaluateTrick(trickArr, trumpSuit) {
 	}
 	return best.seat
 }
+
+// Debug helper: capture a lightweight snapshot of a trick for logging
+export function debugTrickSnapshot(trickArr) {
+	if (!Array.isArray(trickArr)) return []
+	return trickArr.map(t => `${t.seat}:${t.card.rank}${t.card.suit[0]}`)
+}
 export function dealToHands(dealStr) {
 	const m = String(dealStr || '').match(/^([NESW]):\s*(.+)$/)
 	if (!m) throw new Error('Bad Deal string')
