@@ -156,6 +156,7 @@ export default function Player(){
 	const [aiLogs,setAiLogs]=useState([])
 	const [adviceEntries,setAdviceEntries]=useState([]) // learning feedback entries
 	const [showAdvice,setShowAdvice]=useState(true)
+	const [showCompletedTricks,setShowCompletedTricks]=useState(true)
 	// Planning state
 	const [planWinners,setPlanWinners]=useState('')
 	const [planLosers,setPlanLosers]=useState('')
@@ -243,6 +244,7 @@ export default function Player(){
 					</div>}
 					<label className='flex items-center gap-1'><input type='checkbox' checked={pauseAtTrickEnd} onChange={e=> { setPauseAtTrickEnd(e.target.checked); pauseRef.current=e.target.checked }} /> <span>Pause at trick end</span></label>
 					<label className='flex items-center gap-1'><input type='checkbox' checked={showAdvice} onChange={e=> setShowAdvice(e.target.checked)} /> <span>Show advice panel</span></label>
+					<label className='flex items-center gap-1'><input type='checkbox' checked={showCompletedTricks} onChange={e=> setShowCompletedTricks(e.target.checked)} /> <span>Show completed tricks</span></label>
 				</div>
 				{!current?.contract && <div className='space-y-1 border-t pt-2'>
 					<div className='font-semibold'>Set contract</div>
@@ -263,6 +265,9 @@ export default function Player(){
 					<div className='space-y-0.5'>
 						{aiLogs.slice().reverse().map(l=> <div key={l.id} className='truncate'><span className='font-mono text-[9px] text-gray-500 mr-1'>{l.seat}</span>{l.text}</div>)}
 					</div>
+				</div>}
+				{showCompletedTricks && <div className='rounded border bg-white p-1 text-[10px] max-h-60 overflow-auto'>
+					<CompletedTricks tricks={completedTrickList} />
 				</div>}
 			</div>
 			{/* Main content */}
@@ -315,9 +320,6 @@ export default function Player(){
 									<CrossTrick trick={trick} winner={flashWinner} turnSeat={turnSeat} lastAutoPlay={lastAutoPlay} />
 								</div>
 							</div>
-						</div>
-						<div className='w-full flex flex-wrap justify-center gap-6'>
-							<CompletedTricks tricks={completedTrickList} />
 						</div>
 					</div>
 				)}
