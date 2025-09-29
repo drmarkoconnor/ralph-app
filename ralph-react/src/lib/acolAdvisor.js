@@ -42,11 +42,11 @@ function seedFrom(hash){ let h=0; for(const ch of hash) h=(h*131 + ch.charCodeAt
 function partnerOf(seat){ return seat==='N'?'S': seat==='S'?'N': seat==='E'?'W':'E'; }
 
 function chooseOpening(fiveMajor, hcpVal, lens){
-  if(fiveMajor && hcpVal>=12) return '1'+(fiveMajor==='S'?'♠':'♥');
+  if(fiveMajor && hcpVal>=12) return '1'+(fiveMajor==='S'?'S':'H');
   const balanced = isBalanced(lens);
   if(balanced && hcpVal>=12 && hcpVal<=14 && !fiveMajor) return '1NT';
-  if(lens.D>=3 && lens.D>=lens.C) return '1♦';
-  return '1♣';
+  if(lens.D>=3 && lens.D>=lens.C) return '1D';
+  return '1C';
 }
 
 function buildMainline(deal, HCP, lengths, opening){
@@ -54,9 +54,9 @@ function buildMainline(deal, HCP, lengths, opening){
   const partner = partnerOf(opener);
   const partnerHcp = HCP[partner];
   const partnerLengths = lengths[partner];
-  const hasFit = /1[♠♥]/.test(opening) && partnerLengths[ opening.endsWith('♠')?'S':'H'] >= 3;
+  const hasFit = /1[SH]/.test(opening) && partnerLengths[ opening.endsWith('S')?'S':'H'] >= 3;
   const seq = [ opening, 'P' ];
-  if(/1[♠♥]/.test(opening)){
+  if(/1[SH]/.test(opening)){
     if(partnerHcp <=5){ seq.push('P'); }
     else if(partnerHcp<=9 && !hasFit){ seq.push('1NT'); }
     else if(partnerHcp<=8 && hasFit){ seq.push('2'+opening[1]); }
@@ -71,10 +71,17 @@ function buildMainline(deal, HCP, lengths, opening){
   seq.push('P');
   const openerHcp = HCP[opener];
   const last = seq[seq.length-2];
-  if(/1[♠♥]/.test(opening) && last==='1NT'){
+  if(/1[SH]/.test(opening) && last==='1NT'){
     if(openerHcp>=18) seq.push('4'+opening[1]); else seq.push('2'+opening[1]);
   } else seq.push('P');
-  while(seq.length<8) seq.push('P');
+  // Ensure final three passes only if needed later (render layer will compress)
+  // Guarantee at least final pass closure
+  if(seq[seq.length-1] !== 'P') seq.push('P');
+  if(seq.filter(c=> c!=='P').length>0){
+    // add remaining passes to make contract closed (3 passes after last call)
+    let trailing = 0; for(let i=seq.length-1;i>=0 && seq[i]==='P'; i--) trailing++;
+    while(trailing < 3){ seq.push('P'); trailing++; }
+  }
   const bullets = buildBullets(opening, opener, partner, HCP, lengths, seq);
   return { label: 'Mainline ACOL', seq, prob: 0, bullets };
 }
@@ -82,12 +89,12 @@ function buildMainline(deal, HCP, lengths, opening){
 function buildAlternatives(mainline, deal, HCP, lengths, rng){
   const opening = mainline.seq[0];
   const alts = [];
-  if(/1[♠♥]/.test(opening)){
-    alts.push({ label: 'Off-book 2♦', seq: [opening,'P','2♦','P','2'+opening[1],'P','P','P'], prob:0, bullets:[ 'Some bid 2♦ lightly; ACOL expects 9+ at 2-level.', `Opener returns to ${opening[1]}.`, 'Risk of missing game opposite strong opener.' ] });
-    alts.push({ label: 'Optimistic raise', seq: [opening,'P','2'+opening[1],'P','4'+opening[1],'P','P','P'], prob:0, bullets:[ 'Thin raise with weak values.', 'Game only works with max opener.', 'Disciplined evaluation preferred.' ] });
+  if(/1[SH]/.test(opening)){
+    alts.push({ label: 'Off-book 2D', seq: [opening,'P','2D','P','2'+opening[1],'P','P','P'], prob:0, bullets:[ 'Some bid 2D lightly (needs 9+ HCP at 2-level).', `Opener returns to ${opening[1]} partscore.`, 'Risk: miss game opposite a strong opener.' ] });
+    alts.push({ label: 'Optimistic raise', seq: [opening,'P','2'+opening[1],'P','4'+opening[1],'P','P','P'], prob:0, bullets:[ 'Light raise with insufficient values.', 'Game succeeds only with max opener.', 'Better to evaluate fit + points first.' ] });
   } else {
-    alts.push({ label: 'Conservative sign-off', seq:[opening,'P','P','P','P','P','P','P'], prob:0, bullets:[ 'Responder passes marginal values.', 'Could miss thin game.', 'Reassess combined HCP.' ] });
-    alts.push({ label: 'Direct 3NT', seq:[opening,'P','3NT','P','P','P','P','P'], prob:0, bullets:[ 'Pushes straight to game.', 'Fails opposite minimum.', 'Judge stoppers & intermediates.' ] });
+    alts.push({ label: 'Conservative sign-off', seq:[opening,'P','P','P','P','P','P','P'], prob:0, bullets:[ 'Responder passes marginal values.', 'Could miss thin game opposite max.', 'Weigh intermediates + shape.' ] });
+    alts.push({ label: 'Direct 3NT', seq:[opening,'P','3NT','P','P','P','P','P'], prob:0, bullets:[ 'Jumps straight to game.', 'Fails opposite minimum opener.', 'Need reliable stoppers & texture.' ] });
   }
   return alts.slice(0,2);
 }
@@ -96,11 +103,13 @@ function assignProb(lines){ if(!lines.length) return; const main = lines[0]; mai
 function finalAction(seq){ return [...seq].reverse().find(c=> c!=='P')||'P'; }
 function estimateLosers(h,lens){ const approx = Math.round((24-h)/3); return Math.min(6, Math.max(2, approx)); }
 function buildBullets(opening, opener, partner, HCP, lengths, seq){
-  const major = /1[♠♥]/.test(opening)? opening[1]: null;
+  const major = /1[SH]/.test(opening)? opening[1]: null;
   const bullets=[];
-  bullets.push(`Responder ${HCP[partner]} HCP${major? ' with '+major+' '+lengths[partner][major==='♠'?'S':'H']:''} chooses ${seq[2]||'P'}.`);
-  bullets.push(`Opener ${HCP[opener]} HCP ${major? 'supports major':'evaluates'} -> ${finalAction(seq)}.`);
-  bullets.push(`Plan: losers ≈${estimateLosers(HCP[opener], lengths[opener])}; manage entries & danger hand.`);
+  const partnerSuitLen = major? lengths[partner][major]: null;
+  const responderAction = seq.find((c,i)=> i>0 && c!=='P');
+  bullets.push(`Responder has ${HCP[partner]} HCP${major? ` with ${partnerSuitLen} card ${major}`:''} and bids ${responderAction||'Pass'}.`);
+  bullets.push(`Opener ${HCP[opener]} HCP ${major? 'supports the major':'has no major fit'} – auction ends at ${finalAction(seq)}.`);
+  bullets.push(`Plan: approx ${estimateLosers(HCP[opener], lengths[opener])} losers; focus on entries & danger hand.`);
   return bullets.slice(0,3);
 }
 function buildTeacherFocus(mainline, HCP, lengths, deal){
@@ -125,7 +134,7 @@ export function buildAcolAdvice(deal){
   return { dealHash: hash, board: deal.number||0, meta: { dealer: opener, vul: deal.vul||'None', system: deal.meta?.system || 'ACOL' }, auctions: lines, recommendation_index: 0, final_contract, teacher_focus: buildTeacherFocus(mainline, HCP, lengths, deal) };
 }
 
-function parseContract(call){ const m = call && call.match(/^(\d)([♠♥♦♣]|NT)$/); if(!m) return null; return { by: 'N', level: parseInt(m[1],10), strain: m[2] }; }
+function parseContract(call){ const m = call && call.match(/^(\d)([SHDC]|NT)$/); if(!m) return null; return { by: 'N', level: parseInt(m[1],10), strain: m[2] }; }
 
 // Simple in-memory cache so multiple exports avoid recompute
 const _adviceCache = new Map();
