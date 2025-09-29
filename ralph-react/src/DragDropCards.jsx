@@ -854,6 +854,18 @@ export default function DragDropCards({ meta, setMeta }) {
 						}
 						return deal
 					})
+					if (includeAuctionAdvice) {
+						const withAdvice = dealsForPdf.filter((d) => d.auctionAdvice)
+						if (withAdvice.length === 0) {
+							console.warn(
+								'[Handout] No auction advice attached to any deal - advisor may have failed to load.'
+							)
+						} else if (withAdvice.length < dealsForPdf.length) {
+							console.warn(
+								`[Handout] Auction advice present for ${withAdvice.length}/${dealsForPdf.length} deals.`
+							)
+						}
+					}
 					const now = new Date()
 					const yyyy = now.getFullYear()
 					const mm = String(now.getMonth() + 1).padStart(2, '0')

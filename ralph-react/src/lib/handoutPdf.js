@@ -11,6 +11,28 @@ export async function generateHandoutPDF(deals, options = {}) {
 	} = options
 	if (!Array.isArray(deals) || !deals.length)
 		throw new Error('No deals provided')
+
+	// Opportunistically build auction advice for any deals missing it (best-effort, silent on failure)
+	try {
+		const needAdvice = deals.some((d) => !d.auctionAdvice && d && d.hands)
+		if (needAdvice) {
+			const mod = await import('./acolAdvisor.js')
+			if (mod && mod.getOrBuildAcolAdvice) {
+				deals.forEach((d) => {
+					if (!d.auctionAdvice) {
+						try {
+							const adv = mod.getOrBuildAcolAdvice(d)
+							if (adv) d.auctionAdvice = adv
+						} catch (e) {
+							// Swallow; PDF still renders without advice
+						}
+					}
+				})
+			}
+		}
+	} catch (e) {
+		// ignore
+	}
 	const { jsPDF } = await import('jspdf')
 	const doc = new jsPDF({ unit: 'mm', format: 'a4' })
 	const pageW = 210
@@ -119,6 +141,19 @@ export async function generateHandoutPDF(deals, options = {}) {
 			}
 		}
 		return ''
+	}
+
+	// Attempt to load pre-computed auction advice if path / field provided on deal
+	const resolveAdviceFor = (dealObj) => {
+		// Expect dealObj.dealHash or dealObj.meta.dealHash and global window.__auctionAdvice map OR embedded advice
+		if (dealObj.auctionAdvice) return dealObj.auctionAdvice
+		try {
+			if (typeof window !== 'undefined' && window.__auctionAdvice) {
+				const key = dealObj.dealHash || (dealObj.meta && dealObj.meta.dealHash)
+				return window.__auctionAdvice[key]
+			}
+		} catch {}
+		return null
 	}
 
 	const drawBlock = (dealObj) => {
@@ -250,12 +285,9 @@ export async function generateHandoutPDF(deals, options = {}) {
 		;['N', 'W', 'E', 'S'].forEach(drawSeat)
 
 		// Auction (full mode) placed under diagram spanning notes + diagram width (leave meta column untouched)
-		if (
-			mode === 'full' &&
-			Array.isArray(dealObj.calls) &&
-			dealObj.calls.length
-		) {
-			const auctionTop = diagramTopY + seatDy + 10
+		let lastContentY = diagramTopY + seatDy + 10
+		if (mode === 'full' && Array.isArray(dealObj.calls) && dealObj.calls.length) {
+			const auctionTop = lastContentY
 			doc.setFontSize(7)
 			doc.setFont('helvetica', 'bold')
 			doc.text('Auction', leftX, auctionTop)
@@ -267,6 +299,43 @@ export async function generateHandoutPDF(deals, options = {}) {
 				const col = idx % 4
 				const r = Math.floor(idx / 4)
 				doc.text(String(call), leftX + col * colWidth, auctionTop + 8 + r * 4)
+			})
+			lastContentY = auctionTop + 8 + Math.ceil(dealObj.calls.length / 4) * 4 + 2
+		}
+
+		// Integrate auction advice (if available) ALWAYS (basic & full) below auction / diagram
+		const advice = resolveAdviceFor(dealObj)
+		if (advice && advice.auctions && advice.auctions.length) {
+			// horizontal rule
+			doc.setDrawColor(150)
+			doc.setLineWidth(0.2)
+			doc.line(leftX, lastContentY + 2, leftX + notesW + gutter + diagramAreaW, lastContentY + 2)
+			let y = lastContentY + 5
+			doc.setFont('helvetica', 'bold')
+			doc.setFontSize(7.5)
+			doc.text('Auction Advice (ACOL)', leftX, y)
+			y += 3.5
+			const main = advice.auctions[advice.recommendation_index || 0]
+			// Recommended line
+			doc.setFont('helvetica', 'bold')
+			doc.setFontSize(7)
+			doc.text(`Mainline: ${main.seq.join(' ')}`, leftX, y, { maxWidth: notesW + diagramAreaW - 2 })
+			y += 3.2
+			doc.setFont('helvetica', 'normal')
+			doc.setFontSize(6.5)
+			main.bullets.slice(0,3).forEach(b=>{
+				const lines = doc.splitTextToSize('• ' + b, notesW + diagramAreaW - 4)
+				lines.forEach(line=>{ doc.text(line, leftX+1.5, y); y += 3 })
+			})
+			// Alternatives (probabilities in one line each)
+			y += 1.5
+			doc.setFont('helvetica','bold')
+			doc.text('Alternatives:', leftX, y); y+=3
+			doc.setFont('helvetica','normal')
+			advice.auctions.filter((_,i)=> i!== (advice.recommendation_index||0)).forEach(a=>{
+				const line = `${a.label} (${(a.prob*100).toFixed(0)}%): ${a.seq.join(' ')}`
+				const lines = doc.splitTextToSize(line, notesW + diagramAreaW - 4)
+				lines.forEach(l=>{ doc.text(l, leftX+1.5, y); y += 3 })
 			})
 		}
 	}
