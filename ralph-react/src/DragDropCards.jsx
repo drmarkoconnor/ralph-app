@@ -158,6 +158,8 @@ export default function DragDropCards({ meta, setMeta }) {
 	const isIPhone = useIsIPhone()
 	const [activeSeat, setActiveSeat] = useState('N')
 	const [includeHandout, setIncludeHandout] = useState(false)
+	const [includeAuctionAdvice, setIncludeAuctionAdvice] = useState(true)
+	const [adviceReady, setAdviceReady] = useState(false)
 	// handoutMode deprecated – always full now
 	const handoutMode = 'full'
 
@@ -809,6 +811,7 @@ export default function DragDropCards({ meta, setMeta }) {
 				try {
 					// Use shared PDF generator for consistency
 					const { generateHandoutPDF } = await import('./lib/handoutPdf')
+					let { getOrBuildAcolAdvice } = await import('./lib/acolAdvisor.js')
 					// Normalize saved hands into shared format
 					const dealsForPdf = savedHands.map((h, i) => {
 						const boardNo = startBoard + i
@@ -820,6 +823,7 @@ export default function DragDropCards({ meta, setMeta }) {
 							.split(/\s+/)
 							.filter(Boolean)
 							.map((t) => (t === 'P' ? 'Pass' : t))
+						// Build base deal object
 						return {
 							number: boardNo,
 							dealer,
@@ -840,6 +844,15 @@ export default function DragDropCards({ meta, setMeta }) {
 								auctionText: h.meta?.auctionText,
 							},
 						}
+						if (includeAuctionAdvice) {
+							try {
+								const adv = getOrBuildAcolAdvice(deal)
+								if (adv) deal.auctionAdvice = adv
+							} catch (e) {
+								console.warn('Auction advice generation failed for board', boardNo, e)
+							}
+						}
+						return deal
 					})
 					const now = new Date()
 					const yyyy = now.getFullYear()
@@ -1556,6 +1569,16 @@ export default function DragDropCards({ meta, setMeta }) {
 										/>
 										<span>Full Handout PDF</span>
 									</label>
+									{includeHandout && (
+										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none">
+											<input
+												type="checkbox"
+												checked={includeAuctionAdvice}
+												onChange={(e) => setIncludeAuctionAdvice(e.target.checked)}
+											/>
+											<span>Auction Advice</span>
+										</label>
+									)}
 									<span className="text-[11px] text-gray-600">
 										Saved: {savedHands.length}
 									</span>
