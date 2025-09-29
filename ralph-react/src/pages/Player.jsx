@@ -23,7 +23,7 @@ function SeatPanel({ id, remaining, turnSeat, trick, onPlay, visible, dealer, vu
 	const mustFollow = leadSuit && hand.some(c=> c.suit===leadSuit)
 	const isTurn=turnSeat===id
 	return <div className={`rounded-xl border ${compact?'w-52':'w-60'} overflow-hidden bg-white ${compact?'text-[11px]':''} ${isTurn?'border-red-500':'border-gray-300'} ${lastAutoSeat===id?'ring-2 ring-sky-300 animate-pulse':''}`}>
-		<div className={`px-2 py-1 text-[11px] font-semibold flex items-center justify-between ${isTurn?'bg-red-50':'bg-gray-50'}`}>
+		<div className={`px-2 py-1 text-[11px] font-semibold flex items-center justify-between ${isTurn?'bg-red-50': (id==='N'||id==='S')? 'bg-indigo-50':'bg-gray-50'}`}>
 			<span>{seatName(id)}{dealer===id && <span className='ml-1 text-[9px] bg-amber-500 text-white px-1 rounded'>D</span>}</span>
 			<span className='flex items-center gap-1'>
 				{isSeatVul(vul,id) && <span className='text-[8px] px-1 rounded bg-rose-600 text-white'>V</span>}
@@ -98,6 +98,7 @@ function AdvicePanel({ entries }){
 		<div className='text-gray-700 leading-snug'>{latest.why}</div>
 		<div className='text-indigo-800 text-[13px] font-medium'>Next Thought</div>
 		<div className='text-indigo-700 leading-snug'>{latest.next}</div>
+		{latest.principle && <div className='text-[11px] text-indigo-900 bg-indigo-100/60 border border-indigo-200 px-2 py-1 rounded'>{latest.principle}</div>}
 		{entries.length>1 && <details className='text-[11px] mt-1'>
 			<summary className='cursor-pointer text-gray-500 hover:text-gray-700'>Previous advice history</summary>
 			<ul className='mt-1 max-h-40 overflow-auto space-y-1 pr-1'>
@@ -155,6 +156,13 @@ export default function Player(){
 	const [aiLogs,setAiLogs]=useState([])
 	const [adviceEntries,setAdviceEntries]=useState([]) // learning feedback entries
 	const [showAdvice,setShowAdvice]=useState(true)
+	// Planning state
+	const [planWinners,setPlanWinners]=useState('')
+	const [planLosers,setPlanLosers]=useState('')
+	const [actualWinners,setActualWinners]=useState(null)
+	const [actualLosers,setActualLosers]=useState(null)
+	const [planSubmitted,setPlanSubmitted]=useState(false)
+	const [planEvaluated,setPlanEvaluated]=useState(false)
 	const playIdxRef=useRef(0)
 	const pauseRef=useRef(false)
 	const fileRef=useRef(null)
@@ -179,69 +187,14 @@ export default function Player(){
 		initialTrumpRef.current={decl:declCount,dummy:dummyCount,def: defCount,total: declCount+dummyCount+defCount}
 	} catch { initialTrumpRef.current=null }
 	},[hands,effTrump,effDeclarer])
+	// Planning approximations
+	useEffect(()=>{ if(!hands || !effDeclarer){ setActualWinners(null); setActualLosers(null); setPlanSubmitted(false); setPlanEvaluated(false); setPlanWinners(''); setPlanLosers(''); return } try { const p=partnerOf(effDeclarer); const seats=[effDeclarer,p]; const hi=['A','K','Q','J','10','9','8','7','6','5','4','3','2']; const gather=s=> seats.flatMap(seat=> hands[seat].filter(c=> c.suit===s)).sort((a,b)=> hi.indexOf(a.rank)-hi.indexOf(b.rank)); let winners=0,losers=0; for(const suit of ['Spades','Hearts','Diamonds','Clubs']){ const cards=gather(suit); if(!cards.length) continue; if(cards.find(c=> c.rank==='A')) winners++; if(cards.length>=2 && cards.find(c=> c.rank==='K')) winners++; if(cards.length>=3 && cards.find(c=> c.rank==='Q') && (cards.find(c=> c.rank==='A')||cards.find(c=> c.rank==='K'))) winners++; const top3=cards.slice(0,3); const honors=top3.filter(c=> ['A','K','Q'].includes(c.rank)).length; losers += Math.min(top3.length, 3-honors) } setActualWinners(winners); setActualLosers(losers) } catch { setActualWinners(null); setActualLosers(null) } },[hands,effDeclarer])
 
 	// Heuristic evaluation of declarer side play
-	const evaluateDeclarerPlay = useCallback((params)=>{
-		const { seat, suit, rank, preRemaining, postState, effTrump, trickBefore } = params
-		if(!effTrump) return {quality:'neutral', why:'No trump contract: baseline guidance only.', next:'Focus on establishing long suits and maintaining entries.'}
-		if(!effDeclarer) return {quality:'neutral', why:'Declarer unknown yet.', next:'Once declarer identified, think about trump control first.'}
-		const partner = partnerOf(effDeclarer)
-		const isDeclarerSeat = seat===effDeclarer
-		const isDummySeat = seat===partner
-		// Count remaining trumps after play
-		const remainingAfter = postState.remaining
-		const declTrumpsAfter = remainingAfter[effDeclarer].filter(c=> c.suit===effTrump).length
-		const dummyTrumpsAfter = remainingAfter[partner].filter(c=> c.suit===effTrump).length
-		const defendersSeats = ['N','E','S','W'].filter(s=> s!==effDeclarer && s!==partner)
-		const defendersTrumpsAfter = defendersSeats.reduce((n,s)=> n + remainingAfter[s].filter(c=> c.suit===effTrump).length,0)
-		// Lead suit for this trick BEFORE the play
-		const leadSuit = trickBefore.length>0 && trickBefore.length<4 ? trickBefore[0].card.suit : null
-		const followedLead = leadSuit? suit===leadSuit : null
-		const wasRuff = leadSuit && suit===effTrump && leadSuit!==effTrump && !preRemaining[seat].some(c=> c.suit===leadSuit)
-		// Basic heuristics
-		let quality='neutral'; let why=''; let next=''
-		const totalOurTrumpsAfter = declTrumpsAfter + dummyTrumpsAfter
-		if(wasRuff){ quality='good'; why='Nice ruff – using a trump in the shorter hand to create an extra trick.'; }
-		else if(suit===effTrump){
-			if(defendersTrumpsAfter>0){
-				// drawing trumps phase
-				quality='good'; why='Drawing remaining enemy trumps helps protect your side suits.'
-			} else {
-				quality='neutral'; why='All (or almost all) enemy trumps are gone; further trump plays have diminishing value.'
-			}
-		} else if(effTrump && defendersTrumpsAfter>0 && totalOurTrumpsAfter>defendersTrumpsAfter && !leadSuit){
-			quality='bad'; why='Side suit led while opponents still hold trumps you can safely draw.'
-		} else if(!followedLead && leadSuit && suit!==effTrump){
-			quality='bad'; why='Discard provided no immediate benefit; consider whether a ruff or drawing trumps is stronger.'
-		} else {
-			why = quality==='neutral'? 'Reasonable choice; no immediate tactical error detected.' : why
-		}
-		// Adaptive encouragement / guidance
-		if(quality==='good'){
-			next = defendersTrumpsAfter>0 ? 'Continue counting outstanding trumps; once they are gone, transition to establishing or cashing side winners.' : 'Plan how to develop additional winners – look for a long suit or chances to ruff losers in the short trump hand.'
-		} else if(quality==='bad'){
-			next = defendersTrumpsAfter>0 ? 'Review the principle: draw trumps early when you hold the majority, unless you urgently need them for ruffing losers first.' : 'Refocus on a clear plan: count your winners versus required tricks and choose plays that build extra winners.'
-		} else {
-			next = defendersTrumpsAfter>0 ? 'Keep track of how many enemy trumps remain; decide between drawing them or executing planned ruffs.' : 'Shift thinking to creating and preserving entries to the hand with long established winners.'
-		}
-		return {quality, why, next, seat, card:`${rank}${suit[0]}`}
-	},[effDeclarer])
+	const evaluateDeclarerPlay = useCallback((params)=>{ const { seat, suit, rank, preRemaining, postState, effTrump, trickBefore } = params; if(!effTrump) return {quality:'neutral', why:'No trump contract: baseline guidance only.', next:'Focus on establishing long suits and maintaining entries.'}; if(!effDeclarer) return {quality:'neutral', why:'Declarer unknown yet.', next:'Identify declarer then plan trump control.'}; const partner = partnerOf(effDeclarer); const remainingAfter=postState.remaining; const declTrumpsAfter=remainingAfter[effDeclarer].filter(c=> c.suit===effTrump).length; const dummyTrumpsAfter=remainingAfter[partner].filter(c=> c.suit===effTrump).length; const defendersSeats=['N','E','S','W'].filter(s=> s!==effDeclarer && s!==partner); const defendersTrumpsAfter=defendersSeats.reduce((n,s)=> n+remainingAfter[s].filter(c=> c.suit===effTrump).length,0); const leadSuit=trickBefore.length>0 && trickBefore.length<4? trickBefore[0].card.suit:null; const followedLead=leadSuit? suit===leadSuit:null; const wasRuff=leadSuit && suit===effTrump && leadSuit!==effTrump && !preRemaining[seat].some(c=> c.suit===leadSuit); let quality='neutral', why='', next=''; const totalOur=declTrumpsAfter+dummyTrumpsAfter; if(wasRuff){ quality='good'; why='Well-timed ruff – creating an extra winner in the shorter trump hand.' } else if(suit===effTrump){ if(defendersTrumpsAfter>0){ quality='good'; why='Drawing outstanding enemy trumps protects side-suit winners.' } else { quality='neutral'; why='Enemy trumps largely gone; weigh drawing the very last versus starting side suits.' } } else if(effTrump && defendersTrumpsAfter>0 && totalOur>defendersTrumpsAfter && !leadSuit){ quality='bad'; why='Side suit led before finishing trump extraction while you hold the majority.' } else if(!followedLead && leadSuit && suit!==effTrump){ quality='bad'; why='Discard without pressure; consider whether a ruff or drawing trumps advances your plan more.' } else { why='Reasonable choice; no immediate tactical issue detected.' }
+	if(quality==='good') next=defendersTrumpsAfter>0? 'Keep counting remaining trumps; shift focus once they are drawn.':'Switch to developing long suits / ruffing losers.'; else if(quality==='bad') next=defendersTrumpsAfter>0? 'Recall: draw trumps when safe before establishing side winners (unless you need ruffs first).':'Re-center on plan: count secure winners vs targets.'; else next=defendersTrumpsAfter>0? 'Decide: one more trump round or start building side winners.':'Focus on transportation & suit establishment.'; let principle=''; if(suit===effTrump) principle=`Trump count: ours ${declTrumpsAfter+dummyTrumpsAfter} vs opp ${defendersTrumpsAfter}`; else if(wasRuff) principle='Short-hand ruff = manufactured winner.'; else if(defendersTrumpsAfter>0) principle=`Outstanding trumps ${defendersTrumpsAfter}`; return {quality, why, next, seat, card:`${rank}${suit[0]}`, principle} },[effDeclarer])
 
-	const onPlayCard=useCallback((seat,cardId)=>{ 
-		if(!usingManual||!turnSeat) return; 
-		const preRemaining=remaining; const trickBefore=trick; 
-		const engine={ remaining, trick, turnSeat, tricksDecl, tricksDef, trump: effTrump, declarer: effDeclarer, completed: completedTricks, trickComplete }; 
-		const r=playCardManual(engine,seat,cardId); if(!r.ok) return; 
-		const next=r.state; setRemaining(next.remaining); setTrick(next.trick); setTurnSeat(next.turnSeat); setTricksDecl(next.tricksDecl); setTricksDef(next.tricksDef); setCompletedTricks(next.completed); setTrickComplete(next.trickComplete||false); 
-		const [_,suit,rank]=cardId.split('-'); const entry={seat,cardId,suit,rank}; 
-		setHistory(h=>[...h,entry]); setManualMoves(m=>[...m,{seat,suit,rank}]); setPlayIdx(k=>k+1); 
-		// Advice evaluation for declarer side
-		if(effDeclarer && (seat===effDeclarer || partnerOf(effDeclarer)===seat)){
-			try { const evalRes = evaluateDeclarerPlay({ seat, suit, rank, preRemaining, postState: next, effTrump, trickBefore }); setAdviceEntries(list => [...list, { id: Date.now()+Math.random().toString(36).slice(2,7), ...evalRes }].slice(-60)) } catch(e){ /* ignore */ }
-		}
-		if(r.winner){ if(pauseRef.current) setFlashWinner(r.winner); else setFlashWinner(null); setCompletedTrickList(lst=>[...lst,{no: lst.length+1, winner: r.winner, cards: next.trick }]) } 
-		if(hideDefenders && isDefender(seat,effDeclarer)){ setLastAutoSeat(seat); setTimeout(()=> setLastAutoSeat(null),800) } 
-	},[usingManual,turnSeat,remaining,trick,tricksDecl,tricksDef,effTrump,effDeclarer,completedTricks,trickComplete,hideDefenders,evaluateDeclarerPlay])
+	const onPlayCard=useCallback((seat,cardId)=>{ if(usingManual && history.length===0 && !planSubmitted){ setAdviceEntries(list=> [...list,{ id: Date.now()+Math.random().toString(36).slice(2,7), quality:'neutral', why:'Submit your plan (sure winners & likely losers) first.', next:'Planning clarifies whether to draw trumps immediately.', seat, card:'', principle:'Plan before play.' }]); return } if(!usingManual||!turnSeat) return; const preRemaining=remaining; const trickBefore=trick; const engine={ remaining, trick, turnSeat, tricksDecl, tricksDef, trump: effTrump, declarer: effDeclarer, completed: completedTricks, trickComplete }; const r=playCardManual(engine,seat,cardId); if(!r.ok) return; const next=r.state; setRemaining(next.remaining); setTrick(next.trick); setTurnSeat(next.turnSeat); setTricksDecl(next.tricksDecl); setTricksDef(next.tricksDef); setCompletedTricks(next.completed); setTrickComplete(next.trickComplete||false); const [_,suit,rank]=cardId.split('-'); setHistory(h=>[...h,{seat,cardId,suit,rank}]); setManualMoves(m=>[...m,{seat,suit,rank}]); setPlayIdx(k=>k+1); if(effDeclarer && (seat===effDeclarer || partnerOf(effDeclarer)===seat)){ try { const evalRes=evaluateDeclarerPlay({ seat, suit, rank, preRemaining, postState: next, effTrump, trickBefore }); setAdviceEntries(list=> [...list,{ id: Date.now()+Math.random().toString(36).slice(2,7), ...evalRes }].slice(-70)) } catch{} } if(r.winner){ if(pauseRef.current) setFlashWinner(r.winner); else setFlashWinner(null); setCompletedTrickList(lst=>[...lst,{no: lst.length+1, winner: r.winner, cards: next.trick }]) } if(hideDefenders && isDefender(seat,effDeclarer)){ setLastAutoSeat(seat); setTimeout(()=> setLastAutoSeat(null),800) } },[usingManual,history.length,planSubmitted,turnSeat,remaining,trick,tricksDecl,tricksDef,effTrump,effDeclarer,completedTricks,trickComplete,hideDefenders,evaluateDeclarerPlay])
 
 	// Simple auto-play for hidden defenders
 	const rankOrder=['2','3','4','5','6','7','8','9','10','J','Q','K','A']; const rankWeight=r=> rankOrder.indexOf(r)
@@ -317,6 +270,31 @@ export default function Player(){
 				{!current && deals.length===0 && <PreUpload onChooseFile={()=> fileRef.current?.click()} />}
 				{current && hands && (
 					<div className='flex flex-col gap-6 items-center'>
+						{/* Planning Panel */}
+						{effDeclarer && history.length===0 && <div className='w-full max-w-xl rounded-lg border bg-white/70 backdrop-blur p-4 text-[12px] shadow-sm'>
+							<div className='flex items-center justify-between mb-2'><h3 className='font-semibold text-indigo-700'>Pre-Play Planning</h3>{planSubmitted && <span className='text-[10px] text-emerald-600 font-medium'>Submitted</span>}</div>
+							<p className='mb-2 text-gray-700'>Estimate your sure winners and likely losers in the combined Declarer + Dummy hands (before any development). This frames your line of play.</p>
+							<div className='grid grid-cols-2 gap-3 mb-3'>
+								<label className='flex flex-col gap-1'>
+									<span className='text-[11px] font-medium'>Sure Winners</span>
+									<select disabled={planSubmitted} value={planWinners} onChange={e=> setPlanWinners(e.target.value)} className='border rounded px-1 py-0.5'>
+										<option value=''>—</option>{Array.from({length:14},(_,i)=> i).map(n=> <option key={n} value={n}>{n}</option>)}
+									</select>
+								</label>
+								<label className='flex flex-col gap-1'>
+									<span className='text-[11px] font-medium'>Likely Losers</span>
+									<select disabled={planSubmitted} value={planLosers} onChange={e=> setPlanLosers(e.target.value)} className='border rounded px-1 py-0.5'>
+										<option value=''>—</option>{Array.from({length:14},(_,i)=> i).map(n=> <option key={n} value={n}>{n}</option>)}
+									</select>
+								</label>
+							</div>
+							<div className='flex gap-2'>
+								<button disabled={planSubmitted || planWinners==='' || planLosers===''} onClick={()=>{ setPlanSubmitted(true); // evaluate plan
+									const w=parseInt(planWinners,10), l=parseInt(planLosers,10); if(actualWinners!=null && actualLosers!=null){ const wDiff=w-actualWinners; const lDiff=l-actualLosers; let quality='neutral'; let why=''; if(Math.abs(wDiff)<=1 && Math.abs(lDiff)<=1){ quality='good'; why='Strong estimation – very close to baseline heuristic.' } else if(Math.abs(wDiff)<=2 && Math.abs(lDiff)<=2){ quality='neutral'; why='Reasonable first estimate with room to refine as play clarifies.' } else { quality='bad'; why='Estimates are off; review counting of top honors and potential losers.' } const next='Use this frame: address losers (via ruffs, finesses, discards) while preserving needed entries.'; const principle=`Baseline heuristic winners ${actualWinners}, losers ${actualLosers}`; setAdviceEntries(list=> [...list,{ id: Date.now()+Math.random().toString(36).slice(2,7), quality, why, next, seat: effDeclarer, card:'', principle }]); setPlanEvaluated(true) } }} className='px-2 py-1 text-[11px] rounded bg-indigo-600 disabled:opacity-40 text-white'>Submit Plan</button>
+								{planSubmitted && <button onClick={()=>{ setPlanSubmitted(false); setPlanEvaluated(false); setPlanWinners(''); setPlanLosers(''); }} className='px-2 py-1 text-[11px] rounded border'>Adjust</button>}
+							</div>
+							{actualWinners!=null && planSubmitted && <div className='mt-2 text-[11px] text-gray-600'>Heuristic baseline: <span className='font-semibold'>{actualWinners}</span> winners / <span className='font-semibold'>{actualLosers}</span> losers</div>}
+						</div>}
 						{/* Cross layout */}
 						<div className='grid grid-cols-3 grid-rows-3 gap-4 relative'>
 							<div className='col-start-2 row-start-1 flex justify-center'>
