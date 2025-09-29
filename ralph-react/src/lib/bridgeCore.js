@@ -16,9 +16,9 @@ export function isDefender(seat, declarer) {
 }
 // Returns true if the seat belongs to declarer's partnership
 export function isDeclarerSide(seat, declarer) {
-    if (!declarer) return false
-    const p = partnerOf(declarer)
-    return seat === declarer || seat === p
+	if (!declarer) return false
+	const p = partnerOf(declarer)
+	return seat === declarer || seat === p
 }
 export function hcpValue(rank) {
 	if (rank === 'A') return 4
@@ -74,10 +74,10 @@ export function evaluateTrick(trickArr, trumpSuit) {
 	// If any trump cards were played, only they can win; otherwise use lead suit cards
 	let pool = []
 	if (trumpSuit) {
-		const trumpsPlayed = trickArr.filter(p => p.card.suit === trumpSuit)
+		const trumpsPlayed = trickArr.filter((p) => p.card.suit === trumpSuit)
 		if (trumpsPlayed.length) pool = trumpsPlayed
 	}
-	if (!pool.length) pool = trickArr.filter(p => p.card.suit === leadSuit)
+	if (!pool.length) pool = trickArr.filter((p) => p.card.suit === leadSuit)
 	if (!pool.length) return null
 	let best = pool[0]
 	for (let i = 1; i < pool.length; i++) {
@@ -89,7 +89,7 @@ export function evaluateTrick(trickArr, trumpSuit) {
 // Debug helper: capture a lightweight snapshot of a trick for logging
 export function debugTrickSnapshot(trickArr) {
 	if (!Array.isArray(trickArr)) return []
-	return trickArr.map(t => `${t.seat}:${t.card.rank}${t.card.suit[0]}`)
+	return trickArr.map((t) => `${t.seat}:${t.card.rank}${t.card.suit[0]}`)
 }
 export function dealToHands(dealStr) {
 	const m = String(dealStr || '').match(/^([NESW]):\s*(.+)$/)
