@@ -215,9 +215,9 @@ export default function Player(){
 	const reset=()=> { setDeals([]); setIndex(0); setSelectedName('') }
 
 	return (
-		<div className='min-h-screen bg-gray-100 flex'>
+		<div className='min-h-screen app-dark-bg flex text-slate-100'>
 			{/* Sidebar */}
-			<div className='w-72 p-3 border-r bg-gray-50 flex flex-col gap-3 text-[11px]'>
+			<div className='w-72 p-3 border-r border-slate-700 sidebar-theme-ocean flex flex-col gap-3 text-[11px]'>
 				<div className='flex items-center justify-between'>
 					<Link to='/' className='text-sky-600 hover:underline text-[12px]'>← Home</Link>
 					<button onClick={reset} className='px-2 py-0.5 rounded border bg-white'>Start over</button>
@@ -233,7 +233,7 @@ export default function Player(){
 						<button disabled={!deals.length} onClick={next} className='flex-1 px-2 py-0.5 rounded border disabled:opacity-40'>Next</button>
 					</div>
 				</div>
-				<div className='space-y-1 border-t pt-2'>
+				<div className='space-y-1 border-t border-slate-600/40 pt-2'>
 					<label className='flex items-center gap-1'><input type='checkbox' checked={hideDefenders} onChange={e=> setHideDefenders(e.target.checked)} /> <span>Hide defenders</span></label>
 					{hideDefenders && <div className='ml-4 flex flex-col gap-1'>
 						<label className='flex items-center gap-1'><input type='checkbox' checked={fastAutoDef} onChange={e=> setFastAutoDef(e.target.checked)} /> <span>Fast auto-play</span></label>
@@ -244,7 +244,7 @@ export default function Player(){
 					<label className='flex items-center gap-1'><input type='checkbox' checked={pauseAtTrickEnd} onChange={e=> { setPauseAtTrickEnd(e.target.checked); pauseRef.current=e.target.checked }} /> <span>Pause at trick end</span></label>
 					<label className='flex items-center gap-1'><input type='checkbox' checked={showAdvice} onChange={e=> setShowAdvice(e.target.checked)} /> <span>Show advice panel</span></label>
 				</div>
-				{!current?.contract && <div className='space-y-1 border-t pt-2'>
+				{!current?.contract && <div className='space-y-1 border-t border-slate-600/40 pt-2'>
 					<div className='font-semibold'>Set contract</div>
 					<label className='flex items-center justify-between gap-1'><span>Declarer</span><select className='border rounded px-1 py-0.5' value={manualDeclarer} onChange={e=> setManualDeclarer(e.target.value)}><option value=''>—</option><option value='N'>N</option><option value='E'>E</option><option value='S'>S</option><option value='W'>W</option></select></label>
 					<label className='flex items-center justify-between gap-1'><span>Level</span><select className='border rounded px-1 py-0.5' value={manualLevel} onChange={e=> setManualLevel(e.target.value)}><option value=''>—</option>{['1','2','3','4','5','6','7'].map(l=> <option key={l}>{l}</option>)}</select></label>
