@@ -10,8 +10,31 @@ const suitSymbol = s => s==='Spades'? '♠': s==='Hearts'? '♥': s==='Diamonds'
 
 // Very small PBN parser (Boards + tags we actually use)
 function parsePbn(text){
-	const lines=text.split(/\r?\n/); const out=[]; let cur=null; const tag=/^\[(\w+)(?:\s+"(.*)")?\]/; const push=()=>{ if(cur) out.push(cur); cur=null }
-	for(const raw of lines){ const line=raw.trim(); if(!line) continue; const m=line.match(tag); if(m){ const k=m[1]; const v=(m[2]||'').trim(); if(k==='Board'){ if(cur) push(); cur={board:v, dealer:'N', vul:'None', deal:'', auction:[], play:'', playLeader:'', notes:[]} } if(!cur) cur={board:v||'', dealer:'N', vul:'None', deal:'', auction:[], play:'', playLeader:'', notes:[]}; switch(k){ case 'Dealer': cur.dealer=v||'N'; break; case 'Vulnerable': cur.vul=v||'None'; break; case 'Deal': cur.deal=v; break; case 'Auction': cur.auctionDealer=v||cur.dealer; cur._mode='a'; break; case 'Play': cur.playLeader=v||cur.dealer; cur._mode='p'; break; case 'Contract': cur.contract=v; break; case 'Declarer': cur.declarer=v; break; case 'Note': cur.notes.push(v); break; default: break } continue } if(cur){ if(cur._mode==='a'){ if(/^[^-]/.test(line)) cur.auction.push(...line.split(/\s+/).filter(Boolean)) } else if(cur._mode==='p'){ cur.play += (cur.play?' ':'')+line } } } push(); return out.filter(b=> b.deal) }
+	const lines=text.split(/\r?\n/); const out=[]; let cur=null; const tagLine=/^\[(\w+)(?:\s+"(.*)")?\]\s*(.*)$/; const push=()=>{ if(cur) out.push(cur); cur=null }
+	for(const raw of lines){ const lineRaw=raw; const line=lineRaw.trim(); if(!line) continue; const m=line.match(tagLine); if(m){ const k=m[1]; const v=(m[2]||'').trim(); const trailing=(m[3]||'').trim(); if(k==='Board'){ if(cur) push(); cur={board:v, dealer:'N', vul:'None', deal:'', auction:[], auctionDealer:'N', play:'', playLeader:'', notes:[], system:'', theme:'', interf:'', ddpar:'', scoring:''} }
+		if(!cur) cur={board:v||'', dealer:'N', vul:'None', deal:'', auction:[], auctionDealer:'N', play:'', playLeader:'', notes:[], system:'', theme:'', interf:'', ddpar:'', scoring:''};
+		switch(k){
+			case 'Dealer': cur.dealer=v||'N'; break;
+			case 'Vulnerable': cur.vul=v||'None'; break;
+			case 'Deal': cur.deal=v; break;
+			case 'Auction': cur.auctionDealer=v||cur.dealer; cur._mode='a'; if(trailing) cur.auction.push(...trailing.split(/\s+/).filter(Boolean)); break;
+			case 'Play': cur.playLeader=v||cur.dealer; cur._mode='p'; if(trailing) cur.play += (cur.play? ' ':'')+trailing; break;
+			case 'Contract': cur.contract=v; break;
+			case 'Declarer': cur.declarer=v; break;
+			case 'Note': cur.notes.push(v); break;
+			case 'System': cur.system=v; break;
+			case 'Theme': cur.theme=v; break;
+			case 'Interf': cur.interf=v; break;
+			case 'DDPar': cur.ddpar=v; break;
+			case 'Scoring': cur.scoring=v; break;
+			default: break;
+		}
+		continue
+	}
+	if(cur){ if(cur._mode==='a'){ if(/^[^-]/.test(line)) cur.auction.push(...line.split(/\s+/).filter(Boolean)) } else if(cur._mode==='p'){ cur.play += (cur.play?' ':'')+line } }
+	}
+	push(); return out.filter(b=> b.deal)
+}
 
 // --- UI Atoms ---
 function SeatPanel({ id, remaining, turnSeat, trick, onPlay, visible, dealer, vul, declarer, showHCP, lastAutoSeat, compact }){
@@ -165,12 +188,15 @@ export default function Player(){
 	const [planSubmitted,setPlanSubmitted]=useState(false)
 	const [planEvaluated,setPlanEvaluated]=useState(false)
 	const [preAnalysis,setPreAnalysis]=useState(null) // snapshot info for planning panel
+	const [showAuctionModal,setShowAuctionModal]=useState(false)
 	const playIdxRef=useRef(0)
 	const pauseRef=useRef(false)
 	const fileRef=useRef(null)
 	const initialTrumpRef=useRef(null) // {decl,dummy,defenders,total}
 
 	const validatedAuction=useMemo(()=>{ if(!current) return {legal:false}; const calls=Array.isArray(current.auction)? current.auction:[]; if(!calls.length) return {legal:false}; return validateAuction(current.auctionDealer||current.dealer||'N', calls) },[current])
+	// modal trigger if no auction / contract present
+	useEffect(()=>{ if(current){ if(!(current.auction&&current.auction.length) && !current.contract && !manualLevel && !manualStrain){ setShowAuctionModal(true) } else { setShowAuctionModal(false) } } },[current,manualLevel,manualStrain])
 	const effDeclarer = manualDeclarer || current?.declarer || (validatedAuction.legal? validatedAuction.declarer:'') || ''
 	const effContract = useMemo(()=>{ if(manualLevel && manualStrain) return `${manualLevel}${manualStrain}${manualDbl}`; return current?.contract || (validatedAuction.legal? validatedAuction.contract:'') || '' },[manualLevel,manualStrain,manualDbl,current?.contract,validatedAuction])
 	const effTrump=parseTrump(effContract)
@@ -254,6 +280,14 @@ export default function Player(){
 
 	return (
 		<div className='min-h-screen bg-gray-100 flex'>
+			{showAuctionModal && <div className='fixed inset-0 z-50 flex items-center justify-center'>
+				<div className='absolute inset-0 bg-black/30 backdrop-blur-sm' />
+				<div className='relative bg-white rounded-xl shadow-lg w-full max-w-md p-5 space-y-4'>
+					<h2 className='text-lg font-semibold text-indigo-700'>No Auction Found</h2>
+					<p className='text-sm text-gray-700'>This PBN has no auction lines. Please set the contract manually in the sidebar (Declarer, Level, Strain, Doubles) before you begin planning.</p>
+					<button onClick={()=> setShowAuctionModal(false)} className='px-3 py-1.5 rounded bg-indigo-600 text-white text-sm'>Got it</button>
+				</div>
+			</div>}
 			{/* Sidebar */}
 			<div className='w-72 p-3 border-r bg-gray-50 flex flex-col gap-3 text-[11px]'>
 				<div className='flex items-center justify-between'>
@@ -316,6 +350,11 @@ export default function Player(){
 						{/* Planning Panel */}
 						{effDeclarer && history.length===0 && <div className='w-full max-w-xl rounded-lg border bg-white/70 backdrop-blur p-4 text-[12px] shadow-sm'>
 							<div className='flex items-center justify-between mb-2'><h3 className='font-semibold text-indigo-700'>Pre-Play Planning</h3>{planSubmitted && <span className='text-[10px] text-emerald-600 font-medium'>Submitted</span>}</div>
+							{(current?.theme || current?.system || (current?.notes||[]).length>0) && <div className='mb-3 text-[11px] space-y-1'>
+								{current?.theme && <div><span className='font-semibold text-indigo-600'>Theme:</span> {current.theme}</div>}
+								{current?.system && <div><span className='font-semibold text-indigo-600'>System:</span> {current.system}</div>}
+								{(current?.notes||[]).length>0 && <div className='border rounded bg-white/60 px-2 py-1'><span className='font-semibold text-indigo-600'>Notes:</span> {(current.notes).slice(0,3).map((n,i)=> <span key={i} className='ml-1 after:content-["·"] last:after:content-[""]'>{n}</span>)}</div>}
+							</div>}
 							<p className='mb-2 text-gray-700'>Estimate your sure winners and likely losers in the combined Declarer + Dummy hands (before any development). This frames your line of play.</p>
 							<div className='grid grid-cols-2 gap-3 mb-3'>
 								<label className='flex flex-col gap-1'>
@@ -361,6 +400,10 @@ export default function Player(){
 								<div className='col-start-2 row-start-1 flex justify-center'>
 									<SeatPanel id='N' compact remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='N' || partnerOf(effDeclarer)==='N'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='N'|| partnerOf(effDeclarer)==='N')} lastAutoSeat={lastAutoSeat} />
 								</div>
+									{/* Contract badge to right of North (col 3, row 1) */}
+									{effContract && <div className='col-start-3 row-start-1 flex justify-start items-start'>
+										<ContractBadge contract={effContract} declarer={effDeclarer} />
+									</div>}
 								<div className='col-start-1 row-start-2 flex justify-center items-center'>
 									<SeatPanel id='W' remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='W' || partnerOf(effDeclarer)==='W'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='W'|| partnerOf(effDeclarer)==='W')} lastAutoSeat={lastAutoSeat} />
 								</div>
@@ -380,5 +423,24 @@ export default function Player(){
 			</div>
 		</div>
 	)
+}
+
+// Contract badge component
+function ContractBadge({ contract, declarer }){
+	if(!contract) return null
+	// parse contract like 4S, 3NT, 2HX, 5DXX
+	const m=contract.match(/^(\d)([CDHSN]{1,2})(X{0,2})$/i)
+	if(!m) return <div className='rounded-lg border bg-white px-3 py-2 text-sm font-semibold'>{contract}</div>
+	const level=m[1]; let strain=m[2].toUpperCase(); const dbl=m[3];
+	const suitMap={ C:'♣', D:'♦', H:'♥', S:'♠', NT:'NT', N:'NT' };
+	if(strain==='N') strain='NT'
+	const sym=suitMap[strain]||strain; const isRed = strain==='H'||strain==='D'
+	const colorClass=isRed? 'text-rose-600':'text-gray-800'
+	const bgGrad=isRed? 'from-rose-50 to-amber-50':'from-emerald-50 to-sky-50'
+	return <div className={`relative rounded-xl border-2 border-indigo-300 bg-gradient-to-br ${bgGrad} shadow px-4 py-3 flex flex-col items-center min-w-[90px]`}>
+		<div className='text-[10px] tracking-wide text-indigo-600 font-semibold mb-0.5'>CONTRACT</div>
+		<div className={`text-3xl font-bold leading-none ${colorClass}`}>{level}{sym}{dbl && <span className='text-indigo-700 text-2xl ml-0.5'>{dbl}</span>}</div>
+		{declarer && <div className='mt-1 text-[11px] font-medium text-indigo-700'>Decl: {declarer}</div>}
+	</div>
 }
 
