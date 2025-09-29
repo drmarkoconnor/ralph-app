@@ -295,25 +295,25 @@ export default function Player(){
 							</div>
 							{actualWinners!=null && planSubmitted && <div className='mt-2 text-[11px] text-gray-600'>Heuristic baseline: <span className='font-semibold'>{actualWinners}</span> winners / <span className='font-semibold'>{actualLosers}</span> losers</div>}
 						</div>}
-						{/* Cross layout */}
-						<div className='grid grid-cols-3 grid-rows-3 gap-4 relative'>
-							<div className='col-start-2 row-start-1 flex justify-center'>
+						{/* Cross layout with advice panel to left of North */}
+						<div className='flex items-start gap-6'>
+							{showAdvice && <div className='pt-1'><AdvicePanel entries={adviceEntries} /></div>}
+							<div className='grid grid-cols-3 grid-rows-3 gap-4 relative'>
+								<div className='col-start-2 row-start-1 flex justify-center'>
 									<SeatPanel id='N' compact remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='N' || partnerOf(effDeclarer)==='N'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='N'|| partnerOf(effDeclarer)==='N')} lastAutoSeat={lastAutoSeat} />
-									{showAdvice && <div className='absolute left-full ml-4 top-0 w-64 self-start'>
-										<AdvicePanel entries={adviceEntries} />
-									</div>}
-							</div>
-							<div className='col-start-1 row-start-2 flex justify-center items-center'>
-								<SeatPanel id='W' remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='W' || partnerOf(effDeclarer)==='W'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='W'|| partnerOf(effDeclarer)==='W')} lastAutoSeat={lastAutoSeat} />
-							</div>
-							<div className='col-start-3 row-start-2 flex justify-center items-center'>
-								<SeatPanel id='E' remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='E' || partnerOf(effDeclarer)==='E'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='E'|| partnerOf(effDeclarer)==='E')} lastAutoSeat={lastAutoSeat} />
-							</div>
-							<div className='col-start-2 row-start-3 flex justify-center'>
+								</div>
+								<div className='col-start-1 row-start-2 flex justify-center items-center'>
+									<SeatPanel id='W' remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='W' || partnerOf(effDeclarer)==='W'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='W'|| partnerOf(effDeclarer)==='W')} lastAutoSeat={lastAutoSeat} />
+								</div>
+								<div className='col-start-3 row-start-2 flex justify-center items-center'>
+									<SeatPanel id='E' remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='E' || partnerOf(effDeclarer)==='E'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='E'|| partnerOf(effDeclarer)==='E')} lastAutoSeat={lastAutoSeat} />
+								</div>
+								<div className='col-start-2 row-start-3 flex justify-center'>
 									<SeatPanel id='S' compact remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='S' || partnerOf(effDeclarer)==='S'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='S'|| partnerOf(effDeclarer)==='S')} lastAutoSeat={lastAutoSeat} />
-							</div>
-							<div className='col-start-2 row-start-2 flex items-center justify-center'>
-								<CrossTrick trick={trick} winner={flashWinner} turnSeat={turnSeat} lastAutoPlay={lastAutoPlay} />
+								</div>
+								<div className='col-start-2 row-start-2 flex items-center justify-center'>
+									<CrossTrick trick={trick} winner={flashWinner} turnSeat={turnSeat} lastAutoPlay={lastAutoPlay} />
+								</div>
 							</div>
 						</div>
 						<div className='w-full flex flex-wrap justify-center gap-6'>
