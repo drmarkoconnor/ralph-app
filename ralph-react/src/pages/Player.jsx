@@ -1,1855 +1,349 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+// Truly minimal Player rebuild (legacy code removed)
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import SidebarLayout from '../components/SidebarLayout'
-import { EXAMPLE_LIBRARY } from '../data/examples'
-import useIsIPhone from '../hooks/useIsIPhone'
-// Core helpers now imported from bridgeCore
-import {
-	rightOf,
-	partnerOf,
-	isDefender,
-	hcpValue,
-	parseTrump,
-	dealToHands,
-	computeDuplicateScore,
-	neededToSet,
-	validateAuction,
-	parsePlayMoves,
-	parsePlayScript,
-	isSeatVul,
-	isDeclarerSide,
-} from '../lib/bridgeCore'
-import { sanitizePBN, parsePBN } from '../lib/pbn'
+import { createInitialManualState, playCardManual } from '../lib/manualPlayEngine'
+import { rightOf, partnerOf, isDefender, hcpValue, parseTrump, dealToHands, computeDuplicateScore, neededToSet, validateAuction, parsePlayMoves, parsePlayScript, isSeatVul, evaluateTrick } from '../lib/bridgeCore'
 
-// UI-only helpers kept local
-function seatFullName(id) {
-	return id === 'N'
-		? 'North'
-		: id === 'E'
-		? 'East'
-		: id === 'S'
-		? 'South'
-		: 'West'
-}
-function suitSymbol(suit) {
-	return suit === 'Spades'
-		? '♠'
-		: suit === 'Hearts'
-		? '♥'
-		: suit === 'Diamonds'
-		? '♦'
-		: '♣'
-}
-function suitLetter(suit) {
-	return suit === 'Spades'
-		? 'S'
-		: suit === 'Hearts'
-		? 'H'
-		: suit === 'Diamonds'
-		? 'D'
-		: 'C'
+// --- Tiny helpers ---
+const seatName = s => s==='N'? 'North': s==='E'? 'East': s==='S'? 'South':'West'
+const suitSymbol = s => s==='Spades'? '♠': s==='Hearts'? '♥': s==='Diamonds'? '♦':'♣'
+
+// Very small PBN parser (Boards + tags we actually use)
+function parsePbn(text){
+	const lines=text.split(/\r?\n/); const out=[]; let cur=null; const tag=/^\[(\w+)(?:\s+"(.*)")?\]/; const push=()=>{ if(cur) out.push(cur); cur=null }
+	for(const raw of lines){ const line=raw.trim(); if(!line) continue; const m=line.match(tag); if(m){ const k=m[1]; const v=(m[2]||'').trim(); if(k==='Board'){ if(cur) push(); cur={board:v, dealer:'N', vul:'None', deal:'', auction:[], play:'', playLeader:'', notes:[]} } if(!cur) cur={board:v||'', dealer:'N', vul:'None', deal:'', auction:[], play:'', playLeader:'', notes:[]}; switch(k){ case 'Dealer': cur.dealer=v||'N'; break; case 'Vulnerable': cur.vul=v||'None'; break; case 'Deal': cur.deal=v; break; case 'Auction': cur.auctionDealer=v||cur.dealer; cur._mode='a'; break; case 'Play': cur.playLeader=v||cur.dealer; cur._mode='p'; break; case 'Contract': cur.contract=v; break; case 'Declarer': cur.declarer=v; break; case 'Note': cur.notes.push(v); break; default: break } continue } if(cur){ if(cur._mode==='a'){ if(/^[^-]/.test(line)) cur.auction.push(...line.split(/\s+/).filter(Boolean)) } else if(cur._mode==='p'){ cur.play += (cur.play?' ':'')+line } } } push(); return out.filter(b=> b.deal) }
+
+// --- UI Atoms ---
+function SeatPanel({ id, remaining, turnSeat, trick, onPlay, visible, dealer, vul, declarer, showHCP, lastAutoSeat, compact }){
+	const hand=remaining?.[id]||[]
+	const hcp=hand.reduce((s,c)=> s + hcpValue(c.rank),0)
+	const suitOrder=['Spades','Hearts','Diamonds','Clubs'] // reversed order requirement
+	const grouped=Object.fromEntries(suitOrder.map(s=> [s, hand.filter(c=> c.suit===s).sort((a,b)=> '2345678910JQKA'.indexOf(a.rank)-'2345678910JQKA'.indexOf(b.rank))]))
+	const leadSuit = trick.length>0 && trick.length<4 ? trick[0].card.suit : null
+	const mustFollow = leadSuit && hand.some(c=> c.suit===leadSuit)
+	const isTurn=turnSeat===id
+	return <div className={`rounded-xl border ${compact?'w-52':'w-60'} overflow-hidden bg-white ${compact?'text-[11px]':''} ${isTurn?'border-red-500':'border-gray-300'} ${lastAutoSeat===id?'ring-2 ring-sky-300 animate-pulse':''}`}>
+		<div className={`px-2 py-1 text-[11px] font-semibold flex items-center justify-between ${isTurn?'bg-red-50':'bg-gray-50'}`}>
+			<span>{seatName(id)}{dealer===id && <span className='ml-1 text-[9px] bg-amber-500 text-white px-1 rounded'>D</span>}</span>
+			<span className='flex items-center gap-1'>
+				{isSeatVul(vul,id) && <span className='text-[8px] px-1 rounded bg-rose-600 text-white'>V</span>}
+				{(visible || showHCP) && <span className='text-[10px] opacity-70'>HCP {hcp}</span>}
+			</span>
+		</div>
+		<div className='p-2 flex flex-col gap-2'>
+			{suitOrder.map(s => <div key={s} className='flex items-center gap-2'>
+				<div className={`w-6 text-center text-xl ${s==='Hearts'||s==='Diamonds'?'text-red-600':'text-black'}`}>{suitSymbol(s)}</div>
+				<div className='flex flex-wrap gap-1 flex-1'>
+					{visible ? grouped[s].map(c=>{ const legal=!isTurn || !leadSuit || !mustFollow || c.suit===leadSuit; return <button key={c.id} disabled={!legal||!isTurn} onClick={()=> onPlay(id,c.id)} className={`px-1 text-sm rounded ${legal&&isTurn? 'hover:bg-gray-100':'opacity-40 cursor-not-allowed'}`}>{c.rank}</button> }) : <span className='italic text-gray-400 text-sm'>hidden</span>}
+					{visible && grouped[s].length===0 && <span className='text-gray-300'>-</span>}
+				</div>
+			</div>)}
+		</div>
+	</div>
 }
 
-// ---------- Main Page Component ----------
-export default function Player() {
-	// File + examples
-	const fileRef = useRef(null)
-	const [deals, setDeals] = useState([])
-	const [index, setIndex] = useState(0)
-	const [selectedName, setSelectedName] = useState('')
-	const [exampleMsg, setExampleMsg] = useState('')
+function ScorePanel({ tricksDecl, tricksDef, needed, contract, declarer, result }){
+	return <div className='rounded border bg-white p-2 text-[11px] space-y-0.5'>
+		<div>Declarer: <span className='font-semibold'>{declarer||'-'}</span></div>
+		<div>Contract: <span className='font-semibold'>{contract||'-'}</span></div>
+		<div>Declarer tricks: <span className='font-semibold'>{tricksDecl}</span></div>
+		<div>Defender tricks: <span className='font-semibold'>{tricksDef}</span></div>
+		<div>Defend to set: <span className='font-semibold'>{needed||'-'}</span></div>
+		{result && !result.partial && <div>Result: <span className='font-semibold'>{result.resultText}</span>{typeof result.score==='number' && <span className='ml-1 font-semibold'>{result.score>0?'+':''}{result.score}</span>}</div>}
+	</div>
+}
 
-	// UI toggles
-	const [teacherMode, setTeacherMode] = useState(false)
-	const [auctionRevealed, setAuctionRevealed] = useState(true)
-	const [hideDefenders, setHideDefenders] = useState(false)
-	const [showSuitTally, setShowSuitTally] = useState(false)
-	const [showHcpWhenHidden, setShowHcpWhenHidden] = useState(false)
-	const [pauseAtTrickEnd, setPauseAtTrickEnd] = useState(false)
-	const pauseRef = useRef(pauseAtTrickEnd)
-	useEffect(() => {
-		pauseRef.current = pauseAtTrickEnd
-	}, [pauseAtTrickEnd])
+function MiniTrick({ trick, winner, turnSeat, lastAutoPlay }){
+	const order=['N','E','S','W']
+	return <div className='rounded border bg-white p-2'>
+		<div className='text-[11px] text-gray-600 mb-1 flex items-center justify-between'>
+			<span>Current Trick</span>
+			{lastAutoPlay && <span className='text-[9px] text-sky-600 font-medium'>AUTO {lastAutoPlay.seat}</span>}
+		</div>
+		<div className='grid grid-cols-2 gap-2 w-40 mx-auto'>
+			{order.map(seat=>{ const t=trick.find(x=>x.seat===seat); const win=trick.length===4 && winner===seat; const turn=turnSeat===seat; return <div key={seat} className={`h-14 rounded-md border flex flex-col items-center justify-center text-[11px] font-semibold relative ${win?'border-emerald-500 ring-1 ring-emerald-400':'border-gray-300'} ${turn?'bg-yellow-50':'bg-white'}`}> <div className='text-[8px] text-gray-500 absolute top-0 left-0 px-1 py-0.5'>{seat}</div>{t? <div className={`${t.card.suit==='Hearts'||t.card.suit==='Diamonds'?'text-red-600':'text-gray-900'} text-lg`}>{t.card.rank}{suitSymbol(t.card.suit)}</div> : <span className='text-gray-300'>—</span>}</div> })}
+		</div>
+	</div>
+}
 
-	// Manual overrides
-	const [manualMoves, setManualMoves] = useState([])
-	const [manualDeclarer, setManualDeclarer] = useState('')
-	const [manualLevel, setManualLevel] = useState('')
-	const [manualStrain, setManualStrain] = useState('')
-	const [manualDbl, setManualDbl] = useState('')
-
-	// Board state
-	const [remaining, setRemaining] = useState(null)
-	const [tally, setTally] = useState({
-		Spades: [],
-		Hearts: [],
-		Diamonds: [],
-		Clubs: [],
-	})
-	const [trick, setTrick] = useState([])
-	const [turnSeat, setTurnSeat] = useState(null)
-	const [tricksDecl, setTricksDecl] = useState(0)
-	const [tricksDef, setTricksDef] = useState(0)
-	const [playIdx, setPlayIdx] = useState(0)
-	const playIdxRef = useRef(0)
-	useEffect(() => {
-		playIdxRef.current = playIdx
-	}, [playIdx])
-	const [flashWinner, setFlashWinner] = useState(null)
-	// Debug log to surface play flow issues (temporary)
-	const [debugMsgs, setDebugMsgs] = useState([])
-	const logDebug = useCallback((msg) => {
-		setDebugMsgs((d) => {
-			const next = [...d, msg]
-			return next.slice(-20) // keep last 20
-		})
-		if (typeof window !== 'undefined') {
-			window.__RALPH_DEBUG__ = window.__RALPH_DEBUG__ || []
-			window.__RALPH_DEBUG__.push(`${new Date().toISOString()} ${msg}`)
-		}
-	}, [])
-
-	// Hint modal
-	const [showHint, setShowHint] = useState(false)
-	const [hintText, setHintText] = useState('')
-
-	const current = deals[index] || null
-
-	// Handout generation state (always generates FULL layout now)
-	const [pdfBusy, setPdfBusy] = useState(false)
-	const [pdfError, setPdfError] = useState(null)
-	const [handoutAutoGenerated, setHandoutAutoGenerated] = useState(false)
-	useEffect(() => {
-		setHandoutAutoGenerated(false)
-	}, [deals])
-
-	// Per-board editable teaching notes (local modifications to loaded PBN)
-	const [noteDraft, setNoteDraft] = useState('')
-	// Load current board's notes into draft when index or deals change
-	useEffect(() => {
-		const d = deals[index]
-		if (!d) {
-			setNoteDraft('')
-			return
-		}
-		if (Array.isArray(d.notes)) setNoteDraft(d.notes.join('\n'))
-		else if (typeof d.notes === 'string') setNoteDraft(d.notes)
-		else setNoteDraft('')
-	}, [deals, index])
-
-	// Handout generator wrapper (uses extracted module) - defined BEFORE saveBoardNotes to avoid TDZ errors
-	const generateHandoutFromLoaded = useCallback(async () => {
-		if (!deals.length) return
-		setPdfBusy(true)
-		setPdfError(null)
-		try {
-			const { generateHandoutPDF } = await import('../lib/handoutPdf')
-			const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-			const themePart = (selectedName || 'session')
-				.toLowerCase()
-				.replace(/[^a-z0-9]+/g, '-')
-				.replace(/^-+|-+$/g, '')
-			// Normalize deals for PDF (ensure hands + notes + calls + key metadata)
-			const normalized = deals.map((d, idx) => {
-				let handsMap = d.hands
-				if (!handsMap && d.deal) {
-					try {
-						handsMap = dealToHands(d.deal)
-					} catch {
-						handsMap = null
-					}
-				}
-				// Collect notes: explicit notes array + any Note / Notes / NoteX tags in ext
-				let notesArr = Array.isArray(d.notes)
-					? d.notes
-					: typeof d.notes === 'string'
-					? d.notes.split(/\n+/).filter(Boolean)
-					: []
-				if (d.ext) {
-					// Single [Note "..."] tag
-					if (d.ext.Note && typeof d.ext.Note === 'string')
-						notesArr.push(d.ext.Note)
-					// Sometimes multiple Note tags: Note0 / Note1 etc.
-					Object.keys(d.ext).forEach((k) => {
-						if (/^Note\d+$/.test(k) && typeof d.ext[k] === 'string')
-							notesArr.push(d.ext[k])
-					})
-					if (d.ext.Notes && typeof d.ext.Notes === 'string') {
-						const multi = d.ext.Notes.split(/\n+/)
-							.map((s) => s.trim())
-							.filter(Boolean)
-						notesArr.push(...multi)
-					}
-				}
-				// De-duplicate & trim
-				notesArr = notesArr.map((s) => s.trim()).filter(Boolean)
-				const seen = new Set()
-				const combinedNotes = notesArr.filter((n) => {
-					if (seen.has(n)) return false
-					seen.add(n)
-					return true
-				})
-				return {
-					number: d.board || idx + 1,
-					dealer: d.dealer,
-					vul: d.vul,
-					hands: handsMap || { N: [], E: [], S: [], W: [] },
-					notes: combinedNotes,
-					calls: Array.isArray(d.auction) ? d.auction : [],
-					contract: d.contract,
-					declarer: d.declarer,
-					resultText: d.resultText,
-					meta: {
-						...(d.meta || {}),
-						lead: d.meta?.lead || d.lead,
-						theme: d.meta?.theme || d.meta?.themeChoice,
-						ddpar: d.meta?.ddpar || d.ddpar,
-						scoring: d.meta?.scoring,
-						interf: d.meta?.interf,
-						resultText: d.resultText,
-					},
-				}
-			})
-			await generateHandoutPDF(normalized, {
-				mode: 'full',
-				filenameBase: `ralph-${dateStr}-${themePart}-hand`,
-				autoNotes: true,
-			})
-		} catch (err) {
-			console.error(err)
-			setPdfError(String(err.message || err))
-		} finally {
-			setPdfBusy(false)
-		}
-	}, [deals, selectedName])
-
-	const saveBoardNotes = useCallback(
-		(regenerate = false) => {
-			setDeals((prev) => {
-				if (!prev[index]) return prev
-				const lines = String(noteDraft || '')
-					.split(/\n+/)
-					.map((l) => l.trim())
-					.filter(Boolean)
-				const next = [...prev]
-				next[index] = { ...prev[index], notes: lines }
-				return next
-			})
-			setHandoutAutoGenerated(false)
-			if (regenerate) {
-				setTimeout(() => {
-					generateHandoutFromLoaded()
-				}, 0)
-			}
-		},
-		[index, noteDraft, generateHandoutFromLoaded]
-	)
-
-	const isIPhone = useIsIPhone()
-
-	// Teacher preferences
-	useEffect(() => {
-		setAuctionRevealed(!teacherMode)
-	}, [teacherMode])
-	useEffect(() => {
-		if (teacherMode) setPauseAtTrickEnd(true)
-	}, [teacherMode])
-	useEffect(() => {
-		if (teacherMode) setAuctionRevealed(false)
-	}, [teacherMode, current?.board])
-
-	// Examples loader
-	const completeDealIfPartial = useCallback((dealStr) => {
-		try {
-			const m = String(dealStr || '')
-				.trim()
-				.match(/^([NESW]):\s*(.+)$/)
-			if (!m) return dealStr
-			const dealer = m[1]
-			const body = m[2]
-			let segs = body.split(/\s+/)
-			if (segs.length !== 4) return dealStr
-			const seats = ['N', 'E', 'S', 'W']
-			const startIdx = seats.indexOf(dealer)
-			const seatOrder = [
-				seats[startIdx],
-				seats[(startIdx + 1) % 4],
-				seats[(startIdx + 2) % 4],
-				seats[(startIdx + 3) % 4],
-			]
-			const SUITS = ['S', 'H', 'D', 'C']
-			const RANKS = [
-				'A',
-				'K',
-				'Q',
-				'J',
-				'T',
-				'9',
-				'8',
-				'7',
-				'6',
-				'5',
-				'4',
-				'3',
-				'2',
-			]
-			const allCards = []
-			for (const s of SUITS) for (const r of RANKS) allCards.push(`${s}${r}`)
-			const used = new Set()
-			const seatHands = {
-				N: { S: [], H: [], D: [], C: [] },
-				E: { S: [], H: [], D: [], C: [] },
-				S: { S: [], H: [], D: [], C: [] },
-				W: { S: [], H: [], D: [], C: [] },
-			}
-			for (let i = 0; i < 4; i++) {
-				const seat = seatOrder[i]
-				const parts = (segs[i] || '').split('.')
-				for (let si = 0; si < 4; si++) {
-					const p = parts[si] || ''
-					if (!p || p === '-') continue
-					const suit = SUITS[si]
-					for (const ch of p) {
-						const rank = ch.toUpperCase()
-						if (!RANKS.includes(rank)) continue
-						const card = `${suit}${rank}`
-						if (used.has(card)) continue
-						used.add(card)
-						seatHands[seat][suit].push(rank)
-					}
-				}
-			}
-			const remaining = allCards.filter((c) => !used.has(c))
-			for (const seat of seatOrder) {
-				const count = () =>
-					seatHands[seat].S.length +
-					seatHands[seat].H.length +
-					seatHands[seat].D.length +
-					seatHands[seat].C.length
-				while (count() < 13 && remaining.length) {
-					const card = remaining.shift()
-					const suit = card[0]
-					const rank = card[1]
-					seatHands[seat][suit].push(rank)
-				}
-			}
-			let seatPtr = 0
-			while (remaining.length) {
-				const seat = seatOrder[seatPtr % 4]
-				const card = remaining.shift()
-				seatHands[seat][card[0]].push(card[1])
-				seatPtr++
-			}
-			const segOut = []
-			for (let i = 0; i < 4; i++) {
-				const seat = seatOrder[i]
-				const parts = SUITS.map(
-					(s) =>
-						seatHands[seat][s]
-							.slice()
-							.sort((a, b) => RANKS.indexOf(a) - RANKS.indexOf(b))
-							.join('') || '-'
-				)
-				segOut.push(parts.join('.'))
-			}
-			return `${dealer}:${segOut.join(' ')}`
-		} catch {
-			return dealStr
-		}
-	}, [])
-
-	const loadExampleByLabel = useCallback(
-		(label) => {
-			let found = null
-			for (const group of EXAMPLE_LIBRARY) {
-				for (const item of group.items) {
-					if (item.label === label) {
-						found = item
-						break
-					}
-				}
-				if (found) break
-			}
-			if (!found) {
-				setExampleMsg(`Example not found: ${label}`)
-				return
-			}
-			const mapped = (found.deals || []).map((d) => ({
-				board: d.board,
-				dealer: d.dealer,
-				vul: d.vul,
-				deal: completeDealIfPartial(d.deal),
-				auction: d.auction,
-				auctionDealer: d.auctionDealer || d.dealer,
-				meta: d.meta || {},
-				notes: d.notes || [],
-			}))
-			setDeals(mapped)
-			setIndex(0)
-			setExampleMsg(
-				`${label}: loaded ${mapped.length} example${
-					mapped.length === 1 ? '' : 's'
-				}.`
-			)
-			setPlayIdx(0)
-			setManualMoves([])
-			setManualDeclarer('')
-			setManualLevel('')
-			setManualStrain('')
-			setManualDbl('')
-			setTeacherMode(true)
-		},
-		[completeDealIfPartial]
-	)
-
-	// Auction/contract context
-	const validatedAuction = useMemo(() => {
-		if (!current) return { legal: false }
-		const calls = Array.isArray(current.auction) ? current.auction : []
-		if (!calls.length) return { legal: false }
-		return validateAuction(
-			current.auctionDealer || current.dealer || 'N',
-			calls
-		)
-	}, [current])
-
-	const effDeclarer =
-		manualDeclarer ||
-		current?.declarer ||
-		(validatedAuction.legal ? validatedAuction.declarer : '') ||
-		''
-	const effContract = useMemo(() => {
-		if (manualLevel && manualStrain)
-			return `${manualLevel}${manualStrain}${manualDbl}`
-		return (
-			current?.contract ||
-			(validatedAuction.legal ? validatedAuction.contract : '') ||
-			''
-		)
-	}, [
-		manualLevel,
-		manualStrain,
-		manualDbl,
-		current?.contract,
-		validatedAuction,
-	])
-	const effTrump = parseTrump(effContract)
-
-	// Derived: hands and play moves
-	const hands = useMemo(() => {
-		if (!current?.deal) return null
-		try {
-			return dealToHands(current.deal)
-		} catch {
-			return null
-		}
-	}, [current?.deal])
-
-	const playMoves = useMemo(() => {
-		if (current?.play?.length) {
-			try {
-				return parsePlayMoves(current?.playLeader, current.play, effContract)
-			} catch {
-				return []
-			}
-		}
-		if (current?.playScript) {
-			try {
-				return parsePlayScript(current.playScript)
-			} catch {
-				return []
-			}
-		}
-		return []
-	}, [current?.playLeader, current?.play, current?.playScript, effContract])
-	const usingManual = playMoves.length === 0
-	const timelineMoves = usingManual ? manualMoves : playMoves
-
-	// Initialize board on deal/context changes
-	useEffect(() => {
-		if (!hands) {
-			setRemaining(null)
-			setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
-			setTrick([])
-			setTurnSeat(null)
-			setTricksDecl(0)
-			setTricksDef(0)
-			setPlayIdx(0)
-			return
-		}
-		const seed = {
-			N: [...hands.N],
-			E: [...hands.E],
-			S: [...hands.S],
-			W: [...hands.W],
-		}
-		setRemaining(seed)
-		setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
-		setTrick([])
-		setTricksDecl(0)
-		setTricksDef(0)
-		const leaderFromDec = effDeclarer
-			? rightOf(effDeclarer)
-			: current?.dealer || 'N'
-		setTurnSeat(current?.playLeader || leaderFromDec)
-		setPlayIdx(0)
-		if (current?.contract) {
-			setManualLevel('')
-			setManualStrain('')
-			setManualDbl('')
-		}
-		if (current?.declarer && manualDeclarer) setManualDeclarer('')
-	}, [
-		hands,
-		effDeclarer,
-		current?.dealer,
-		current?.playLeader,
-		current?.contract,
-		current?.declarer,
-		manualDeclarer,
-	])
-
-	// Replay engine up to k moves
-	const applyMovesTo = useCallback(
-		(k) => {
-			if (!hands) return
-			setFlashWinner(null)
-			const maxK = Math.max(0, Math.min(k, timelineMoves.length))
-			const willPause = pauseRef.current && maxK > 0 && maxK % 4 === 0
-			const rem = {
-				N: [...hands.N],
-				E: [...hands.E],
-				S: [...hands.S],
-				W: [...hands.W],
-			}
-			const tl = { Spades: [], Hearts: [], Diamonds: [], Clubs: [] }
-			const trickArr = []
-			const trump = effTrump
-			const dec = effDeclarer || null
-			const leaderFromDec = dec ? rightOf(dec) : current?.dealer || 'N'
-			let nextSeat = current?.playLeader || leaderFromDec
-			let declTricks = 0
-			let defTricks = 0
-			let lastWinnerAtPause = null
-
-			const popCard = (seat, suit, rank) => {
-				const idx = rem[seat].findIndex(
-					(c) => c.suit === suit && c.rank === rank
-				)
-				if (idx >= 0) return rem[seat].splice(idx, 1)[0]
-				return { id: `${seat}-${suit}-${rank}`, suit, rank }
-			}
-
-			for (let i = 0; i < maxK; i++) {
-				const mv = timelineMoves[i]
-				const seat = mv.seat != null ? mv.seat : nextSeat
-				const suit = mv.suit
-				const rank = mv.rank
-				const played = popCard(seat, suit, rank)
-				tl[suit] = [...tl[suit], { seat, rank }]
-				trickArr.push({
-					seat,
-					card: { suit, rank, id: played.id || `${seat}-${suit}-${rank}` },
-				})
-				nextSeat = rightOf(seat)
-				if (trickArr.length === 4) {
-					const winner = evaluateTrick(trickArr, trump)
-					if (winner) {
-						if (isDeclarerSide(winner, dec)) declTricks++
-						else defTricks++
-						lastWinnerAtPause = winner
-						nextSeat = winner
-					}
-					if (!(willPause && i === maxK - 1)) {
-						trickArr.length = 0
-					}
-				}
-			}
-
-			setRemaining(rem)
-			setTally(tl)
-			setTrick([...trickArr])
-			setTurnSeat(nextSeat)
-			setTricksDecl(declTricks)
-			setTricksDef(defTricks)
-			setPlayIdx(maxK)
-			playIdxRef.current = maxK
-			setFlashWinner(willPause ? lastWinnerAtPause : null)
-		},
-		[
-			hands,
-			timelineMoves,
-			effTrump,
-			effDeclarer,
-			current?.dealer,
-			current?.playLeader,
-		]
-	)
-
-	// Manual play
-	const onPlayCard = useCallback(
-		(seat, cardId) => {
-			if (!remaining) {
-				logDebug(`Ignored play (${seat} ${cardId}) – no remaining state`)
-				return
-			}
-			if (!turnSeat) {
-				logDebug(`Ignored play (${seat} ${cardId}) – turnSeat is null`)
-				return
-			}
-			if (seat !== turnSeat) {
-				logDebug(
-					`Ignored play (${seat} ${cardId}) – not ${turnSeat}'s turn (click allowed due to TEMP rules but logic blocked)`
-				)
-				return
-			}
-			const hand = remaining[seat] || []
-			const idx = hand.findIndex((c) => c.id === cardId)
-			if (idx < 0) {
-				logDebug(`Ignored play (${seat} ${cardId}) – card not found in hand`)
-				return
-			}
-			const card = hand[idx]
-			logDebug(
-				`Play accepted: ${seat} plays ${card.rank}${card.suit[0]} (trickLen=${trick.length})`
-			)
-			const newRemaining = {
-				...remaining,
-				[seat]: [...hand.slice(0, idx), ...hand.slice(idx + 1)],
-			}
-			const newTally = {
-				...tally,
-				[card.suit]: [...(tally[card.suit] || []), { seat, rank: card.rank }],
-			}
-			const curTrick = trick.length === 4 ? [] : trick
-			const nextTrick = [...curTrick, { seat, card }]
-			let nextTurn = rightOf(seat)
-			let d = tricksDecl
-			let f = tricksDef
-			let flash = null
-			if (nextTrick.length === 4) {
-				const winner = evaluateTrick(nextTrick, effTrump)
-				if (winner) {
-					logDebug(`Trick completed. Winner = ${winner}`)
-					if (isDeclarerSide(winner, effDeclarer)) d++
-					else f++
-					nextTurn = winner
-					if (pauseRef.current) flash = winner
-				}
-				else logDebug('Trick completed but no winner determined')
-			}
-			setRemaining(newRemaining)
-			setTally(newTally)
-			setTrick(nextTrick.length === 4 && !pauseRef.current ? [] : nextTrick)
-			setTurnSeat(nextTurn)
-			logDebug(`Next turn -> ${nextTurn}; decl=${d} def=${f}; trickSize=${nextTrick.length}`)
-			setTricksDecl(d)
-			setTricksDef(f)
-			setFlashWinner(flash)
-			setManualMoves((mm) => [
-				...mm,
-				{ seat, suit: card.suit, rank: card.rank },
-			])
-		},
-		[
-			remaining,
-			turnSeat,
-			tally,
-			trick,
-			tricksDecl,
-			tricksDef,
-			effTrump,
-			effDeclarer,
-			logDebug,
-		]
-	)
-
-	// Derived
-	const stepHelper = usingManual ? 'Manual play' : 'PBN replay'
-	const result = useMemo(() => {
-		if (!effContract) return null
-		const vul = isSeatVul(effDeclarer, current?.vul)
-		return computeDuplicateScore(effContract, effDeclarer, vul, tricksDecl)
-	}, [effContract, effDeclarer, current?.vul, tricksDecl])
-
-	// File input
-	const onFile = useCallback(async (e) => {
-		try {
-			const file = e?.target?.files?.[0]
-			if (!file) return
-			const raw = await file.text()
-			const cleaned = sanitizePBN(raw)
-			const parsed = parsePBN(cleaned)
-			// Deduplicate boards (keep first occurrence of each board number)
-			const seen = new Set()
-			const deduped = []
-			for (const d of parsed) {
-				if (d.board && seen.has(d.board)) continue
-				if (d.board) seen.add(d.board)
-				deduped.push(d)
-			}
-			setDeals(deduped)
-			setIndex(0)
-			setSelectedName(file.name)
-			setExampleMsg('')
-			setManualMoves([])
-			setPlayIdx(0)
-		} catch (err) {
-			console.error('Failed to read file:', err)
-		}
-	}, [])
-
-	const prev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), [])
-	const next = useCallback(
-		() => setIndex((i) => Math.min(deals.length - 1, i + 1)),
-		[deals.length]
-	)
-
-	const resetToChooser = useCallback(() => {
-		setDeals([])
-		setIndex(0)
-		setSelectedName('')
-		setExampleMsg('')
-		setTeacherMode(false)
-		setAuctionRevealed(true)
-		setManualMoves([])
-		setManualDeclarer('')
-		setManualLevel('')
-		setManualStrain('')
-		setManualDbl('')
-		setPlayIdx(0)
-		setRemaining(null)
-		setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
-		setTrick([])
-		setTricksDecl(0)
-		setTricksDef(0)
-		setFlashWinner(null)
-	}, [])
-
-	// Hint
-	const makeHint = useCallback(() => {
-		if (!remaining || !turnSeat) return 'No hint available.'
-		const myHand = remaining[turnSeat] || []
-		const leadSuit =
-			trick.length && trick.length < 4 ? trick[0].card.suit : null
-		const trump = effTrump
-		const bySuit = (s) => myHand.filter((c) => c.suit === s)
-		if (leadSuit) {
-			if (bySuit(leadSuit).length)
-				return `Follow ${suitLetter(
-					leadSuit
-				)}. Win cheaply if you can; otherwise play lowest.`
-			if (trump && bySuit(trump).length)
-				return `Ruff with a low ${suitLetter(trump)}.`
-			return 'Discard a low card from your shortest suit.'
-		}
-		const groups = ['Spades', 'Hearts', 'Diamonds', 'Clubs'].map((s) => ({
-			s,
-			n: bySuit(s).length,
-		}))
-		groups.sort((a, b) => b.n - a.n)
-		const longest = groups[0]
-		if (longest.n > 0)
-			return `Lead your longest suit (${suitLetter(
-				longest.s
-			)}). Top of a sequence if you have one; else a low (4th best) card.`
-		return 'No hint available.'
-	}, [remaining, turnSeat, trick, effTrump])
-
-	// Panels
-	const LeftPanel = (
-		<div className="text-xs text-gray-800 space-y-2">
-			<div className="flex items-center justify-between">
-				<Link to="/" className="text-sky-600 hover:underline text-[12px]">
-					← Home
-				</Link>
-				<button
-					onClick={resetToChooser}
-					className="px-2 py-0.5 rounded border bg-white text-[11px]">
-					Start over
-				</button>
-			</div>
-			<div className="space-y-1">
-				<input
-					ref={fileRef}
-					type="file"
-					accept=".pbn,text/plain"
-					onChange={onFile}
-					className="hidden"
-				/>
-				<button
-					onClick={() => fileRef.current?.click()}
-					className="w-full px-2 py-1 rounded bg-sky-600 text-white text-[12px]">
-					Choose PBN…
-				</button>
-				{/* Generate PDF button moved here (was in RightPanel) */}
-				<button
-					disabled={pdfBusy || !deals.length}
-					onClick={generateHandoutFromLoaded}
-					className={`w-full px-2 py-1 rounded text-[11px] font-semibold transition ${
-						pdfBusy
-							? 'bg-teal-400 text-white'
-							: 'bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40'
-					}`}>
-					{pdfBusy ? 'Generating Full PDF…' : 'Generate Full Handout PDF'}
-				</button>
-				{pdfError && (
-					<div className="text-[10px] text-rose-600 mt-0.5">{pdfError}</div>
-				)}
-				<div className="text-[11px] text-gray-600 truncate">
-					{selectedName || 'No file chosen'}
-				</div>
-				<div className="text-[11px] text-gray-700">
-					{deals.length
-						? `Board ${deals[index]?.board || index + 1} — ${index + 1}/${
-								deals.length
-						  }`
-						: 'No file loaded'}
-				</div>
-				{effContract ? (
-					<div className="text-[11px] text-gray-700">
-						Contract:{' '}
-						<span className="font-semibold">
-							{effContract}
-							{effDeclarer ? ` (${effDeclarer})` : ''}
-						</span>
-					</div>
-				) : (
-					<div className="text-[11px] text-gray-500">No bidding found</div>
-				)}
-				<div className="flex gap-1">
-					<button
-						disabled={!deals.length}
-						onClick={prev}
-						className="flex-1 px-2 py-0.5 rounded border text-[11px] disabled:opacity-40">
-						Prev
-					</button>
-					<button
-						disabled={!deals.length}
-						onClick={next}
-						className="flex-1 px-2 py-0.5 rounded border text-[11px] disabled:opacity-40">
-						Next
-					</button>
-				</div>
-				{/* Per-board notes editor */}
-				{deals.length > 0 && (
-					<div className="pt-2 border-t space-y-1">
-						<div className="flex items-center justify-between">
-							<div className="text-[11px] font-semibold">Board Notes</div>
-							{current?.notes?.length ? (
-								<div className="text-[10px] text-gray-500">
-									{current.notes.length} line
-									{current.notes.length === 1 ? '' : 's'}
-								</div>
-							) : null}
-						</div>
-						<textarea
-							className="w-full border rounded px-1 py-0.5 text-[11px] h-20 resize-vertical"
-							value={noteDraft}
-							onChange={(e) => setNoteDraft(e.target.value)}
-							placeholder="Enter or adjust teaching notes for this board. One bullet per line."
-						/>
-						<div className="flex flex-wrap gap-1">
-							<button
-								onClick={() => saveBoardNotes(false)}
-								disabled={pdfBusy}
-								className="px-2 py-0.5 rounded border bg-white text-[11px] disabled:opacity-40">
-								Save Notes
-							</button>
-							<button
-								onClick={() => saveBoardNotes(true)}
-								disabled={pdfBusy}
-								className="px-2 py-0.5 rounded border bg-teal-600 text-white text-[11px] disabled:opacity-40">
-								Save & Regenerate PDF
-							</button>
-							<button
-								onClick={() => setNoteDraft('')}
-								className="px-2 py-0.5 rounded border bg-white text-[11px]">
-								Clear
-							</button>
-						</div>
-						<div className="text-[10px] text-gray-500 leading-snug">
-							These edits are local only (not written back to the PBN file).
-							Regenerate the PDF to include changes.
-						</div>
-					</div>
-				)}
-			</div>
-			<div className="pt-2 border-t space-y-1">
-				<label className="flex items-center gap-1">
-					<input
-						type="checkbox"
-						checked={hideDefenders}
-						onChange={(e) => setHideDefenders(e.target.checked)}
-					/>
-					<span>Hide defenders</span>
-				</label>
-				<label className="flex items-center gap-1">
-					<input
-						type="checkbox"
-						checked={showSuitTally}
-						onChange={(e) => setShowSuitTally(e.target.checked)}
-					/>
-					<span>Show suit tally</span>
-				</label>
-				<label className="flex items-center gap-1">
-					<input
-						type="checkbox"
-						checked={showHcpWhenHidden}
-						onChange={(e) => setShowHcpWhenHidden(e.target.checked)}
-					/>
-					<span>Show HCP when hidden</span>
-				</label>
-				<label className="flex items-center gap-1">
-					<input
-						type="checkbox"
-						checked={pauseAtTrickEnd}
-						onChange={(e) => setPauseAtTrickEnd(e.target.checked)}
-					/>
-					<span>Pause at trick end</span>
-				</label>
-				{validatedAuction?.legal ? (
-					<button
-						onClick={() => setAuctionRevealed((v) => !v)}
-						className="w-full px-2 py-0.5 rounded border text-[11px]">
-						{auctionRevealed ? 'Hide Auction' : 'Reveal Auction'}
-					</button>
-				) : null}
-				<button
-					onClick={() => setTeacherMode((v) => !v)}
-					className={`w-full px-2 py-0.5 rounded border text-[11px] ${
-						teacherMode ? 'bg-rose-600 text-white border-rose-700' : 'bg-white'
-					}`}>
-					{teacherMode ? 'Teacher Focus: ON' : 'Teacher Focus'}
-				</button>
-			</div>
-			{!current?.contract && (
-				<div className="pt-2 border-t space-y-1">
-					<div className="text-[11px] font-semibold">Set contract</div>
-					<label className="flex items-center justify-between gap-1">
-						<span>Declarer</span>
-						<select
-							className="border rounded px-1 py-0.5"
-							value={manualDeclarer}
-							onChange={(e) => setManualDeclarer(e.target.value)}>
-							<option value="">—</option>
-							<option value="N">N</option>
-							<option value="E">E</option>
-							<option value="S">S</option>
-							<option value="W">W</option>
-						</select>
-					</label>
-					<label className="flex items-center justify-between gap-1">
-						<span>Level</span>
-						<select
-							className="border rounded px-1 py-0.5"
-							value={manualLevel}
-							onChange={(e) => setManualLevel(e.target.value)}>
-							<option value="">—</option>
-							{['1', '2', '3', '4', '5', '6', '7'].map((lv) => (
-								<option key={lv} value={lv}>
-									{lv}
-								</option>
-							))}
-						</select>
-					</label>
-					<label className="flex items-center justify-between gap-1">
-						<span>Trumps</span>
-						<select
-							className="border rounded px-1 py-0.5"
-							value={manualStrain}
-							onChange={(e) => setManualStrain(e.target.value)}>
-							<option value="">—</option>
-							<option value="C">C</option>
-							<option value="D">D</option>
-							<option value="H">H</option>
-							<option value="S">S</option>
-							<option value="NT">NT</option>
-						</select>
-					</label>
-					<label className="flex items-center justify-between gap-1">
-						<span>Dbl</span>
-						<select
-							className="border rounded px-1 py-0.5"
-							value={manualDbl}
-							onChange={(e) => setManualDbl(e.target.value)}>
-							<option value="">—</option>
-							<option value="X">X</option>
-							<option value="XX">XX</option>
-						</select>
-					</label>
-					<button
-						onClick={() => {
-							setManualMoves([])
-							setTricksDecl(0)
-							setTricksDef(0)
-							setTrick([])
-							if (hands)
-								setRemaining({
-									N: [...hands.N],
-									E: [...hands.E],
-									S: [...hands.S],
-									W: [...hands.W],
-								})
-							setTally({ Spades: [], Hearts: [], Diamonds: [], Clubs: [] })
-							setPlayIdx(0)
-							const leaderFromDec =
-								manualDeclarer || current?.declarer
-									? rightOf(manualDeclarer || current?.declarer)
-									: current?.dealer || 'N'
-							setTurnSeat(current?.playLeader || leaderFromDec)
-						}}
-						className="w-full px-2 py-0.5 rounded border bg-white">
-						Start again
-					</button>
-				</div>
-			)}
+// Cross style current trick display (N at top, S bottom, W left, E right)
+function CrossTrick({ trick=[], winner, turnSeat, lastAutoPlay }){
+	const cardFor = seat => trick.find(t=> t.seat===seat)
+	const CardBox = ({seat}) => { const t=cardFor(seat); const win = winner===seat && trick.length===4; const turn = turnSeat===seat; return (
+		<div className={`w-16 h-20 rounded-md border flex flex-col items-center justify-center text-[11px] font-semibold shadow-sm ${win? 'border-emerald-500 ring-2 ring-emerald-400':'border-gray-300'} ${turn? 'bg-yellow-50':'bg-white'}`}>
+			<div className='text-[9px] text-gray-500 mb-0.5'>{seat}</div>
+			{t? <div className={`text-base ${t.card.suit==='Hearts'||t.card.suit==='Diamonds'?'text-red-600':'text-gray-900'}`}>{t.card.rank}{suitSymbol(t.card.suit)}</div> : <span className='text-gray-300 text-sm'>—</span>}
+		</div>
+	) }
+	return (
+		<div className='relative w-64 h-64 mx-auto rounded-xl border bg-white/80 backdrop-blur-sm shadow-inner flex items-center justify-center'>
+			<div className='absolute top-2 left-1/2 -translate-x-1/2'><CardBox seat='N' /></div>
+			<div className='absolute bottom-2 left-1/2 -translate-x-1/2'><CardBox seat='S' /></div>
+			<div className='absolute left-2 top-1/2 -translate-y-1/2'><CardBox seat='W' /></div>
+			<div className='absolute right-2 top-1/2 -translate-y-1/2'><CardBox seat='E' /></div>
+			<div className='text-[10px] absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-sky-600 text-white shadow'>{lastAutoPlay? `AUTO ${lastAutoPlay.seat}`:'Current Trick'}</div>
 		</div>
 	)
+}
 
-	const RightPanel = (
-		<div className="text-xs text-gray-800 space-y-2">
-			{validatedAuction?.legal && auctionRevealed && !teacherMode ? (
-				<AuctionView
-					dealer={current?.auctionDealer || current?.dealer}
-					calls={current?.auction}
-					finalContract={effContract}
-				/>
-			) : null}
-			<ScorePanel
-				tricksDecl={tricksDecl}
-				tricksDef={tricksDef}
-				neededToSet={neededToSet(effContract)}
-				contract={effContract}
-				declarer={effDeclarer}
-				result={result}
-			/>
+function AdvicePanel({ entries }){
+	if(!entries || !entries.length) return <div className='text-xs italic text-gray-400'>Declarer advice will appear here as you play.</div>
+	const latest=entries[entries.length-1]
+	const face = latest.quality==='good'? '😃' : latest.quality==='bad'? '😕':'🙂'
+	return <div className='text-sm bg-gradient-to-br from-indigo-50 via-white to-violet-50 border border-indigo-200 shadow rounded-lg p-3 space-y-2 w-64'>
+		<div className='flex items-center justify-between'>
+			<div className='font-semibold text-indigo-700 flex items-center gap-1'>Declarer Insight <span>{face}</span></div>
+			<div className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded ${latest.quality==='good'? 'bg-green-100 text-green-700': latest.quality==='bad' ? 'bg-rose-100 text-rose-700':'bg-gray-100 text-gray-600'}`}>{latest.quality}</div>
 		</div>
-	)
+		<div className='text-gray-700 leading-snug'>{latest.why}</div>
+		<div className='text-indigo-800 text-[13px] font-medium'>Next Thought</div>
+		<div className='text-indigo-700 leading-snug'>{latest.next}</div>
+		{entries.length>1 && <details className='text-[11px] mt-1'>
+			<summary className='cursor-pointer text-gray-500 hover:text-gray-700'>Previous advice history</summary>
+			<ul className='mt-1 max-h-40 overflow-auto space-y-1 pr-1'>
+				{[...entries].slice(-15,-1).reverse().map(e=> <li key={e.id} className='border-l pl-2 text-[11px] leading-snug'>
+					<span className='font-semibold'>{e.card}</span> – <span className='italic'>{e.quality}</span>: {e.why}
+				</li>)}
+			</ul>
+		</details>}
+	</div>
+}
+
+function CompletedTricks({ tricks }){ if(!tricks || !tricks.length) return null; return <div className='rounded border bg-white p-2 max-h-48 overflow-auto w-60'>
+	<div className='text-[11px] text-gray-600 mb-1'>Completed Tricks</div>
+	<table className='w-full text-[10px]'><thead><tr className='text-gray-600'><th className='text-left'>#</th><th className='text-left'>Winner</th><th className='text-left'>Cards (N E S W)</th></tr></thead><tbody>
+		{tricks.map(t=>{ const order=['N','E','S','W']; const cards=order.map(s=>{ const it=t.cards.find(c=> c.seat===s); return it? `${it.card.rank}${it.card.suit[0]}`:'—' }); return <tr key={t.no} className='border-t'><td className='py-0.5 pr-1'>{t.no}</td><td className='py-0.5 pr-1 font-semibold'>{t.winner}</td><td className='py-0.5 font-mono'>{cards.join(' ')}</td></tr> })}
+	</tbody></table>
+</div> }
+
+function PreUpload({ onChooseFile }){ return <div className='max-w-lg mx-auto mt-10 text-center rounded border bg-white p-6'>
+	<h2 className='text-lg font-semibold mb-2'>Load a PBN file</h2>
+	<p className='text-sm text-gray-600 mb-4'>Choose a PBN tournament file to begin exploring deals.</p>
+	<button onClick={onChooseFile} className='px-3 py-1.5 rounded bg-sky-600 text-white text-sm'>Choose PBN…</button>
+</div> }
+
+// --- Root Component ---
+export default function Player(){
+	const [deals,setDeals]=useState([])
+	const [index,setIndex]=useState(0)
+	const [selectedName,setSelectedName]=useState('')
+	const current=deals[index]
+	const [manualDeclarer,setManualDeclarer]=useState('')
+	const [manualLevel,setManualLevel]=useState('')
+	const [manualStrain,setManualStrain]=useState('')
+	const [manualDbl,setManualDbl]=useState('')
+	const [hideDefenders,setHideDefenders]=useState(false)
+	const [fastAutoDef,setFastAutoDef]=useState(false)
+	const [aiDifficulty,setAiDifficulty]=useState('Intermediate')
+	const [signalMode,setSignalMode]=useState('Standard')
+	const [showAiLog,setShowAiLog]=useState(true)
+	const [pauseAtTrickEnd,setPauseAtTrickEnd]=useState(false)
+	const [remaining,setRemaining]=useState(null)
+	const [trick,setTrick]=useState([])
+	const [turnSeat,setTurnSeat]=useState(null)
+	const [tricksDecl,setTricksDecl]=useState(0)
+	const [tricksDef,setTricksDef]=useState(0)
+	const [completedTricks,setCompletedTricks]=useState(0)
+	const [trickComplete,setTrickComplete]=useState(false)
+	const [history,setHistory]=useState([])
+	const [manualMoves,setManualMoves]=useState([])
+	const [playIdx,setPlayIdx]=useState(0)
+	const [flashWinner,setFlashWinner]=useState(null)
+	const [completedTrickList,setCompletedTrickList]=useState([])
+	const [lastAutoSeat,setLastAutoSeat]=useState(null)
+	const [lastAutoPlay,setLastAutoPlay]=useState(null)
+	const [aiLogs,setAiLogs]=useState([])
+	const [adviceEntries,setAdviceEntries]=useState([]) // learning feedback entries
+	const [showAdvice,setShowAdvice]=useState(true)
+	const playIdxRef=useRef(0)
+	const pauseRef=useRef(false)
+	const fileRef=useRef(null)
+	const initialTrumpRef=useRef(null) // {decl,dummy,defenders,total}
+
+	const validatedAuction=useMemo(()=>{ if(!current) return {legal:false}; const calls=Array.isArray(current.auction)? current.auction:[]; if(!calls.length) return {legal:false}; return validateAuction(current.auctionDealer||current.dealer||'N', calls) },[current])
+	const effDeclarer = manualDeclarer || current?.declarer || (validatedAuction.legal? validatedAuction.declarer:'') || ''
+	const effContract = useMemo(()=>{ if(manualLevel && manualStrain) return `${manualLevel}${manualStrain}${manualDbl}`; return current?.contract || (validatedAuction.legal? validatedAuction.contract:'') || '' },[manualLevel,manualStrain,manualDbl,current?.contract,validatedAuction])
+	const effTrump=parseTrump(effContract)
+	const hands = useMemo(()=>{ if(!current?.deal) return null; try { return dealToHands(current.deal) } catch { return null } },[current?.deal])
+	const playMoves=useMemo(()=>{ if(current?.play?.length){ try { return parsePlayMoves(current.playLeader,current.play,effContract) } catch { return [] } } if(current?.playScript){ try { return parsePlayScript(current.playScript) } catch { return [] } } return [] },[current?.play,current?.playLeader,current?.playScript,effContract])
+	const usingManual=playMoves.length===0
+
+	useEffect(()=>{ if(!hands){ setRemaining(null); setTrick([]); setTurnSeat(null); setTricksDecl(0); setTricksDef(0); setCompletedTricks(0); setHistory([]); setManualMoves([]); setCompletedTrickList([]); setPlayIdx(0); return } const leader= effDeclarer? rightOf(effDeclarer): current?.dealer || 'N'; const init=createInitialManualState(hands,current?.playLeader||leader, effTrump, effDeclarer); setRemaining(init.remaining); setTrick(init.trick); setTurnSeat(init.turnSeat); setTricksDecl(init.tricksDecl); setTricksDef(init.tricksDef); setCompletedTricks(init.completed); setTrickComplete(init.trickComplete); setHistory([]); setManualMoves([]); setCompletedTrickList([]); setPlayIdx(0); setFlashWinner(null) },[hands,effTrump,effDeclarer,current?.playLeader,current?.dealer])
+
+	// Capture initial trump distribution for advice heuristics
+	useEffect(()=>{ if(!hands || !effTrump || !effDeclarer) { initialTrumpRef.current=null; return } try {
+		const partner = partnerOf(effDeclarer)
+		const declCount = hands[effDeclarer].filter(c=> c.suit===effTrump).length
+		const dummyCount = hands[partner].filter(c=> c.suit===effTrump).length
+		const defCount = ['N','E','S','W'].filter(s=> s!==effDeclarer && s!==partner).reduce((acc,s)=> acc + hands[s].filter(c=> c.suit===effTrump).length,0)
+		initialTrumpRef.current={decl:declCount,dummy:dummyCount,def: defCount,total: declCount+dummyCount+defCount}
+	} catch { initialTrumpRef.current=null }
+	},[hands,effTrump,effDeclarer])
+
+	// Heuristic evaluation of declarer side play
+	const evaluateDeclarerPlay = useCallback((params)=>{
+		const { seat, suit, rank, preRemaining, postState, effTrump, trickBefore } = params
+		if(!effTrump) return {quality:'neutral', why:'No trump contract: baseline guidance only.', next:'Focus on establishing long suits and maintaining entries.'}
+		if(!effDeclarer) return {quality:'neutral', why:'Declarer unknown yet.', next:'Once declarer identified, think about trump control first.'}
+		const partner = partnerOf(effDeclarer)
+		const isDeclarerSeat = seat===effDeclarer
+		const isDummySeat = seat===partner
+		// Count remaining trumps after play
+		const remainingAfter = postState.remaining
+		const declTrumpsAfter = remainingAfter[effDeclarer].filter(c=> c.suit===effTrump).length
+		const dummyTrumpsAfter = remainingAfter[partner].filter(c=> c.suit===effTrump).length
+		const defendersSeats = ['N','E','S','W'].filter(s=> s!==effDeclarer && s!==partner)
+		const defendersTrumpsAfter = defendersSeats.reduce((n,s)=> n + remainingAfter[s].filter(c=> c.suit===effTrump).length,0)
+		// Lead suit for this trick BEFORE the play
+		const leadSuit = trickBefore.length>0 && trickBefore.length<4 ? trickBefore[0].card.suit : null
+		const followedLead = leadSuit? suit===leadSuit : null
+		const wasRuff = leadSuit && suit===effTrump && leadSuit!==effTrump && !preRemaining[seat].some(c=> c.suit===leadSuit)
+		// Basic heuristics
+		let quality='neutral'; let why=''; let next=''
+		const totalOurTrumpsAfter = declTrumpsAfter + dummyTrumpsAfter
+		if(wasRuff){ quality='good'; why='Nice ruff – using a trump in the shorter hand to create an extra trick.'; }
+		else if(suit===effTrump){
+			if(defendersTrumpsAfter>0){
+				// drawing trumps phase
+				quality='good'; why='Drawing remaining enemy trumps helps protect your side suits.'
+			} else {
+				quality='neutral'; why='All (or almost all) enemy trumps are gone; further trump plays have diminishing value.'
+			}
+		} else if(effTrump && defendersTrumpsAfter>0 && totalOurTrumpsAfter>defendersTrumpsAfter && !leadSuit){
+			quality='bad'; why='Side suit led while opponents still hold trumps you can safely draw.'
+		} else if(!followedLead && leadSuit && suit!==effTrump){
+			quality='bad'; why='Discard provided no immediate benefit; consider whether a ruff or drawing trumps is stronger.'
+		} else {
+			why = quality==='neutral'? 'Reasonable choice; no immediate tactical error detected.' : why
+		}
+		// Adaptive encouragement / guidance
+		if(quality==='good'){
+			next = defendersTrumpsAfter>0 ? 'Continue counting outstanding trumps; once they are gone, transition to establishing or cashing side winners.' : 'Plan how to develop additional winners – look for a long suit or chances to ruff losers in the short trump hand.'
+		} else if(quality==='bad'){
+			next = defendersTrumpsAfter>0 ? 'Review the principle: draw trumps early when you hold the majority, unless you urgently need them for ruffing losers first.' : 'Refocus on a clear plan: count your winners versus required tricks and choose plays that build extra winners.'
+		} else {
+			next = defendersTrumpsAfter>0 ? 'Keep track of how many enemy trumps remain; decide between drawing them or executing planned ruffs.' : 'Shift thinking to creating and preserving entries to the hand with long established winners.'
+		}
+		return {quality, why, next, seat, card:`${rank}${suit[0]}`}
+	},[effDeclarer])
+
+	const onPlayCard=useCallback((seat,cardId)=>{ 
+		if(!usingManual||!turnSeat) return; 
+		const preRemaining=remaining; const trickBefore=trick; 
+		const engine={ remaining, trick, turnSeat, tricksDecl, tricksDef, trump: effTrump, declarer: effDeclarer, completed: completedTricks, trickComplete }; 
+		const r=playCardManual(engine,seat,cardId); if(!r.ok) return; 
+		const next=r.state; setRemaining(next.remaining); setTrick(next.trick); setTurnSeat(next.turnSeat); setTricksDecl(next.tricksDecl); setTricksDef(next.tricksDef); setCompletedTricks(next.completed); setTrickComplete(next.trickComplete||false); 
+		const [_,suit,rank]=cardId.split('-'); const entry={seat,cardId,suit,rank}; 
+		setHistory(h=>[...h,entry]); setManualMoves(m=>[...m,{seat,suit,rank}]); setPlayIdx(k=>k+1); 
+		// Advice evaluation for declarer side
+		if(effDeclarer && (seat===effDeclarer || partnerOf(effDeclarer)===seat)){
+			try { const evalRes = evaluateDeclarerPlay({ seat, suit, rank, preRemaining, postState: next, effTrump, trickBefore }); setAdviceEntries(list => [...list, { id: Date.now()+Math.random().toString(36).slice(2,7), ...evalRes }].slice(-60)) } catch(e){ /* ignore */ }
+		}
+		if(r.winner){ if(pauseRef.current) setFlashWinner(r.winner); else setFlashWinner(null); setCompletedTrickList(lst=>[...lst,{no: lst.length+1, winner: r.winner, cards: next.trick }]) } 
+		if(hideDefenders && isDefender(seat,effDeclarer)){ setLastAutoSeat(seat); setTimeout(()=> setLastAutoSeat(null),800) } 
+	},[usingManual,turnSeat,remaining,trick,tricksDecl,tricksDef,effTrump,effDeclarer,completedTricks,trickComplete,hideDefenders,evaluateDeclarerPlay])
+
+	// Simple auto-play for hidden defenders
+	const rankOrder=['2','3','4','5','6','7','8','9','10','J','Q','K','A']; const rankWeight=r=> rankOrder.indexOf(r)
+	const selectDefenderCard=useCallback((seat)=>{ const hand=remaining?.[seat]; if(!hand?.length) return null; const cur=trick; const leadSuit=cur.length>0 && cur.length<4? cur[0].card.suit:null; let playable=hand; if(leadSuit){ const follow=hand.filter(c=> c.suit===leadSuit); if(follow.length) playable=follow } if(aiDifficulty==='Basic'){ const low=playable.slice().sort((a,b)=> rankWeight(a.rank)-rankWeight(b.rank))[0]; return {card:low, reason: leadSuit? 'Lowest follow':'Lowest lead'} } if(!leadSuit){ const groups={}; hand.forEach(c=>{ (groups[c.suit] ||= []).push(c) }); let entries=Object.entries(groups).sort((a,b)=> b[1].length - a[1].length); if(effTrump){ const non=entries.filter(e=> e[0]!==effTrump); if(non.length) entries=[...non, ...entries.filter(e=> e[0]===effTrump)] } const low=entries[0][1].slice().sort((a,b)=> rankWeight(a.rank)-rankWeight(b.rank)); return {card: low[0], reason: `Lead ${entries[0][0][0]} low`} } if(leadSuit){ const partner=partnerOf(seat); const currentWinner=evaluateTrick(cur,effTrump); const asc=playable.slice().sort((a,b)=> rankWeight(a.rank)-rankWeight(b.rank)); if(currentWinner===partner){ let reason='Partner winning'; if(signalMode==='LowEnc') reason+=' (low=enc)'; return {card: asc[0], reason} } for(const c of asc){ const w=evaluateTrick([...cur,{seat,card:c}], effTrump); if(w===seat) return {card:c, reason:'Win cheaply'} } return {card: asc[0], reason:'Cannot win'} } return {card: playable[0], reason:'Random'} },[remaining,trick,effTrump,aiDifficulty,signalMode])
+
+	const autoPlayRef=useRef(false)
+	useEffect(()=>{ if(!usingManual||!hideDefenders||!turnSeat||!isDefender(turnSeat,effDeclarer)||autoPlayRef.current) return; autoPlayRef.current=true; const timer=setTimeout(()=>{ const sel=selectDefenderCard(turnSeat); if(sel?.card){ onPlayCard(turnSeat, sel.card.id); setLastAutoPlay({seat:turnSeat, cardId: sel.card.id, reason: sel.reason, ts: Date.now()}); setAiLogs(l=> [...l,{id: Date.now()+Math.random().toString(36).slice(2,6), seat: turnSeat, text: `${turnSeat} ${sel.card.rank}${sel.card.suit[0]} – ${sel.reason}` }].slice(-40)) } autoPlayRef.current=false }, fastAutoDef?120:420); return ()=> { clearTimeout(timer); autoPlayRef.current=false } },[usingManual,hideDefenders,turnSeat,effDeclarer,fastAutoDef,selectDefenderCard,onPlayCard])
+
+	const result=useMemo(()=>{ if(!effContract||!effDeclarer) return null; return computeDuplicateScore(effContract, effDeclarer, isSeatVul(effDeclarer, current?.vul), tricksDecl) },[effContract,effDeclarer,tricksDecl,current?.vul])
+
+	const onFile=e=>{ const f=e.target.files?.[0]; if(!f) return; setSelectedName(f.name); const r=new FileReader(); r.onload=()=>{ try{ const boards=parsePbn(String(r.result)); setDeals(boards); setIndex(0) }catch(err){ console.error(err)} }; r.readAsText(f) }
+
+	const rebuildFromHistory=useCallback((to)=>{ if(!hands) return; const leader=effDeclarer? rightOf(effDeclarer): current?.dealer || 'N'; let st=createInitialManualState(hands,current?.playLeader||leader, effTrump, effDeclarer); for(const mv of history.slice(0,to)){ const r=playCardManual(st,mv.seat,mv.cardId); if(!r.ok) break; st=r.state } setRemaining(st.remaining); setTrick(st.trick); setTurnSeat(st.turnSeat); setTricksDecl(st.tricksDecl); setTricksDef(st.tricksDef); setCompletedTricks(st.completed); setTrickComplete(st.trickComplete); setPlayIdx(to); playIdxRef.current=to },[history,hands,effDeclarer,effTrump,current?.playLeader,current?.dealer])
+	const onPrevStep=()=> rebuildFromHistory(Math.max(0, playIdxRef.current-1))
+	const onNextStep=()=> rebuildFromHistory(Math.min(history.length, playIdxRef.current+1))
+	const prev=()=> setIndex(i=> Math.max(0,i-1))
+	const next=()=> setIndex(i=> Math.min(deals.length-1,i+1))
+	const reset=()=> { setDeals([]); setIndex(0); setSelectedName('') }
 
 	return (
-		<SidebarLayout left={LeftPanel} right={RightPanel}>
-			<div className="w-full flex flex-col items-center py-2">
-				{teacherMode ? (
-					<>
-						<div className="pointer-events-none fixed inset-0 z-10 bg-black/80" />
-						<div className="fixed top-2 left-1/2 -translate-x-1/2 z-30">
-							<button
-								className="px-3 py-1.5 rounded-full bg-rose-600 text-white text-xs shadow border border-rose-700 hover:bg-rose-700"
-								onClick={() => setTeacherMode(false)}
-								title="Exit Teacher Focus">
-								Exit Teacher Focus
-							</button>
-						</div>
-					</>
-				) : null}
-				<div className="relative z-20 w-full max-w-6xl">
-					{!teacherMode &&
-					hideDefenders &&
-					turnSeat &&
-					isDefender(turnSeat, effDeclarer) ? (
-						<div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">
-							Defender's turn is hidden — unhide defenders to choose a card.
-						</div>
-					) : null}
-					{remaining ? (
-						<>
-							{debugMsgs.length > 0 && (
-								<div className="mb-2 text-[10px] font-mono whitespace-pre-wrap max-h-32 overflow-auto border rounded bg-gray-50 p-1">
-									{debugMsgs.map((m, i) => (
-										<div key={i}>{m}</div>
-									))}
-								</div>
-							)}
-							{!isIPhone && (
-								<div className="w-full flex items-center justify-center mb-2">
-									<button
-										onClick={() => {
-											setHintText(makeHint())
-											setShowHint(true)
-										}}
-										className="px-3 py-1.5 rounded-full bg-amber-500 text-white text-sm shadow hover:bg-amber-600">
-										Hint
-									</button>
-								</div>
-							)}
-							<PlayerLayout
-								remaining={remaining}
-								onPlay={onPlayCard}
-								hideDefenders={hideDefenders}
-								showSuitTally={showSuitTally}
-								showHcpWhenHidden={showHcpWhenHidden}
-								dealer={current?.dealer}
-								vulnerable={current?.vul}
-								declarer={effDeclarer}
-								contract={effContract}
-								players={current?.players || {}}
-								turnSeat={turnSeat}
-								trick={trick}
-								tally={tally}
-								tricksDecl={tricksDecl}
-								tricksDef={tricksDef}
-								teacherMode={teacherMode}
-								flashWinner={flashWinner}
-								totalMoves={timelineMoves.length}
-								helperText={stepHelper}
-								idx={playIdx}
-								onPrev={() => applyMovesTo(playIdxRef.current - 1)}
-								onNext={() => applyMovesTo(playIdxRef.current + 1)}
-								resultTag={current?.resultTricks}
-								finishedBanner={
-									result && !result.partial
-										? `${result.resultText} • Score ${
-												result.score > 0 ? '+' : ''
-										  }${result.score}`
-										: null
-								}
-								pauseAtTrickEnd={pauseAtTrickEnd}
-								onTogglePause={(e) => setPauseAtTrickEnd(!!e?.target?.checked)}
-								isIPhone={isIPhone}
-								onRequestHint={() => {
-									setHintText(makeHint())
-									setShowHint(true)
-								}}
-							/>
-							{/* Handout options panel removed: always full mode */}
-						</>
-					) : (
-						<PreUploadGrid
-							onChooseFile={() => fileRef.current?.click()}
-							exampleMsg={exampleMsg}
-							onLoadExample={loadExampleByLabel}
-						/>
-					)}
-					{showHint && (
-						<div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-							<div className="bg-white rounded-lg shadow-xl border border-gray-200 w-[90%] max-w-lg p-4">
-								<div className="text-sm font-semibold text-gray-800 mb-2">
-									Suggested Play
-								</div>
-								<div className="text-sm text-gray-800 whitespace-pre-wrap">
-									{hintText}
-								</div>
-								<div className="mt-3 flex items-center justify-end gap-2">
-									<button
-										className="px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-xs border border-gray-300"
-										onClick={() => setShowHint(false)}>
-										Close
-									</button>
-								</div>
+		<div className='min-h-screen bg-gray-100 flex'>
+			{/* Sidebar */}
+			<div className='w-72 p-3 border-r bg-gray-50 flex flex-col gap-3 text-[11px]'>
+				<div className='flex items-center justify-between'>
+					<Link to='/' className='text-sky-600 hover:underline text-[12px]'>← Home</Link>
+					<button onClick={reset} className='px-2 py-0.5 rounded border bg-white'>Start over</button>
+				</div>
+				<div>
+					<input ref={fileRef} type='file' accept='.pbn,text/plain' onChange={onFile} className='hidden' />
+					<button onClick={()=> fileRef.current?.click()} className='w-full px-2 py-1 rounded bg-sky-600 text-white text-[12px]'>Choose PBN…</button>
+					<div className='mt-1 text-gray-600 truncate'>{selectedName || 'No file chosen'}</div>
+					<div className='text-gray-700 mt-0.5'>{deals.length? `Board ${current?.board || index+1} — ${index+1}/${deals.length}`:'No file loaded'}</div>
+					{effContract? <div className='text-gray-700'>Contract: <span className='font-semibold'>{effContract}{effDeclarer? ` (${effDeclarer})`:''}</span></div>: <div className='text-gray-500'>No bidding found</div>}
+					<div className='flex gap-1 mt-1'>
+						<button disabled={!deals.length} onClick={prev} className='flex-1 px-2 py-0.5 rounded border disabled:opacity-40'>Prev</button>
+						<button disabled={!deals.length} onClick={next} className='flex-1 px-2 py-0.5 rounded border disabled:opacity-40'>Next</button>
+					</div>
+				</div>
+				<div className='space-y-1 border-t pt-2'>
+					<label className='flex items-center gap-1'><input type='checkbox' checked={hideDefenders} onChange={e=> setHideDefenders(e.target.checked)} /> <span>Hide defenders</span></label>
+					{hideDefenders && <div className='ml-4 flex flex-col gap-1'>
+						<label className='flex items-center gap-1'><input type='checkbox' checked={fastAutoDef} onChange={e=> setFastAutoDef(e.target.checked)} /> <span>Fast auto-play</span></label>
+						<label className='flex items-center gap-1'><span>AI</span><select value={aiDifficulty} onChange={e=> setAiDifficulty(e.target.value)} className='border rounded px-1 py-0.5'><option>Basic</option><option>Intermediate</option><option>Advanced</option></select></label>
+						<label className='flex items-center gap-1'><span>Signals</span><select value={signalMode} onChange={e=> setSignalMode(e.target.value)} className='border rounded px-1 py-0.5'><option value='Standard'>Standard</option><option value='LowEnc'>LowEnc</option></select></label>
+						<label className='flex items-center gap-1'><input type='checkbox' checked={showAiLog} onChange={e=> setShowAiLog(e.target.checked)} /> <span>Show AI log</span></label>
+					</div>}
+					<label className='flex items-center gap-1'><input type='checkbox' checked={pauseAtTrickEnd} onChange={e=> { setPauseAtTrickEnd(e.target.checked); pauseRef.current=e.target.checked }} /> <span>Pause at trick end</span></label>
+					<label className='flex items-center gap-1'><input type='checkbox' checked={showAdvice} onChange={e=> setShowAdvice(e.target.checked)} /> <span>Show advice panel</span></label>
+				</div>
+				{!current?.contract && <div className='space-y-1 border-t pt-2'>
+					<div className='font-semibold'>Set contract</div>
+					<label className='flex items-center justify-between gap-1'><span>Declarer</span><select className='border rounded px-1 py-0.5' value={manualDeclarer} onChange={e=> setManualDeclarer(e.target.value)}><option value=''>—</option><option value='N'>N</option><option value='E'>E</option><option value='S'>S</option><option value='W'>W</option></select></label>
+					<label className='flex items-center justify-between gap-1'><span>Level</span><select className='border rounded px-1 py-0.5' value={manualLevel} onChange={e=> setManualLevel(e.target.value)}><option value=''>—</option>{['1','2','3','4','5','6','7'].map(l=> <option key={l}>{l}</option>)}</select></label>
+					<label className='flex items-center justify-between gap-1'><span>Strain</span><select className='border rounded px-1 py-0.5' value={manualStrain} onChange={e=> setManualStrain(e.target.value)}><option value=''>—</option><option value='C'>C</option><option value='D'>D</option><option value='H'>H</option><option value='S'>S</option><option value='NT'>NT</option></select></label>
+					<label className='flex items-center justify-between gap-1'><span>Dbl</span><select className='border rounded px-1 py-0.5' value={manualDbl} onChange={e=> setManualDbl(e.target.value)}><option value=''>—</option><option value='X'>X</option><option value='XX'>XX</option></select></label>
+				</div>}
+				<ScorePanel tricksDecl={tricksDecl} tricksDef={tricksDef} needed={neededToSet(effContract)} contract={effContract} declarer={effDeclarer} result={result} />
+				<div className='flex flex-wrap gap-1 text-[11px]'>
+					<button onClick={()=> rebuildFromHistory(0)} disabled={!history.length} className='px-2 py-0.5 border rounded disabled:opacity-40'>⏮</button>
+					<button onClick={onPrevStep} disabled={playIdxRef.current<=0} className='px-2 py-0.5 border rounded disabled:opacity-40'>◀</button>
+					<button onClick={onNextStep} disabled={playIdxRef.current>=history.length} className='px-2 py-0.5 border rounded disabled:opacity-40'>▶</button>
+					<button onClick={()=> rebuildFromHistory(history.length)} disabled={playIdxRef.current>=history.length} className='px-2 py-0.5 border rounded disabled:opacity-40'>⏭</button>
+				</div>
+				{showAiLog && hideDefenders && <div className='flex-1 overflow-auto rounded border bg-white p-1 text-[10px]'>
+					<div className='font-semibold mb-1'>AI Log</div>
+					<div className='space-y-0.5'>
+						{aiLogs.slice().reverse().map(l=> <div key={l.id} className='truncate'><span className='font-mono text-[9px] text-gray-500 mr-1'>{l.seat}</span>{l.text}</div>)}
+					</div>
+				</div>}
+			</div>
+			{/* Main content */}
+			<div className='flex-1 p-4 flex flex-col gap-4'>
+				{!current && deals.length===0 && <PreUpload onChooseFile={()=> fileRef.current?.click()} />}
+				{current && hands && (
+					<div className='flex flex-col gap-6 items-center'>
+						{/* Cross layout */}
+						<div className='grid grid-cols-3 grid-rows-3 gap-4 relative'>
+							<div className='col-start-2 row-start-1 flex justify-center'>
+									<SeatPanel id='N' compact remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='N' || partnerOf(effDeclarer)==='N'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='N'|| partnerOf(effDeclarer)==='N')} lastAutoSeat={lastAutoSeat} />
+									{showAdvice && <div className='absolute left-full ml-4 top-0 w-64 self-start'>
+										<AdvicePanel entries={adviceEntries} />
+									</div>}
+							</div>
+							<div className='col-start-1 row-start-2 flex justify-center items-center'>
+								<SeatPanel id='W' remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='W' || partnerOf(effDeclarer)==='W'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='W'|| partnerOf(effDeclarer)==='W')} lastAutoSeat={lastAutoSeat} />
+							</div>
+							<div className='col-start-3 row-start-2 flex justify-center items-center'>
+								<SeatPanel id='E' remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='E' || partnerOf(effDeclarer)==='E'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='E'|| partnerOf(effDeclarer)==='E')} lastAutoSeat={lastAutoSeat} />
+							</div>
+							<div className='col-start-2 row-start-3 flex justify-center'>
+									<SeatPanel id='S' compact remaining={remaining} turnSeat={turnSeat} trick={trick} onPlay={onPlayCard} visible={!hideDefenders || effDeclarer==='S' || partnerOf(effDeclarer)==='S'} dealer={current?.dealer} vul={current?.vul} declarer={effDeclarer} showHCP={hideDefenders && (effDeclarer==='S'|| partnerOf(effDeclarer)==='S')} lastAutoSeat={lastAutoSeat} />
+							</div>
+							<div className='col-start-2 row-start-2 flex items-center justify-center'>
+								<CrossTrick trick={trick} winner={flashWinner} turnSeat={turnSeat} lastAutoPlay={lastAutoPlay} />
 							</div>
 						</div>
-					)}
-				</div>
-			</div>
-		</SidebarLayout>
-	)
-}
-
-// ---------- Presentational components ----------
-function PlayerLayout({
-	remaining,
-	onPlay,
-	hideDefenders,
-	showSuitTally,
-	showHcpWhenHidden,
-	dealer,
-	vulnerable,
-	declarer,
-	players = {},
-	turnSeat,
-	trick,
-	tally,
-	tricksDecl,
-	tricksDef,
-	teacherMode,
-	flashWinner,
-	totalMoves = 0,
-	helperText = 'Manual play',
-	idx = 0,
-	onPrev,
-	onNext,
-	resultTag,
-	finishedBanner,
-	pauseAtTrickEnd,
-	onTogglePause,
-	isIPhone = false,
-	onRequestHint,
-}) {
-	const seats = ['N', 'E', 'S', 'W']
-	let visible = seats
-	if (hideDefenders) {
-		if (declarer) {
-			const partner = partnerOf(declarer)
-			const showDummy = (trick?.length || 0) >= 1
-			visible = showDummy ? [declarer, partner] : [declarer]
-		} else visible = ['N', 'S']
-	}
-	const completedTricks = tricksDecl + tricksDef
-	// Mobile-first: single active seat view with tabs and sticky bottom controls
-	const tabs = ['N', 'E', 'S', 'W']
-	const [activeSeat, setActiveSeat] = useState('N')
-	useEffect(() => {
-		setActiveSeat(turnSeat || 'N')
-	}, [turnSeat])
-
-	if (isIPhone) {
-		return (
-			<div className="w-full flex flex-col items-stretch gap-2 pb-16">
-				<div className="mx-auto w-full max-w-sm">
-					<div className="flex items-center justify-center gap-1 p-1 rounded-lg border bg-white sticky top-0 z-10">
-						{tabs.map((s) => (
-							<button
-								key={`tab-${s}`}
-								onClick={() => setActiveSeat(s)}
-								className={`flex-1 px-2 py-1 rounded text-xs border ${
-									activeSeat === s ? 'bg-gray-900 text-white' : 'bg-white'
-								}`}>
-								{s}
-							</button>
-						))}
-					</div>
-					<div className="mt-2 flex items-center justify-center">
-						<SeatPanel
-							id={activeSeat}
-							remaining={remaining}
-							onPlay={onPlay}
-							visible={visible.includes(activeSeat)}
-							dealer={dealer}
-							vulnerable={vulnerable}
-							turnSeat={turnSeat}
-							trick={trick}
-							declarer={declarer}
-							playerName={players[activeSeat]}
-							showHcpWhenHidden={showHcpWhenHidden}
-							teacherMode={teacherMode}
-						/>
-					</div>
-					<div className="px-2">
-						<CurrentTrick
-							teacherMode={teacherMode}
-							trick={trick}
-							turnSeat={turnSeat}
-							winnerSeat={flashWinner}
-							hasPlay={!!totalMoves}
-							totalMoves={totalMoves}
-							helperText={helperText}
-							idx={idx}
-							onPrev={onPrev}
-							onNext={onNext}
-							resultTag={resultTag}
-							completedTricks={completedTricks}
-							finishedBanner={finishedBanner}
-							pauseAtTrickEnd={pauseAtTrickEnd}
-							onTogglePause={onTogglePause}
-						/>
-					</div>
-				</div>
-				{/* Sticky bottom bar */}
-				<div
-					className="fixed bottom-0 inset-x-0 z-40 bg-white border-t"
-					style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-					<div className="max-w-md mx-auto flex items-center justify-between gap-1 p-2">
-						<button
-							onClick={onPrev}
-							className="px-2 py-1 rounded border text-xs">
-							Prev
-						</button>
-						<button
-							onClick={onNext}
-							className="px-2 py-1 rounded border text-xs">
-							Next
-						</button>
-						<label className="text-[10px] text-gray-700 flex items-center gap-1">
-							<input
-								type="checkbox"
-								checked={!!pauseAtTrickEnd}
-								onChange={onTogglePause}
-							/>
-							Pause
-						</label>
-						<button
-							onClick={onRequestHint}
-							className="px-2 py-1 rounded bg-amber-500 text-white text-xs">
-							Hint
-						</button>
-					</div>
-				</div>
-			</div>
-		)
-	}
-
-	return (
-		<div className="w-full flex flex-col items-stretch gap-2">
-			<div className="w-full flex items-start justify-center gap-3">
-				<div className="w-56 hidden md:flex flex-col gap-2">
-					{showSuitTally && <SuitTally tally={tally} />}
-				</div>
-				<div className="flex-1">
-					<div className="grid grid-cols-3 gap-x-10 gap-y-2 items-center justify-items-center">
-						<div />
-						<div>
-							<SeatPanel
-								id="N"
-								remaining={remaining}
-								onPlay={onPlay}
-								visible={visible.includes('N')}
-								dealer={dealer}
-								vulnerable={vulnerable}
-								turnSeat={turnSeat}
-								trick={trick}
-								declarer={declarer}
-								playerName={players['N']}
-								showHcpWhenHidden={showHcpWhenHidden}
-								teacherMode={teacherMode}
-							/>
-						</div>
-						<div />
-						<div className="justify-self-end mr-2">
-							<SeatPanel
-								id="W"
-								remaining={remaining}
-								onPlay={onPlay}
-								visible={visible.includes('W')}
-								dealer={dealer}
-								vulnerable={vulnerable}
-								turnSeat={turnSeat}
-								trick={trick}
-								declarer={declarer}
-								playerName={players['W']}
-								showHcpWhenHidden={showHcpWhenHidden}
-								teacherMode={teacherMode}
-							/>
-						</div>
-						<div />
-						<div className="justify-self-start ml-2">
-							<SeatPanel
-								id="E"
-								remaining={remaining}
-								onPlay={onPlay}
-								visible={visible.includes('E')}
-								dealer={dealer}
-								vulnerable={vulnerable}
-								turnSeat={turnSeat}
-								trick={trick}
-								declarer={declarer}
-								playerName={players['E']}
-								showHcpWhenHidden={showHcpWhenHidden}
-								teacherMode={teacherMode}
-							/>
-						</div>
-						<div />
-						<div>
-							<SeatPanel
-								id="S"
-								remaining={remaining}
-								onPlay={onPlay}
-								visible={visible.includes('S')}
-								dealer={dealer}
-								vulnerable={vulnerable}
-								turnSeat={turnSeat}
-								trick={trick}
-								declarer={declarer}
-								playerName={players['S']}
-								showHcpWhenHidden={showHcpWhenHidden}
-								teacherMode={teacherMode}
-							/>
-						</div>
-						<div />
-					</div>
-					<div className="flex items-center justify-center mt-3">
-						<CurrentTrick
-							teacherMode={teacherMode}
-							trick={trick}
-							turnSeat={turnSeat}
-							winnerSeat={flashWinner}
-							hasPlay={!!totalMoves}
-							totalMoves={totalMoves}
-							helperText={helperText}
-							idx={idx}
-							onPrev={onPrev}
-							onNext={onNext}
-							resultTag={resultTag}
-							completedTricks={completedTricks}
-							finishedBanner={finishedBanner}
-							pauseAtTrickEnd={pauseAtTrickEnd}
-							onTogglePause={onTogglePause}
-						/>
-					</div>
-				</div>
-				{/* Scoreboard lives in the right sidebar panel; removed from main to avoid duplication */}
-			</div>
-		</div>
-	)
-}
-
-// (End Player component)
-
-function SuitTally({ tally }) {
-	if (!tally) return null
-	const suits = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
-	const color = (s) =>
-		s === 'Hearts' || s === 'Diamonds' ? 'text-red-600' : 'text-black'
-	const sym = (s) =>
-		s === 'Spades' ? '♠' : s === 'Hearts' ? '♥' : s === 'Diamonds' ? '♦' : '♣'
-	return (
-		<div className="rounded border bg-white p-2">
-			<div className="text-[11px] text-gray-600 mb-1">Played</div>
-			<div className="flex flex-col gap-1">
-				{suits.map((s) => (
-					<div
-						key={`tally-${s}`}
-						className="flex items-center justify-between text-xs">
-						<span className={`font-semibold ${color(s)}`}>{sym(s)}</span>
-						<span className="text-gray-700">{tally[s]?.length || 0}</span>
-					</div>
-				))}
-			</div>
-		</div>
-	)
-}
-
-function SeatPanel({
-	id,
-	remaining,
-	onPlay,
-	visible,
-	dealer,
-	vulnerable,
-	turnSeat,
-	trick,
-	declarer,
-	playerName,
-	showHcpWhenHidden,
-	teacherMode,
-}) {
-	const bySeat = remaining[id] || []
-	const hcp = bySeat.reduce((sum, c) => sum + hcpValue(c.rank), 0)
-	// Display suits in reversed instructional order: Spades, Hearts, Diamonds, Clubs
-	const suitOrder = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
-	const suitText = {
-		Hearts: 'text-red-600',
-		Diamonds: 'text-red-600',
-		Spades: 'text-black',
-		Clubs: 'text-black',
-	}
-	const isDealer = dealer === id
-	const seatIsVul =
-		vulnerable === 'All' ||
-		(vulnerable === 'NS' && (id === 'N' || id === 'S')) ||
-		(vulnerable === 'EW' && (id === 'E' || id === 'W'))
-	const order = {
-		A: 13,
-		K: 12,
-		Q: 11,
-		J: 10,
-		10: 9,
-		9: 8,
-		8: 7,
-		7: 6,
-		6: 5,
-		5: 4,
-		4: 3,
-		3: 2,
-		2: 1,
-	}
-	const cardsBySuit = Object.fromEntries(
-		suitOrder.map((s) => [
-			s,
-			bySeat
-				.filter((c) => c.suit === s)
-				.sort((a, b) => order[b.rank] - order[a.rank]),
-		])
-	)
-	const isTurn = turnSeat === id
-	// Determine current trick's lead suit (only when trick in progress with 1-3 cards)
-	const leadSuit = trick && trick.length > 0 && trick.length < 4 ? trick[0].card.suit : null
-	const hasLead = leadSuit ? bySeat.some((x) => x.suit === leadSuit) : false
-	// Precompute if any card would be legal under normal rules
-	const anyLegal = bySeat.some(
-		(c) => !isTurn || !leadSuit || !hasLead || c.suit === leadSuit
-	)
-	return (
-		<div
-			className={`rounded-2xl overflow-hidden shadow-md border ${
-				isDealer
-					? 'border-amber-500'
-					: isTurn
-					? 'border-red-600'
-					: 'border-gray-300'
-			} ${
-				teacherMode
-					? isTurn
-						? 'relative z-20 bg-white ring-2 ring-rose-400 shadow-lg'
-						: 'relative z-10 bg-white/95 ring-1 ring-slate-300'
-					: 'bg-white'
-			} ${teacherMode && !isTurn ? 'opacity-90' : ''} w-64`}>
-			<div
-				className={`w-full ${
-					isDealer
-						? 'bg-amber-100 text-amber-900'
-						: isTurn
-						? 'bg-red-100 text-red-900'
-						: teacherMode
-						? 'bg-gray-50 text-gray-700'
-						: 'bg-gray-100 text-gray-800'
-				} font-extrabold text-[11px] tracking-widest uppercase px-2 py-1.5 flex items-center justify-between`}>
-				<span className="flex items-center gap-1">
-					{id === 'N'
-						? 'NORTH'
-						: id === 'E'
-						? 'EAST'
-						: id === 'S'
-						? 'SOUTH'
-						: 'WEST'}
-					{isDealer && (
-						<span
-							title="Dealer"
-							className="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 text-[8px] rounded-full bg-amber-500 text-white">
-							D
-						</span>
-					)}
-				</span>
-				<span className="flex items-center gap-1">
-					{isTurn && (
-						<span className="text-[9px] font-bold text-white bg-red-600 rounded px-0.5 py-0.5">
-							{seatFullName(id)} to play
-						</span>
-					)}
-					{seatIsVul && (
-						<span className="text-[8px] font-bold text-red-700 bg-red-100 border border-red-200 rounded px-0.5 py-0.5">
-							V
-						</span>
-					)}
-					{(visible ||
-						(showHcpWhenHidden &&
-							declarer &&
-							(id === declarer || id === partnerOf(declarer)))) && (
-						<span className="text-[10px] opacity-80">HCP {hcp}</span>
-					)}
-					<span className="text-[10px] opacity-80">{bySeat.length}/13</span>
-				</span>
-			</div>
-			<div className="h-56 p-2.5 flex flex-col gap-2 items-stretch justify-center">
-				{suitOrder.map((suit) => (
-					<div key={`${id}-${suit}`} className="flex items-center gap-3 flex-1">
-						<div
-							className={`w-8 text-center text-2xl leading-none ${suitText[suit]}`}>
-							{suit === 'Clubs'
-								? '♣'
-								: suit === 'Diamonds'
-								? '♦'
-								: suit === 'Hearts'
-								? '♥'
-								: '♠'}
-						</div>
-						<div className="flex-1 text-sm md:text-base leading-none flex flex-wrap gap-1.5">
-							{visible ? (
-								cardsBySuit[suit].length ? (
-									cardsBySuit[suit].map((c) => {
-										// TEMP: Allow any card when it's this seat's turn to avoid deadlock at 4th play.
-										// Previous enforcement logic (follow suit) retained below for future re-enable:
-										// const normalLegal = turnSeat === id && (!leadSuit || !hasLead || c.suit === leadSuit)
-										// const legal = normalLegal || (turnSeat === id && !anyLegal)
-										const legal = turnSeat === id
-										return (
-											<button
-												key={c.id}
-												onClick={() => legal && onPlay(id, c.id)}
-												disabled={!legal}
-												className={`font-semibold px-1.5 select-none rounded ${
-													legal
-														? 'text-gray-900 hover:bg-gray-100 active:scale-95'
-														: 'text-gray-400 cursor-not-allowed opacity-60'
-												}`}> 
-												{c.rank}
-											</button>
-										)
-									})
-								) : (
-									<span className="text-lg md:text-xl text-gray-500">-</span>
-								)
-							) : (
-								<span className="text-gray-400 text-base italic">hidden</span>
-							)}
+						<div className='w-full flex flex-wrap justify-center gap-6'>
+							<CompletedTricks tricks={completedTrickList} />
 						</div>
 					</div>
-				))}
+				)}
 			</div>
-			{playerName ? (
-				<div className="px-1.5 pb-1.5 pt-0.5 text:[9px] text-gray-500 truncate">
-					{playerName}
-				</div>
-			) : null}
-		</div>
-	)
-}
-
-function ScorePanel({
-	tricksDecl,
-	tricksDef,
-	neededToSet,
-	contract,
-	declarer,
-	result,
-}) {
-	return (
-		<div className="rounded-lg border bg-white p-3">
-			<div className="text-[11px] text-gray-600 mb-1">Scoreboard</div>
-			<div className="text-xs text-gray-800">
-				Declarer: <span className="font-semibold">{declarer || '-'}</span>
-			</div>
-			<div className="text-xs text-gray-800 mb-1">
-				Contract: <span className="font-semibold">{contract || '-'}</span>
-			</div>
-			<div className="text-xs text-gray-800">
-				Declarer tricks: <span className="font-semibold">{tricksDecl}</span>
-			</div>
-			<div className="text-xs text-gray-800">
-				Defender tricks: <span className="font-semibold">{tricksDef}</span>
-			</div>
-			<div className="text-xs text-gray-800">
-				Defenders to defeat:{' '}
-				<span className="font-semibold">{neededToSet || '-'}</span>
-			</div>
-			{result && !result.partial ? (
-				<div className="mt-1 text-xs text-gray-800">
-					Result: <span className="font-semibold">{result.resultText}</span>
-					{typeof result.score === 'number' ? (
-						<span className="ml-1 font-semibold">{`Score ${
-							result.score > 0 ? '+' : ''
-						}${result.score}`}</span>
-					) : null}
-				</div>
-			) : null}
-		</div>
-	)
-}
-
-function CurrentTrick({
-	teacherMode = false,
-	trick,
-	turnSeat,
-	winnerSeat,
-	hasPlay,
-	totalMoves = 0,
-	helperText = 'Manual play',
-	idx = 0,
-	onPrev,
-	onNext,
-	finishedBanner,
-	resultTag,
-	completedTricks,
-	pauseAtTrickEnd,
-	onTogglePause,
-}) {
-	const order = ['N', 'E', 'S', 'W']
-	const items = Array.isArray(trick) ? trick : []
-	const safeIdx = Math.min(Math.max(0, idx), Math.max(0, totalMoves - 1))
-	const completed =
-		typeof completedTricks === 'number'
-			? completedTricks
-			: hasPlay
-			? Math.floor(idx / 4)
-			: 0
-	return (
-		<div
-			className={`mt-2 rounded-xl border p-2 w/full max-w-[820px] ${
-				teacherMode
-					? 'relative z-20 bg-white shadow-lg ring-2 ring-rose-200'
-					: 'bg-white'
-			}`.replace('w/full', 'w-full')}>
-			<div className="flex items-center justify-between">
-				<button
-					onClick={onPrev}
-					disabled={safeIdx === 0}
-					className="px-2 py-1 rounded border text-xs disabled:opacity-40">
-					← Prev
-				</button>
-				<div className="flex-1 px-2">
-					<div className="text-[11px] text-center text-gray-600">
-						{helperText}
-					</div>
-					<div className="grid grid-cols-4 gap-2 place-items-center mt-1">
-						{order.map((seat) => (
-							<div
-								key={`ctl-${seat}`}
-								className={`text-center text-[9px] font-semibold ${
-									turnSeat === seat ? 'text-red-600' : 'text-gray-500'
-								}`}>
-								{seat} {turnSeat === seat ? '•' : ''}
-							</div>
-						))}
-						{order.map((seat) => {
-							const t = items.find((x) => x.seat === seat)
-							const isTurn = turnSeat === seat
-							const isWinner =
-								winnerSeat && seat === winnerSeat && items.length === 4
-							const base = teacherMode
-								? isTurn
-									? 'border-red-500 ring-2 ring-rose-400 bg-gradient-to-br from-white to-rose-50'
-									: 'border-slate-200 bg-gradient-to-br from-white to-slate-50'
-								: isTurn
-								? 'border-red-400 bg-red-50'
-								: 'bg-[#FFF8E7]'
-							const winnerClass = isWinner
-								? ' ring-2 ring-emerald-400 border-emerald-500'
-								: ''
-							return (
-								<div
-									key={`ct-${seat}`}
-									className={`w-14 h-14 rounded-lg border flex items-center justify-center ${base}${winnerClass}`}>
-									{t ? (
-										<div
-											className={`${
-												t.card.suit === 'Hearts' || t.card.suit === 'Diamonds'
-													? 'text-red-600'
-													: 'text-black'
-											} text-xl font-extrabold`}>
-											{t.card.rank}
-											{suitSymbol(t.card.suit)}
-										</div>
-									) : (
-										<span className="text-[10px] text-gray-400">—</span>
-									)}
-								</div>
-							)
-						})}
-					</div>
-				</div>
-				<button
-					onClick={onNext}
-					disabled={safeIdx >= totalMoves - 1}
-					className="px-1.5 py-0.5 rounded border text-[11px] disabled:opacity-40">
-					Next →
-				</button>
-			</div>
-			<div className="mt-1 flex items-center justify-center gap-3">
-				<div className="text-[10px] text-gray-500">
-					{totalMoves > 0 ? `${safeIdx + 1}/${totalMoves}` : '—'} · Completed
-					tricks:{' '}
-					<span className="font-semibold">{Math.max(0, completed)}</span>
-				</div>
-				<label className="text-[10px] text-gray-700 flex items-center gap-1">
-					<input
-						type="checkbox"
-						checked={!!pauseAtTrickEnd}
-						onChange={onTogglePause}
-					/>
-					Pause at trick end
-				</label>
-			</div>
-			{finishedBanner ? (
-				<div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
-					{finishedBanner}
-				</div>
-			) : null}
-			{resultTag != null && idx < totalMoves ? (
-				<div className="mt-2 text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded px-2 py-1">
-					Result tag present: final tricks by declarer = {resultTag}. Play may
-					be truncated in the PBN.
-				</div>
-			) : null}
-		</div>
-	)
-}
-
-function AuctionView({ dealer = 'N', calls = [], finalContract = '' }) {
-	const seats = ['N', 'E', 'S', 'W']
-	const startIdx = seats.indexOf(dealer || 'N')
-	return (
-		<div className="rounded-lg border bg-white p-2">
-			<div className="text-[11px] text-gray-600 mb-1">Auction</div>
-			<table className="w-full text-xs">
-				<thead className="text-gray-600">
-					<tr>
-						{[0, 1, 2, 3].map((i) => (
-							<th key={i} className="text-left font-semibold">
-								{seats[(startIdx + i) % 4]}
-							</th>
-						))}
-					</tr>
-				</thead>
-				<tbody>
-					{(() => {
-						const rows = []
-						for (let i = 0; i < calls.length; i += 4)
-							rows.push(calls.slice(i, i + 4))
-						return rows.map((r, idx) => (
-							<tr key={idx} className="border-t">
-								{[0, 1, 2, 3].map((j) => (
-									<td key={j} className="py-0.5">
-										{r[j] || ''}
-									</td>
-								))}
-							</tr>
-						))
-					})()}
-				</tbody>
-			</table>
-			{finalContract ? (
-				<div className="mt-1 text-[11px]">
-					Final contract: <span className="font-semibold">{finalContract}</span>
-				</div>
-			) : null}
-		</div>
-	)
-}
-
-function PreUploadGrid({ onChooseFile, exampleMsg, onLoadExample }) {
-	const examples = EXAMPLE_LIBRARY
-	return (
-		<div className="w-full">
-			<div className="rounded-lg border bg-white p-4 mb-3">
-				<div className="flex items-center justify-between mb-2">
-					<div className="text-sm font-semibold text-gray-800">Get started</div>
-					<button
-						onClick={onChooseFile}
-						className="px-2.5 py-1 rounded bg-sky-600 text-white text-xs hover:bg-sky-700">
-						Choose PBN…
-					</button>
-				</div>
-				<div className="text-xs text-gray-600">
-					Load a PBN tournament file or pick an example scenario below. Built‑in
-					examples load instantly and enable Teacher Focus.
-				</div>
-			</div>
-			<div className="overflow-x-auto rounded-lg border bg-white">
-				<table className="w-full text-sm">
-					<thead className="bg-gray-50 text-gray-600">
-						<tr>
-							<th className="text-left font-semibold p-2">Category</th>
-							<th className="text-left font-semibold p-2">Scenarios</th>
-						</tr>
-					</thead>
-					<tbody>
-						{examples.map((row) => (
-							<tr key={row.group} className="border-t">
-								<td className="align-top p-2 font-semibold text-gray-800 w-40">
-									{row.group}
-								</td>
-								<td className="p-2">
-									<div className="flex flex-wrap gap-2">
-										{row.items.map((item) => (
-											<button
-												key={item.label}
-												onClick={() => onLoadExample(item.label)}
-												className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
-												{item.label}
-											</button>
-										))}
-									</div>
-								</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
-			{exampleMsg ? (
-				<div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-					{exampleMsg}
-				</div>
-			) : null}
 		</div>
 	)
 }
