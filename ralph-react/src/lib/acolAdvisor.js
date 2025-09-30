@@ -42,10 +42,14 @@ function seedFrom(hash){ let h=0; for(const ch of hash) h=(h*131 + ch.charCodeAt
 function partnerOf(seat){ return seat==='N'?'S': seat==='S'?'N': seat==='E'?'W':'E'; }
 
 function chooseOpening(fiveMajor, hcpVal, lens){
-  if(fiveMajor && hcpVal>=12) return '1'+(fiveMajor==='S'?'S':'H');
+  // ACOL style simplification:
+  // 12-14 balanced (no 5-card major) -> 1NT
+  // Otherwise if 5+ card major (12+) -> 1M (spades preference on 5-5)
+  // Otherwise open longest minor (1D if 4+ and length >= clubs, else 1C)
   const balanced = isBalanced(lens);
-  if(balanced && hcpVal>=12 && hcpVal<=14 && !fiveMajor) return '1NT';
-  if(lens.D>=3 && lens.D>=lens.C) return '1D';
+  if(balanced && !fiveMajor && hcpVal>=12 && hcpVal<=14) return '1NT';
+  if(fiveMajor && hcpVal>=12) return '1'+(fiveMajor==='S'?'S':'H');
+  if(lens.D >= 4 && lens.D >= lens.C) return '1D';
   return '1C';
 }
 
@@ -72,7 +76,14 @@ function buildMainline(deal, HCP, lengths, opening){
   const openerHcp = HCP[opener];
   const last = seq[seq.length-2];
   if(/1[SH]/.test(opening) && last==='1NT'){
-    if(openerHcp>=18) seq.push('4'+opening[1]); else seq.push('2'+opening[1]);
+    if(openerHcp>=18 && openerHcp<=19) {
+      // Strong jump try to game or game directly if fit + points
+      seq.push(openerHcp>=19 ? '4'+opening[1] : '3'+opening[1]);
+    } else if(openerHcp>=18) {
+      seq.push('4'+opening[1]);
+    } else {
+      seq.push('2'+opening[1]);
+    }
   } else seq.push('P');
   // Ensure final three passes only if needed later (render layer will compress)
   // Guarantee at least final pass closure
@@ -107,9 +118,23 @@ function buildBullets(opening, opener, partner, HCP, lengths, seq){
   const bullets=[];
   const partnerSuitLen = major? lengths[partner][major]: null;
   const responderAction = seq.find((c,i)=> i>0 && c!=='P');
-  bullets.push(`Responder has ${HCP[partner]} HCP${major? ` with ${partnerSuitLen} card ${major}`:''} and bids ${responderAction||'Pass'}.`);
-  bullets.push(`Opener ${HCP[opener]} HCP ${major? 'supports the major':'has no major fit'} – auction ends at ${finalAction(seq)}.`);
-  bullets.push(`Plan: approx ${estimateLosers(HCP[opener], lengths[opener])} losers; focus on entries & danger hand.`);
+  const partnerLenTxt = partnerSuitLen ? `${partnerSuitLen} card ${major}` : '';
+  bullets.push(`Responder: ${HCP[partner]} HCP${partnerLenTxt? ' with '+partnerLenTxt:''} -> ${responderAction||'Pass'}.`);
+  if(opening==='1NT') {
+    bullets.push(`Opener: ${HCP[opener]} HCP balanced (12-14 NT range). Sequence ends at ${finalAction(seq)}.`);
+  } else if(major) {
+    bullets.push(`Opener: ${HCP[opener]} HCP opens ${opening}; fit ${partnerSuitLen? 'confirmed':'uncertain'}; contract ends at ${finalAction(seq)}.`);
+  } else {
+    bullets.push(`Opener: ${HCP[opener]} HCP chooses longest minor (${opening}).`);
+  }
+  // Planning line
+  const openerLens = lengths[opener];
+  const balancedStrong = isBalanced(openerLens) && HCP[opener] >=18 && HCP[opener] <=19;
+  if(balancedStrong && opening !== '1NT') {
+    bullets.push('Plan: Strong balanced (18-19) – consider jump rebid in NT on next round.');
+  } else {
+    bullets.push(`Plan: about ${estimateLosers(HCP[opener], openerLens)} losers; manage entries & guard the danger hand.`);
+  }
   return bullets.slice(0,3);
 }
 function buildTeacherFocus(mainline, HCP, lengths, deal){
@@ -130,11 +155,18 @@ export function buildAcolAdvice(deal){
   const lines = [mainline, ...alts];
   assignProb(lines);
   const finalCall = [...mainline.seq].reverse().find(c=> c!=='P');
-  const final_contract = parseContract(finalCall||'P') || { by: opener, level:1, strain:'NT' };
+  const seatOrder = rotationFrom(opener);
+  let callIdx = mainline.seq.findIndex(c=> c===finalCall);
+  if(callIdx===-1){ callIdx = mainline.seq.length-1; }
+  const declarerSeat = seatOrder[callIdx % 4];
+  const parsed = parseContract(finalCall||'');
+  const final_contract = parsed ? { ...parsed, by: declarerSeat } : { by: opener, level:1, strain:'NT' };
   return { dealHash: hash, board: deal.number||0, meta: { dealer: opener, vul: deal.vul||'None', system: deal.meta?.system || 'ACOL' }, auctions: lines, recommendation_index: 0, final_contract, teacher_focus: buildTeacherFocus(mainline, HCP, lengths, deal) };
 }
 
 function parseContract(call){ const m = call && call.match(/^(\d)([SHDC]|NT)$/); if(!m) return null; return { by: 'N', level: parseInt(m[1],10), strain: m[2] }; }
+
+function rotationFrom(start){ const order = ['N','E','S','W']; const idx = order.indexOf(start); return [0,1,2,3].map(i=> order[(idx+i)%4]); }
 
 // Simple in-memory cache so multiple exports avoid recompute
 const _adviceCache = new Map();
