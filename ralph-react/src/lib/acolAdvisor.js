@@ -59,7 +59,26 @@ function buildMainline(deal, HCP, lengths, opening){
   const partnerHcp = HCP[partner];
   const partnerLengths = lengths[partner];
   const hasFit = /1[SH]/.test(opening) && partnerLengths[ opening.endsWith('S')?'S':'H'] >= 3;
-  const seq = [ opening, 'P' ];
+  const seq = [ opening ];
+
+  // SIMPLE OPPONENT INTERFERENCE MODEL
+  // Evaluate LHO (next seat clockwise) for a weak preemptive overcall with a 7+ card suit & <=10 HCP.
+  const lho = partnerOf(partner); // rotation: opener -> LHO -> partner -> RHO
+  const lhoLengths = lengths[lho];
+  const lhoHcp = HCP[lho];
+  let lhoOvercall = null;
+  if(lhoHcp <= 10){
+    // pick longest suit (prefer majors) length >=7
+    const order = ['S','H','D','C'];
+    let best = null; let bestLen = 0;
+    order.forEach(s=> { if(lhoLengths[s] > bestLen){ bestLen = lhoLengths[s]; best = s; }});
+    if(bestLen >= 7){
+      // decide level: 8+ -> 4-level for majors else 3-level; minors stay at 3-level
+      const level = (bestLen >=8 && (best==='S' || best==='H')) ? 4 : 3;
+      lhoOvercall = level + best; // e.g. 3H / 4S
+    }
+  }
+  if(lhoOvercall) seq.push(lhoOvercall); else seq.push('P');
   if(/1[SH]/.test(opening)){
     if(partnerHcp <=5){ seq.push('P'); }
     else if(partnerHcp<=9 && !hasFit){ seq.push('1NT'); }
@@ -100,6 +119,16 @@ function buildMainline(deal, HCP, lengths, opening){
 function buildAlternatives(mainline, deal, HCP, lengths, rng){
   const opening = mainline.seq[0];
   const alts = [];
+  // Provide a "No Interference" alternative if mainline had preempt
+  const hadInterference = mainline.seq[1] && mainline.seq[1] !== 'P';
+  if(hadInterference){
+    // Build a simplified non-interference baseline for comparison (reuse logic without overcall)
+    try {
+      const clone = { ...deal };
+      const alt = buildMainline({ ...clone, dealer: deal.dealer }, HCP, lengths, opening);
+      if(alt.seq[1] === 'P') alts.push({ label: 'If no overcall', seq: alt.seq, prob:0, bullets:[ 'Line without opponent preempt.', 'Shows space preserved for exploration.', 'Compare contracts vs obstructed auction.' ] });
+    } catch {}
+  }
   if(/1[SH]/.test(opening)){
     alts.push({ label: 'Off-book 2D', seq: [opening,'P','2D','P','2'+opening[1],'P','P','P'], prob:0, bullets:[ 'Some bid 2D lightly (needs 9+ HCP at 2-level).', `Opener returns to ${opening[1]} partscore.`, 'Risk: miss game opposite a strong opener.' ] });
     alts.push({ label: 'Optimistic raise', seq: [opening,'P','2'+opening[1],'P','4'+opening[1],'P','P','P'], prob:0, bullets:[ 'Light raise with insufficient values.', 'Game succeeds only with max opener.', 'Better to evaluate fit + points first.' ] });
@@ -117,8 +146,12 @@ function buildBullets(opening, opener, partner, HCP, lengths, seq){
   const major = /1[SH]/.test(opening)? opening[1]: null;
   const bullets=[];
   const partnerSuitLen = major? lengths[partner][major]: null;
-  const responderAction = seq.find((c,i)=> i>0 && c!=='P');
+  const responderAction = seq.find((c,i)=> i>0 && c!=='P' && c!=='X' && c!=='XX' && !/^[23]NT$/.test(c) ? c : (c && c!=='P' ? c : null));
+  const interference = seq[1] && seq[1] !== 'P' ? seq[1] : null;
   const partnerLenTxt = partnerSuitLen ? `${partnerSuitLen} card ${major}` : '';
+  if(interference){
+    bullets.push(`Opponent preempts with ${interference}.`);
+  }
   bullets.push(`Responder: ${HCP[partner]} HCP${partnerLenTxt? ' with '+partnerLenTxt:''} -> ${responderAction||'Pass'}.`);
   if(opening==='1NT') {
     bullets.push(`Opener: ${HCP[opener]} HCP balanced (12-14 NT range). Sequence ends at ${finalAction(seq)}.`);
@@ -135,7 +168,11 @@ function buildBullets(opening, opener, partner, HCP, lengths, seq){
   } else {
     bullets.push(`Plan: about ${estimateLosers(HCP[opener], openerLens)} losers; manage entries & guard the danger hand.`);
   }
-  return bullets.slice(0,3);
+  // Add combined HCP bullet if we have a confirmed fit and space
+  if(major && partnerSuitLen && bullets.length < 5){
+    bullets.push(`Combined HCP (pair): ${HCP[opener] + HCP[partner]}`);
+  }
+  return bullets.slice(0,5);
 }
 function buildTeacherFocus(mainline, HCP, lengths, deal){
   const opener = deal.dealer; const partner = partnerOf(opener); return [ 'Count losers first', 'Identify danger hand', 'Entry management', `Fit & HCP: ${HCP[opener]} + ${HCP[partner]}` ]; }
