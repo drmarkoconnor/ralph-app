@@ -42,13 +42,23 @@ function seedFrom(hash){ let h=0; for(const ch of hash) h=(h*131 + ch.charCodeAt
 function partnerOf(seat){ return seat==='N'?'S': seat==='S'?'N': seat==='E'?'W':'E'; }
 
 function chooseOpening(fiveMajor, hcpVal, lens){
-  // ACOL style simplification:
-  // 12-14 balanced (no 5-card major) -> 1NT
-  // Otherwise if 5+ card major (12+) -> 1M (spades preference on 5-5)
-  // Otherwise open longest minor (1D if 4+ and length >= clubs, else 1C)
+  // Opening requirements (simplified ACOL flavour):
+  // <12 HCP: consider preempt if 7+ card suit and 5-10 HCP else PASS
+  if(hcpVal < 12){
+    const order = ['S','H','D','C'];
+    let best=null, bestLen=0; order.forEach(s=> { if(lens[s] > bestLen){ bestLen=lens[s]; best=s; }});
+    if(bestLen>=7 && hcpVal<=10){
+      const level = (best==='S'||best==='H') ? (bestLen>=8?4:3) : 3;
+      return level + best; // e.g. 3H / 4S / 3D / 3C
+    }
+    return 'PASS';
+  }
+  // 12-14 balanced w/out 5-card major -> 1NT
   const balanced = isBalanced(lens);
   if(balanced && !fiveMajor && hcpVal>=12 && hcpVal<=14) return '1NT';
+  // 5+ major -> 1M
   if(fiveMajor && hcpVal>=12) return '1'+(fiveMajor==='S'?'S':'H');
+  // Longest minor (prefer 1D if 4+ and >= clubs)
   if(lens.D >= 4 && lens.D >= lens.C) return '1D';
   return '1C';
 }
@@ -58,83 +68,71 @@ function buildMainline(deal, HCP, lengths, opening){
   const partner = partnerOf(opener);
   const partnerHcp = HCP[partner];
   const partnerLengths = lengths[partner];
-  const hasFit = /1[SH]/.test(opening) && partnerLengths[ opening.endsWith('S')?'S':'H'] >= 3;
   const seq = [ opening ];
 
-  // SIMPLE OPPONENT INTERFERENCE MODEL
-  // Evaluate LHO (next seat clockwise) for a weak preemptive overcall with a 7+ card suit & <=10 HCP.
-  const lho = partnerOf(partner); // rotation: opener -> LHO -> partner -> RHO
-  const lhoLengths = lengths[lho];
-  const lhoHcp = HCP[lho];
-  let lhoOvercall = null;
-  if(lhoHcp <= 10){
-    // pick longest suit (prefer majors) length >=7
-    const order = ['S','H','D','C'];
-    let best = null; let bestLen = 0;
-    order.forEach(s=> { if(lhoLengths[s] > bestLen){ bestLen = lhoLengths[s]; best = s; }});
-    if(bestLen >= 7){
-      // decide level: 8+ -> 4-level for majors else 3-level; minors stay at 3-level
-      const level = (bestLen >=8 && (best==='S' || best==='H')) ? 4 : 3;
-      lhoOvercall = level + best; // e.g. 3H / 4S
-    }
+  // PASS out
+  if(opening === 'PASS'){
+    while(seq.length < 4) seq.push('P');
+    return finalizeAuctionLine(seq, opening, opener, partner, HCP, lengths);
   }
-  if(lhoOvercall) seq.push(lhoOvercall); else seq.push('P');
+
+  // Preempt opening (3/4-level) -> assume silence unless partner has game values + support
+  if(/^[34][SHDC]$/.test(opening)){
+    // LHO pass
+    seq.push('P');
+    // Partner evaluate
+    const suit = opening.slice(-1);
+    const supportLen = partnerLengths[suit];
+    if(HCP[partner] >= 13 && supportLen >= 3){
+      if(suit==='S' || suit==='H') seq.push('4'+suit); else seq.push('5'+suit);
+    } else seq.push('P');
+    // RHO pass
+    seq.push('P');
+    return finalizeAuctionLine(seq, opening, opener, partner, HCP, lengths);
+  }
+
+  // 1-level opening logic
+  const hasMajorFit = /1[SH]/.test(opening) && partnerLengths[ opening.endsWith('S') ? 'S':'H'] >= 3;
   if(/1[SH]/.test(opening)){
-    if(partnerHcp <=5){ seq.push('P'); }
-    else if(partnerHcp<=9 && !hasFit){ seq.push('1NT'); }
-    else if(partnerHcp<=8 && hasFit){ seq.push('2'+opening[1]); }
-    else if(partnerHcp<=11 && hasFit){ seq.push('3'+opening[1]); }
-    else if(partnerHcp>=12 && hasFit){ seq.push('4'+opening[1]); }
-    else { seq.push('1NT'); }
-  } else if(opening==='1NT') {
-    if(partnerHcp<8) seq.push('P'); else if(partnerHcp<=9) seq.push('2NT'); else seq.push('3NT');
+    if(partnerHcp <=5) seq.push('P');
+    else if(partnerHcp <=9 && !hasMajorFit) seq.push('1NT');
+    else if(partnerHcp <=8 && hasMajorFit) seq.push('2'+opening[1]);
+    else if(partnerHcp <=11 && hasMajorFit) seq.push('3'+opening[1]);
+    else if(partnerHcp >=12 && hasMajorFit) seq.push('4'+opening[1]);
+    else seq.push('1NT');
+  } else if(opening === '1NT') {
+    if(partnerHcp < 8) seq.push('P'); else if(partnerHcp <=9) seq.push('2NT'); else seq.push('3NT');
   } else { // minor opening
-    if(partnerHcp<6) seq.push('P'); else seq.push('1NT');
+    if(partnerHcp <6) seq.push('P'); else seq.push('1NT');
   }
-  seq.push('P');
+
+  // Opener rebid / pass
   const openerHcp = HCP[opener];
-  const last = seq[seq.length-2];
-  if(/1[SH]/.test(opening) && last==='1NT'){
-    if(openerHcp>=18 && openerHcp<=19) {
-      // Strong jump try to game or game directly if fit + points
-      seq.push(openerHcp>=19 ? '4'+opening[1] : '3'+opening[1]);
-    } else if(openerHcp>=18) {
-      seq.push('4'+opening[1]);
-    } else {
-      seq.push('2'+opening[1]);
-    }
-  } else seq.push('P');
-  // Ensure final three passes only if needed later (render layer will compress)
-  // Guarantee at least final pass closure
-  if(seq[seq.length-1] !== 'P') seq.push('P');
-  if(seq.filter(c=> c!=='P').length>0){
-    // add remaining passes to make contract closed (3 passes after last call)
-    let trailing = 0; for(let i=seq.length-1;i>=0 && seq[i]==='P'; i--) trailing++;
-    while(trailing < 3){ seq.push('P'); trailing++; }
+  const responderCall = seq[1];
+  if(/1[SH]/.test(opening) && responderCall === '1NT'){
+    if(openerHcp >= 18) seq.push(openerHcp>=19 ? '4'+opening[1] : '3'+opening[1]);
+    else seq.push('2'+opening[1]);
+  } else {
+    seq.push('P');
   }
-  const bullets = buildBullets(opening, opener, partner, HCP, lengths, seq);
-  return { label: 'Mainline ACOL', seq, prob: 0, bullets };
+  return finalizeAuctionLine(seq, opening, opener, partner, HCP, lengths);
 }
 
 function buildAlternatives(mainline, deal, HCP, lengths, rng){
   const opening = mainline.seq[0];
   const alts = [];
-  // Provide a "No Interference" alternative if mainline had preempt
-  const hadInterference = mainline.seq[1] && mainline.seq[1] !== 'P';
-  if(hadInterference){
-    // Build a simplified non-interference baseline for comparison (reuse logic without overcall)
-    try {
-      const clone = { ...deal };
-      const alt = buildMainline({ ...clone, dealer: deal.dealer }, HCP, lengths, opening);
-      if(alt.seq[1] === 'P') alts.push({ label: 'If no overcall', seq: alt.seq, prob:0, bullets:[ 'Line without opponent preempt.', 'Shows space preserved for exploration.', 'Compare contracts vs obstructed auction.' ] });
-    } catch {}
-  }
+  if(opening === 'PASS') return alts; // no alternatives for passed out
   if(/1[SH]/.test(opening)){
-    alts.push({ label: 'Off-book 2D', seq: [opening,'P','2D','P','2'+opening[1],'P','P','P'], prob:0, bullets:[ 'Some bid 2D lightly (needs 9+ HCP at 2-level).', `Opener returns to ${opening[1]} partscore.`, 'Risk: miss game opposite a strong opener.' ] });
-    alts.push({ label: 'Optimistic raise', seq: [opening,'P','2'+opening[1],'P','4'+opening[1],'P','P','P'], prob:0, bullets:[ 'Light raise with insufficient values.', 'Game succeeds only with max opener.', 'Better to evaluate fit + points first.' ] });
-  } else {
-    alts.push({ label: 'Conservative sign-off', seq:[opening,'P','P','P','P','P','P','P'], prob:0, bullets:[ 'Responder passes marginal values.', 'Could miss thin game opposite max.', 'Weigh intermediates + shape.' ] });
-    alts.push({ label: 'Direct 3NT', seq:[opening,'P','3NT','P','P','P','P','P'], prob:0, bullets:[ 'Jumps straight to game.', 'Fails opposite minimum opener.', 'Need reliable stoppers & texture.' ] });
+    alts.push({ label: 'Conservative partscore', seq:[opening,'P','2'+opening[1],'P','P','P','P','P'], prob:0, bullets:[ 'Responder gives simple raise.', 'Keeps game ambitions low.', 'Safe educational baseline.' ] });
+    alts.push({ label: 'Jump to game', seq:[opening,'P','4'+opening[1],'P','P','P','P','P'], prob:0, bullets:[ 'Straight to game.', 'Can miss slam exploration.', 'Relies on opener strength.' ] });
+  } else if(opening==='1NT') {
+    alts.push({ label: 'Invite only', seq:['1NT','P','2NT','P','P','P','P','P'], prob:0, bullets:[ 'Responder invites with 8-9.', 'Decline keeps partscore.', 'Upgrade with good intermediates.' ] });
+    alts.push({ label: 'Direct 3NT', seq:['1NT','P','3NT','P','P','P','P','P'], prob:0, bullets:[ 'Goes straight to game.', 'May overreach opposite minimum.', 'Style choice vulnerable to lead.' ] });
+  } else if(/^[34][SHDC]$/.test(opening)) {
+    alts.push({ label: 'Higher preempt', seq:[opening,'P','P','P','P','P','P','P'], prob:0, bullets:[ 'Stays put; no game try.', 'Forces defender guesses.', 'Low info to opponents.' ] });
+  } else { // minor opening
+    alts.push({ label: '1NT response', seq:[opening,'P','1NT','P','P','P','P','P'], prob:0, bullets:[ 'Standard balanced response.', 'Keeps auction low.', 'Search for major later.' ] });
+    alts.push({ label: 'Pass response', seq:[opening,'P','P','P','P','P','P','P'], prob:0, bullets:[ 'Responder too weak to act.', 'Invites lead-direction issue.', 'Educational example.' ] });
   }
   return alts.slice(0,2);
 }
@@ -143,36 +141,30 @@ function assignProb(lines){ if(!lines.length) return; const main = lines[0]; mai
 function finalAction(seq){ return [...seq].reverse().find(c=> c!=='P')||'P'; }
 function estimateLosers(h,lens){ const approx = Math.round((24-h)/3); return Math.min(6, Math.max(2, approx)); }
 function buildBullets(opening, opener, partner, HCP, lengths, seq){
-  const major = /1[SH]/.test(opening)? opening[1]: null;
   const bullets=[];
+  if(opening==='PASS'){
+    bullets.push('Passed out deal – no side has opening values.');
+    bullets.push(`Highest HCP seat: ${highestSeat(HCP)} (${Math.max(...Object.values(HCP))} HCP).`);
+    bullets.push('Use for lead / counting practice.');
+    return bullets;
+  }
+  const major = /1[SH]/.test(opening)? opening[1]: null;
   const partnerSuitLen = major? lengths[partner][major]: null;
-  const responderAction = seq.find((c,i)=> i>0 && c!=='P' && c!=='X' && c!=='XX' && !/^[23]NT$/.test(c) ? c : (c && c!=='P' ? c : null));
-  const interference = seq[1] && seq[1] !== 'P' ? seq[1] : null;
-  const partnerLenTxt = partnerSuitLen ? `${partnerSuitLen} card ${major}` : '';
-  if(interference){
-    bullets.push(`Opponent preempts with ${interference}.`);
-  }
-  bullets.push(`Responder: ${HCP[partner]} HCP${partnerLenTxt? ' with '+partnerLenTxt:''} -> ${responderAction||'Pass'}.`);
-  if(opening==='1NT') {
-    bullets.push(`Opener: ${HCP[opener]} HCP balanced (12-14 NT range). Sequence ends at ${finalAction(seq)}.`);
-  } else if(major) {
-    bullets.push(`Opener: ${HCP[opener]} HCP opens ${opening}; fit ${partnerSuitLen? 'confirmed':'uncertain'}; contract ends at ${finalAction(seq)}.`);
-  } else {
-    bullets.push(`Opener: ${HCP[opener]} HCP chooses longest minor (${opening}).`);
-  }
-  // Planning line
+  const callsWithSeats = seq.map((c,i)=> ({ call:c, seat: rotationFrom(opener)[i%4] }));
+  const responderCallObj = callsWithSeats.find(cs=> cs.seat === partner && cs.call !== 'P');
+  const responderAction = responderCallObj ? responderCallObj.call : 'Pass';
+  bullets.push(`Opener: ${HCP[opener]} HCP opens ${opening}.`);
+  bullets.push(`Responder: ${HCP[partner]} HCP${partnerSuitLen? ` with ${partnerSuitLen} card ${major}`:''} -> ${responderAction}.`);
+  if(opening==='1NT') bullets.push('Shows 12-14 balanced, no 5-card major.');
+  else if(major) bullets.push(`Major fit ${partnerSuitLen? 'likely/confirmed':'pending'}; watching point range.`);
+  else if(/^[34][SHDC]$/.test(opening)) bullets.push('Preempt: length + weak hand to take space.');
+  else bullets.push('Minor opening: searching for major fit or NT.');
   const openerLens = lengths[opener];
   const balancedStrong = isBalanced(openerLens) && HCP[opener] >=18 && HCP[opener] <=19;
-  if(balancedStrong && opening !== '1NT') {
-    bullets.push('Plan: Strong balanced (18-19) – consider jump rebid in NT on next round.');
-  } else {
-    bullets.push(`Plan: about ${estimateLosers(HCP[opener], openerLens)} losers; manage entries & guard the danger hand.`);
-  }
-  // Add combined HCP bullet if we have a confirmed fit and space
-  if(major && partnerSuitLen && bullets.length < 5){
-    bullets.push(`Combined HCP (pair): ${HCP[opener] + HCP[partner]}`);
-  }
-  return bullets.slice(0,5);
+  if(balancedStrong && opening!=='1NT') bullets.push('Plan: Strong balanced (18-19) – consider NT rebid.');
+  else bullets.push(`Plan: about ${estimateLosers(HCP[opener], openerLens)} losers; prioritize entries & danger hand.`);
+  if(major && partnerSuitLen) bullets.push(`Combined HCP: ${HCP[opener] + HCP[partner]}`);
+  return bullets.slice(0,6);
 }
 function buildTeacherFocus(mainline, HCP, lengths, deal){
   const opener = deal.dealer; const partner = partnerOf(opener); return [ 'Count losers first', 'Identify danger hand', 'Entry management', `Fit & HCP: ${HCP[opener]} + ${HCP[partner]}` ]; }
