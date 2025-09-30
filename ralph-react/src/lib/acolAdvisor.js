@@ -169,6 +169,21 @@ function buildBullets(opening, opener, partner, HCP, lengths, seq){
 function buildTeacherFocus(mainline, HCP, lengths, deal){
   const opener = deal.dealer; const partner = partnerOf(opener); return [ 'Count losers first', 'Identify danger hand', 'Entry management', `Fit & HCP: ${HCP[opener]} + ${HCP[partner]}` ]; }
 
+// Helper re-added after refactor (was accidentally removed) to normalize sequence termination and build line object
+function finalizeAuctionLine(seq, opening, opener, partner, HCP, lengths){
+  if(seq[seq.length-1] !== 'P') seq.push('P');
+  if(seq.filter(c=> c!=='P').length>0){
+    let trailing = 0; for(let i=seq.length-1;i>=0 && seq[i]==='P'; i--) trailing++;
+    while(trailing < 3){ seq.push('P'); trailing++; }
+  }
+  const bullets = buildBullets(opening, opener, partner, HCP, lengths, seq);
+  return { label: 'Mainline ACOL', seq, prob: 0, bullets };
+}
+
+function highestSeat(HCP){
+  return Object.entries(HCP).sort((a,b)=> b[1]-a[1])[0][0];
+}
+
 export function buildAcolAdvice(deal){
   if(!deal || !deal.hands) return null;
   const dealer = deal.dealer || 'N';
