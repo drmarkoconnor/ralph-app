@@ -27,7 +27,11 @@ export async function generateHandoutPDF(deals, options = {}) {
 					const adv = advisorMod.getOrBuildAcolAdvice(d)
 					if (adv) d.auctionAdvice = adv
 				} catch (e) {
-					console.warn('[PDF] Auction advice build failed for board', d.number, e)
+					console.warn(
+						'[PDF] Auction advice build failed for board',
+						d.number,
+						e
+					)
 				}
 			}
 		})
@@ -164,7 +168,10 @@ export async function generateHandoutPDF(deals, options = {}) {
 			doc.setFont('helvetica', 'normal')
 			doc.setFontSize(6)
 			doc.setTextColor(120, 120, 120)
-			doc.text(copyright, pageW / 2, pageH - 4, { align: 'center', maxWidth: pageW - 20 })
+			doc.text(copyright, pageW / 2, pageH - 4, {
+				align: 'center',
+				maxWidth: pageW - 20,
+			})
 			doc.setTextColor(0, 0, 0)
 		} catch {
 			/* no-op */
@@ -301,7 +308,11 @@ export async function generateHandoutPDF(deals, options = {}) {
 
 		// Auction (full mode) placed under diagram spanning notes + diagram width (leave meta column untouched)
 		let lastContentY = diagramTopY + seatDy + 10
-		if (mode === 'full' && Array.isArray(dealObj.calls) && dealObj.calls.length) {
+		if (
+			mode === 'full' &&
+			Array.isArray(dealObj.calls) &&
+			dealObj.calls.length
+		) {
 			const auctionTop = lastContentY
 			doc.setFontSize(7)
 			doc.setFont('helvetica', 'bold')
@@ -315,7 +326,8 @@ export async function generateHandoutPDF(deals, options = {}) {
 				const r = Math.floor(idx / 4)
 				doc.text(String(call), leftX + col * colWidth, auctionTop + 8 + r * 4)
 			})
-			lastContentY = auctionTop + 8 + Math.ceil(dealObj.calls.length / 4) * 4 + 2
+			lastContentY =
+				auctionTop + 8 + Math.ceil(dealObj.calls.length / 4) * 4 + 2
 		}
 
 		// Integrate auction advice (if available) ALWAYS (basic & full) below auction / diagram
@@ -337,10 +349,18 @@ export async function generateHandoutPDF(deals, options = {}) {
 						}
 					})
 					.catch((e) => {
-						console.warn('[PDF] per-board advisor build failed', dealObj.number, e)
+						console.warn(
+							'[PDF] per-board advisor build failed',
+							dealObj.number,
+							e
+						)
 					})
 			} catch (e) {
-				console.warn('[PDF] per-board advisor build scheduling failed', dealObj.number, e)
+				console.warn(
+					'[PDF] per-board advisor build scheduling failed',
+					dealObj.number,
+					e
+				)
 			}
 		}
 		if (advice && advice.auctions && advice.auctions.length) {
@@ -356,7 +376,12 @@ export async function generateHandoutPDF(deals, options = {}) {
 			// horizontal rule
 			doc.setDrawColor(150)
 			doc.setLineWidth(0.2)
-			doc.line(leftX, lastContentY + 2, leftX + notesW + gutter + diagramAreaW, lastContentY + 2)
+			doc.line(
+				leftX,
+				lastContentY + 2,
+				leftX + notesW + gutter + diagramAreaW,
+				lastContentY + 2
+			)
 			let y = lastContentY + 5
 			doc.setFont('helvetica', 'bold')
 			doc.setFontSize(7.5)
@@ -364,65 +389,86 @@ export async function generateHandoutPDF(deals, options = {}) {
 			y += 3.5
 			const main = advice.auctions[advice.recommendation_index || 0]
 			// Render 4-column auction table for mainline
-			doc.setFont('helvetica','bold')
+			doc.setFont('helvetica', 'bold')
 			doc.setFontSize(7)
-			doc.text('Mainline Auction', leftX, y); y+=3
-			doc.setFont('helvetica','normal')
-			const headerCols = ['N','E','S','W']
+			doc.text('Mainline Auction', leftX, y)
+			y += 3
+			doc.setFont('helvetica', 'normal')
+			const headerCols = ['N', 'E', 'S', 'W']
 			const colW = (notesW + diagramAreaW - 4) / 4
 			// table headers
-			headerCols.forEach((c,i)=>{
-				doc.text(c, leftX + 1 + i*colW, y)
+			headerCols.forEach((c, i) => {
+				doc.text(c, leftX + 1 + i * colW, y)
 			})
-			y+=3
+			y += 3
 			const rows = []
-			main.seq.forEach((call, idx)=>{
-				const r = Math.floor(idx/4)
-				if(!rows[r]) rows[r]=[]
+			main.seq.forEach((call, idx) => {
+				const r = Math.floor(idx / 4)
+				if (!rows[r]) rows[r] = []
 				rows[r].push(String(call))
 			})
-			rows.forEach(r=>{
+			rows.forEach((r) => {
 				const rowCalls = pdfSeq(r)
-				rowCalls.forEach((c,i)=>{ doc.text(c, leftX + 1 + i*colW, y) })
-				y+=3
+				rowCalls.forEach((c, i) => {
+					doc.text(c, leftX + 1 + i * colW, y)
+				})
+				y += 3
 			})
 			y += 1
 			// Bullets (≤3)
-			doc.setFont('helvetica','bold'); doc.text('Key Points:', leftX, y); y+=3
-			doc.setFont('helvetica','normal'); doc.setFontSize(6.3)
-			main.bullets.slice(0,3).forEach(b=>{
+			doc.setFont('helvetica', 'bold')
+			doc.text('Key Points:', leftX, y)
+			y += 3
+			doc.setFont('helvetica', 'normal')
+			doc.setFontSize(6.3)
+			main.bullets.slice(0, 3).forEach((b) => {
 				const lines = doc.splitTextToSize('• ' + b, notesW + diagramAreaW - 6)
-				lines.forEach(line=> { doc.text(line, leftX+1.5, y); y+=3 })
+				lines.forEach((line) => {
+					doc.text(line, leftX + 1.5, y)
+					y += 3
+				})
 			})
 			// Alternatives summary
-			const alts = advice.auctions.filter((_,i)=> i!== (advice.recommendation_index||0))
-			if(alts.length){
-				y+=1
-				doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.text('Alternatives', leftX, y); y+=3
-				doc.setFont('helvetica','normal'); doc.setFontSize(6.2)
-				alts.forEach(a=>{
-					const prob = (a.prob*100).toFixed(0)+'%'
+			const alts = advice.auctions.filter(
+				(_, i) => i !== (advice.recommendation_index || 0)
+			)
+			if (alts.length) {
+				y += 1
+				doc.setFont('helvetica', 'bold')
+				doc.setFontSize(7)
+				doc.text('Alternatives', leftX, y)
+				y += 3
+				doc.setFont('helvetica', 'normal')
+				doc.setFontSize(6.2)
+				alts.forEach((a) => {
+					const prob = (a.prob * 100).toFixed(0) + '%'
 					const altRows = []
-					a.seq.forEach((call, idx)=>{
-						const r = Math.floor(idx/4)
-						if(!altRows[r]) altRows[r]=[]
+					a.seq.forEach((call, idx) => {
+						const r = Math.floor(idx / 4)
+						if (!altRows[r]) altRows[r] = []
 						altRows[r].push(pdfBid(call))
 					})
-					const flat = altRows.map(rw=> rw.join(' ')).join(' | ')
+					const flat = altRows.map((rw) => rw.join(' ')).join(' | ')
 					const line = `${prob}: ${flat}`
 					const lines = doc.splitTextToSize(line, notesW + diagramAreaW - 6)
-					lines.forEach(l=> { doc.text(l, leftX+1.5, y); y+=3 })
-					if(a.bullets && a.bullets.length){
+					lines.forEach((l) => {
+						doc.text(l, leftX + 1.5, y)
+						y += 3
+					})
+					if (a.bullets && a.bullets.length) {
 						const bLine = '• ' + a.bullets[0]
 						const split = doc.splitTextToSize(bLine, notesW + diagramAreaW - 6)
-						split.forEach(s=> { doc.text(s, leftX+2, y); y+=3 })
+						split.forEach((s) => {
+							doc.text(s, leftX + 2, y)
+							y += 3
+						})
 					}
 				})
 			}
 		} else {
 			// Draw placeholder to make absence visible for debugging
 			doc.setFontSize(6.4)
-			doc.setFont('helvetica','italic')
+			doc.setFont('helvetica', 'italic')
 			doc.text('No auction advice available (debug)', leftX, lastContentY + 6)
 		}
 	}

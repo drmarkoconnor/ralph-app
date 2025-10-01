@@ -8,8 +8,7 @@ function Tooltip({ label, children, className = '' }) {
 				<span
 					role="tooltip"
 					className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 absolute z-50 -top-1.5 left-1/2 -translate-x-1/2 -translate-y-full bg-gray-900/95 backdrop-blur-sm text-white text-[11px] leading-tight px-2.5 py-1.5 rounded-md shadow-xl whitespace-pre-line break-words max-w-[220px] ring-1 ring-black/40"
-					style={{ boxShadow: '0 4px 10px rgba(0,0,0,0.35)' }}
-				>
+					style={{ boxShadow: '0 4px 10px rgba(0,0,0,0.35)' }}>
 					{label}
 				</span>
 			)}
@@ -1523,17 +1522,22 @@ export default function DragDropCards({ meta, setMeta }) {
 							title="Quick random distribution">
 							Randomize
 						</button>
-						<Tooltip label={'Generate a one-page quick use guide for the Generator & Player (workflow, options, advice engine).'}>
+						<Tooltip
+							label={
+								'Generate a one-page quick use guide for the Generator & Player (workflow, options, advice engine).'
+							}>
 							<button
 								className="ml-3 px-4 py-2 rounded-full bg-sky-600 text-white text-sm shadow hover:bg-sky-700"
 								onClick={async () => {
-								try {
-									const { generateTeacherCheatSheetPDF } = await import('./lib/teacherCheatSheetPdf')
-									await generateTeacherCheatSheetPDF()
-								} catch (e) {
-									console.error('Cheat sheet PDF failed', e)
-								}
-							}}>
+									try {
+										const { generateTeacherCheatSheetPDF } = await import(
+											'./lib/teacherCheatSheetPdf'
+										)
+										await generateTeacherCheatSheetPDF()
+									} catch (e) {
+										console.error('Cheat sheet PDF failed', e)
+									}
+								}}>
 								Quick Use Guide PDF
 							</button>
 						</Tooltip>
@@ -1601,7 +1605,12 @@ export default function DragDropCards({ meta, setMeta }) {
 							</div>
 							<div className="flex flex-col md:flex-row md:items-center md:gap-3 w-full">
 								<div className="flex items-center gap-2 flex-wrap">
-									<Tooltip label={complete ? 'Save this complete deal with current notes.' : 'All four hands must contain 13 cards.'}>
+									<Tooltip
+										label={
+											complete
+												? 'Save this complete deal with current notes.'
+												: 'All four hands must contain 13 cards.'
+										}>
 										<button
 											className="px-4 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
 											onClick={saveCurrentHand}
@@ -1609,7 +1618,12 @@ export default function DragDropCards({ meta, setMeta }) {
 											Save Hand
 										</button>
 									</Tooltip>
-									<Tooltip label={savedHands.length ? 'Export all saved boards now. Will also generate PDF if Handout is ticked.' : 'Save at least one board first.'}>
+									<Tooltip
+										label={
+											savedHands.length
+												? 'Export all saved boards now. Will also generate PDF if Handout is ticked.'
+												: 'Save at least one board first.'
+										}>
 										<button
 											className="px-4 py-2 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
 											onClick={handleGeneratePBN}
@@ -1617,7 +1631,10 @@ export default function DragDropCards({ meta, setMeta }) {
 											Save all to PBN now
 										</button>
 									</Tooltip>
-									<Tooltip label={'Adds a formatted PDF handout (2 boards/page) including notes & metadata.'}>
+									<Tooltip
+										label={
+											'Adds a formatted PDF handout (2 boards/page) including notes & metadata.'
+										}>
 										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
 											<input
 												type="checkbox"
@@ -1628,12 +1645,17 @@ export default function DragDropCards({ meta, setMeta }) {
 										</label>
 									</Tooltip>
 									{includeHandout && (
-										<Tooltip label={'Include ACOL mainline auction + alternatives with teaching bullets.'}>
+										<Tooltip
+											label={
+												'Include ACOL mainline auction + alternatives with teaching bullets.'
+											}>
 											<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
 												<input
 													type="checkbox"
 													checked={includeAuctionAdvice}
-													onChange={(e) => setIncludeAuctionAdvice(e.target.checked)}
+													onChange={(e) =>
+														setIncludeAuctionAdvice(e.target.checked)
+													}
 												/>
 												<span>Auction Advice</span>
 											</label>
