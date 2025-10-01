@@ -1,4 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+// Accessible tooltip component with improved background coverage & wrapping
+function Tooltip({ label, children, className = '' }) {
+	return (
+		<span className={`relative group inline-flex ${className}`}>
+			{children}
+			{label && (
+				<span
+					role="tooltip"
+					className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 absolute z-50 -top-1.5 left-1/2 -translate-x-1/2 -translate-y-full bg-gray-900/95 backdrop-blur-sm text-white text-[11px] leading-tight px-2.5 py-1.5 rounded-md shadow-xl whitespace-pre-line break-words max-w-[220px] ring-1 ring-black/40"
+					style={{ boxShadow: '0 4px 10px rgba(0,0,0,0.35)' }}
+				>
+					{label}
+				</span>
+			)}
+		</span>
+	)
+}
 import { BoardZ } from './schemas/board'
 import { exportBoardPBN } from './pbn/export'
 import useIsIPhone from './hooks/useIsIPhone'
@@ -162,6 +179,20 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [adviceReady, setAdviceReady] = useState(false)
 	// handoutMode deprecated – always full now
 	const handoutMode = 'full'
+
+	// Track if user has manually interacted with Theme select to avoid auto-clearing after selection
+	const themeTouchedRef = useRef(false)
+	useEffect(() => {
+		// If initial meta (from parent) seeds a default theme we don't want, clear it once so blank placeholder shows.
+		if (!themeTouchedRef.current) {
+			const stayman = 'Bidding - Stayman & Transfers'
+			if (meta?.themeChoice === stayman) {
+				setMeta?.((m) => ({ ...m, themeChoice: '' }))
+			}
+		}
+	}, [meta?.themeChoice, setMeta])
+
+	// Removed previous auto-default to 'Custom…'; now start blank so user explicitly chooses a theme.
 
 	// Keyboard entry mode
 	const [kbMode, setKbMode] = useState(false)
@@ -823,15 +854,14 @@ export default function DragDropCards({ meta, setMeta }) {
 							.split(/\s+/)
 							.filter(Boolean)
 							.map((t) => (t === 'P' ? 'Pass' : t))
-						// Build base deal object
-						return {
+						const deal = {
 							number: boardNo,
 							dealer,
 							vul,
 							hands: { N: h.N, E: h.E, S: h.S, W: h.W },
 							notes,
 							calls: auctionTokens,
-							contract: h.meta?.contract, // rarely set here
+							contract: h.meta?.contract,
 							declarer: h.meta?.declarer,
 							meta: {
 								system: h.meta?.system,
@@ -849,7 +879,11 @@ export default function DragDropCards({ meta, setMeta }) {
 								const adv = getOrBuildAcolAdvice(deal)
 								if (adv) deal.auctionAdvice = adv
 							} catch (e) {
-								console.warn('Auction advice generation failed for board', boardNo, e)
+								console.warn(
+									'Auction advice generation failed for board',
+									boardNo,
+									e
+								)
 							}
 						}
 						return deal
@@ -1198,9 +1232,11 @@ export default function DragDropCards({ meta, setMeta }) {
 									<select
 										className="border rounded px-1 py-0.5 text-[11px] flex-1"
 										value={meta?.themeChoice || ''}
-										onChange={(e) =>
+										onChange={(e) => {
+											themeTouchedRef.current = true
 											setMeta?.((m) => ({ ...m, themeChoice: e.target.value }))
-										}>
+										}}>
+										<option value="">(select a theme)</option>
 										<option>Bidding - Stayman & Transfers</option>
 										<option>Bidding - Overcalls</option>
 										<option>Bidding - Weak Twos</option>
@@ -1487,6 +1523,20 @@ export default function DragDropCards({ meta, setMeta }) {
 							title="Quick random distribution">
 							Randomize
 						</button>
+						<Tooltip label={'Generate a one-page quick use guide for the Generator & Player (workflow, options, advice engine).'}>
+							<button
+								className="ml-3 px-4 py-2 rounded-full bg-sky-600 text-white text-sm shadow hover:bg-sky-700"
+								onClick={async () => {
+								try {
+									const { generateTeacherCheatSheetPDF } = await import('./lib/teacherCheatSheetPdf')
+									await generateTeacherCheatSheetPDF()
+								} catch (e) {
+									console.error('Cheat sheet PDF failed', e)
+								}
+							}}>
+								Quick Use Guide PDF
+							</button>
+						</Tooltip>
 					</div>
 
 					{/* Deck with DnD */}
@@ -1551,45 +1601,43 @@ export default function DragDropCards({ meta, setMeta }) {
 							</div>
 							<div className="flex flex-col md:flex-row md:items-center md:gap-3 w-full">
 								<div className="flex items-center gap-2 flex-wrap">
-									<button
-										className="px-4 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
-										onClick={saveCurrentHand}
-										disabled={!complete}
-										title={
-											complete
-												? 'Save this complete deal'
-												: 'Finish distributing to enable saving'
-										}>
-										Save Hand
-									</button>
-									<button
-										className="px-4 py-2 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
-										onClick={handleGeneratePBN}
-										disabled={savedHands.length === 0}
-										title={
-											savedHands.length
-												? 'Generate a PBN file of all saved boards now'
-												: 'Save at least one board first'
-										}>
-										Save all to PBN now
-									</button>
-									<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none">
-										<input
-											type="checkbox"
-											checked={includeHandout}
-											onChange={(e) => setIncludeHandout(e.target.checked)}
-										/>
-										<span>Full Handout PDF</span>
-									</label>
-									{includeHandout && (
-										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none">
+									<Tooltip label={complete ? 'Save this complete deal with current notes.' : 'All four hands must contain 13 cards.'}>
+										<button
+											className="px-4 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
+											onClick={saveCurrentHand}
+											disabled={!complete}>
+											Save Hand
+										</button>
+									</Tooltip>
+									<Tooltip label={savedHands.length ? 'Export all saved boards now. Will also generate PDF if Handout is ticked.' : 'Save at least one board first.'}>
+										<button
+											className="px-4 py-2 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
+											onClick={handleGeneratePBN}
+											disabled={savedHands.length === 0}>
+											Save all to PBN now
+										</button>
+									</Tooltip>
+									<Tooltip label={'Adds a formatted PDF handout (2 boards/page) including notes & metadata.'}>
+										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
 											<input
 												type="checkbox"
-												checked={includeAuctionAdvice}
-												onChange={(e) => setIncludeAuctionAdvice(e.target.checked)}
+												checked={includeHandout}
+												onChange={(e) => setIncludeHandout(e.target.checked)}
 											/>
-											<span>Auction Advice</span>
+											<span>Full Handout PDF</span>
 										</label>
+									</Tooltip>
+									{includeHandout && (
+										<Tooltip label={'Include ACOL mainline auction + alternatives with teaching bullets.'}>
+											<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
+												<input
+													type="checkbox"
+													checked={includeAuctionAdvice}
+													onChange={(e) => setIncludeAuctionAdvice(e.target.checked)}
+												/>
+												<span>Auction Advice</span>
+											</label>
+										</Tooltip>
 									)}
 									<span className="text-[11px] text-gray-600">
 										Saved: {savedHands.length}

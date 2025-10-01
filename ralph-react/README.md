@@ -1,12 +1,27 @@
-# React + Vite
+<h1>Ralph Bridge Teaching App</h1>
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Purpose-built tool for creating, annotating, exporting and teaching custom bridge deals with automated ACOL auction guidance.
 
-Currently, two official plugins are available:
+Key features:
+- Drag & drop deal builder with keyboard entry mode
+- Metadata & notes per board (theme, lead, DD Par, scoring, etc.)
+- Automated ACOL auction advisor (mainline + alternatives)
+- PDF handout export (2 boards per page)
+- Player view to step through auction & play for teaching
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Full non-technical user documentation: see <a href="./HELP.md">HELP.md</a>
 
-## Expanding the ESLint configuration
+Developer quick start:
+1. Install deps: `npm install`
+2. Run dev server: `npm run dev`
+3. Build: `npm run build`
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Structure overview:
+- `src/DragDropCards.jsx` – Deal builder UI
+- `src/pages/Player.jsx` – Teaching / play interface
+- `src/lib/acolAdvisor.js` – Deterministic ACOL auction advice engine
+- `src/lib/handoutPdf.js` – PDF generator (jsPDF)
+
+License: Internal teaching aid (add a LICENSE file if distributing externally).
+
+For feature requests or issues, open a ticket or annotate in HELP.md “Future Ideas” section.
