@@ -3,6 +3,31 @@ import { ownerStringFromHands, computeDealHashV1 } from './hash'
 
 const CRLF = '\r\n'
 
+// Dealer4 and some legacy PBN consumers are strict about ASCII-only tag values.
+// Sanitize text: replace Unicode suit symbols, smart quotes/dashes, strip other non-ASCII,
+// and avoid raw double-quotes inside values.
+function sanitizePbnText(input?: string): string {
+	if (!input) return ''
+	let s = String(input)
+	// Normalise common punctuation and suit symbols
+	s = s
+		.replace(/[“”]/g, '"')
+		.replace(/[‘’]/g, "'")
+		.replace(/[–—]/g, '-')
+		.replace(/…/g, '...')
+		.replace(/♠/g, 'S')
+		.replace(/♥/g, 'H')
+		.replace(/♦/g, 'D')
+		.replace(/♣/g, 'C')
+	// Collapse newlines/CRs/tabs inside tag values
+	s = s.replace(/[\r\n\t]+/g, ' ').trim()
+	// PBN strings use double quotes as delimiters; avoid embedded quotes by converting to apostrophes
+	s = s.replace(/"/g, "'")
+	// Finally, strip any non-ASCII control/extended characters (keep printable ASCII 32..126)
+	s = s.replace(/[^\x20-\x7E]/g, '')
+	return s
+}
+
 const seatOrderFrom = (start: Seat): Seat[] => {
 	const all: Seat[] = ['N', 'E', 'S', 'W']
 	const i = all.indexOf(start)
@@ -34,9 +59,9 @@ export async function exportBoardPBN(board: Board): Promise<string> {
 	}
 
 	const core = [
-		`[Event "${board.event}"]`,
-		`[Site "${board.site}"]`,
-		`[Date "${board.date}"]`,
+		`[Event "${sanitizePbnText(board.event)}"]`,
+		`[Site "${sanitizePbnText(board.site)}"]`,
+		`[Date "${sanitizePbnText(board.date)}"]`,
 		`[Board "${board.board}"]`,
 		`[Dealer "${board.dealer}"]`,
 		`[Vulnerable "${board.vul}"]`,
@@ -55,22 +80,27 @@ export async function exportBoardPBN(board: Board): Promise<string> {
 	ext.push(
 		'[TagSpec "System,Theme,Interf,Lead,DDPar,Diagram,PlayScript,Scoring,DealHash"]'
 	)
-	if (board.ext.system) ext.push(`[System "${board.ext.system}"]`)
-	if (board.ext.theme) ext.push(`[Theme "${board.ext.theme}"]`)
-	if (board.ext.interf) ext.push(`[Interf "${board.ext.interf}"]`)
-	if (board.ext.lead) ext.push(`[Lead "${board.ext.lead}"]`)
-	if (board.ext.ddpar) ext.push(`[DDPar "${board.ext.ddpar}"]`)
-	if (board.ext.diagram) ext.push(`[Diagram "${board.ext.diagram}"]`)
+	if (board.ext.system) ext.push(`[System "${sanitizePbnText(board.ext.system)}"]`)
+	if (board.ext.theme) ext.push(`[Theme "${sanitizePbnText(board.ext.theme)}"]`)
+	if (board.ext.interf) ext.push(`[Interf "${sanitizePbnText(board.ext.interf)}"]`)
+	if (board.ext.lead) ext.push(`[Lead "${sanitizePbnText(board.ext.lead)}"]`)
+	if (board.ext.ddpar) ext.push(`[DDPar "${sanitizePbnText(board.ext.ddpar)}"]`)
+	if (board.ext.diagram) ext.push(`[Diagram "${sanitizePbnText(board.ext.diagram)}"]`)
 	if (board.ext.playscript)
-		ext.push(`[PlayScript "${board.ext.playscript.replace(/\n/g, '\\n')}"]`)
-	if (board.ext.scoring) ext.push(`[Scoring "${board.ext.scoring}"]`)
+		ext.push(
+			`[PlayScript "${sanitizePbnText(board.ext.playscript).replace(/\n/g, '\\n')}"]`
+		)
+	if (board.ext.scoring) ext.push(`[Scoring "${sanitizePbnText(board.ext.scoring)}"]`)
 	if (dealHash) ext.push(`[DealHash "${dealHash}"]`)
 
-	const notes = (board.notes || []).map((n) => `[Note "${n.slice(0, 300)}"]`)
+	const notes = (board.notes || []).map((n) =>
+		`[Note "${sanitizePbnText(n).slice(0, 300)}"]`
+	)
 
 	const auction: string[] = []
 	if (board.auctionStart && board.auction && board.auction.length) {
-		auction.push(`[Auction "${board.auctionStart}"] ${board.auction.join(' ')}`)
+		const calls = board.auction.map((c) => sanitizePbnText(String(c)))
+		auction.push(`[Auction "${board.auctionStart}"] ${calls.join(' ')}`)
 	}
 
 	return [...core, ...ext, ...notes, ...auction, ''].join(CRLF) + CRLF

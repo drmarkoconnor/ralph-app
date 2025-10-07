@@ -9,33 +9,11 @@ export async function generateHandoutPDF(deals, options = {}) {
 		filenameBase = 'handout',
 		autoNotes = false,
 		copyright: copyrightOverride,
+		includeMakeableGrid = true,
 	} = options
 	if (!Array.isArray(deals) || !deals.length)
 		throw new Error('No deals provided')
 
-	// Always attempt to ensure auction advice; even if earlier attempts failed.
-	let advisorMod = null
-	try {
-		advisorMod = await import('./acolAdvisor.js')
-	} catch (e) {
-		console.warn('[PDF] Failed to load ACOL advisor module', e)
-	}
-	if (advisorMod && advisorMod.getOrBuildAcolAdvice) {
-		deals.forEach((d) => {
-			if (d && d.hands && !d.auctionAdvice) {
-				try {
-					const adv = advisorMod.getOrBuildAcolAdvice(d)
-					if (adv) d.auctionAdvice = adv
-				} catch (e) {
-					console.warn(
-						'[PDF] Auction advice build failed for board',
-						d.number,
-						e
-					)
-				}
-			}
-		})
-	}
 	const { jsPDF } = await import('jspdf')
 	const doc = new jsPDF({ unit: 'mm', format: 'a4' })
 	const pageW = 210
@@ -61,6 +39,26 @@ export async function generateHandoutPDF(deals, options = {}) {
 		4: 4,
 		3: 3,
 		2: 2,
+	}
+
+	// Precompute makeable contracts tables if DDS wrapper is available
+	let dds = null
+	if (includeMakeableGrid) {
+		try {
+			dds = await import('./ddsWasm.js')
+			if (dds && typeof dds.getDDTable === 'function') {
+				for (const d of deals) {
+					try {
+						const tbl = await dds.getDDTable(d)
+						if (tbl) d._ddTable = tbl
+					} catch (e) {
+						console.warn('[PDF] Failed to compute DD table for board', d?.number, e)
+					}
+				}
+			}
+		} catch (e) {
+			console.warn('[PDF] DDS module not available; makeable grid will be skipped', e)
+		}
 	}
 	const sortDisplay = (arr) =>
 		[...arr].sort((a, b) => rankOrder[b.rank] - rankOrder[a.rank])
@@ -146,25 +144,14 @@ export async function generateHandoutPDF(deals, options = {}) {
 		return ''
 	}
 
-	// Attempt to load pre-computed auction advice if path / field provided on deal
-	const resolveAdviceFor = (dealObj) => {
-		// Expect dealObj.dealHash or dealObj.meta.dealHash and global window.__auctionAdvice map OR embedded advice
-		if (dealObj.auctionAdvice) return dealObj.auctionAdvice
-		try {
-			if (typeof window !== 'undefined' && window.__auctionAdvice) {
-				const key = dealObj.dealHash || (dealObj.meta && dealObj.meta.dealHash)
-				return window.__auctionAdvice[key]
-			}
-		} catch {}
-		return null
-	}
+	// Auction advice fully removed
 
-	const year = new Date().getFullYear()
-	const copyright =
-		copyrightOverride || `© ${year} Mark O'Connor. All rights reserved.`
+	// Default: no footer unless explicitly provided
+	const copyright = copyrightOverride || ''
 
 	const drawFooter = () => {
 		try {
+			if (!copyright) return
 			doc.setFont('helvetica', 'normal')
 			doc.setFontSize(6)
 			doc.setTextColor(120, 120, 120)
@@ -306,8 +293,12 @@ export async function generateHandoutPDF(deals, options = {}) {
 		}
 		;['N', 'W', 'E', 'S'].forEach(drawSeat)
 
+		// Compute a more accurate bottom for the hand diagram, then start content below it
+		// S seat is at diagramTopY + seatDy; there are 4 suit lines spaced by suitLine
+		// Bottom line index is 3, so add 3 * suitLine, plus extra breathing room
+		const diagramBottomY = diagramTopY + seatDy + suitLine * 3 + 8
 		// Auction (full mode) placed under diagram spanning notes + diagram width (leave meta column untouched)
-		let lastContentY = diagramTopY + seatDy + 10
+		let lastContentY = diagramBottomY
 		if (
 			mode === 'full' &&
 			Array.isArray(dealObj.calls) &&
@@ -330,146 +321,39 @@ export async function generateHandoutPDF(deals, options = {}) {
 				auctionTop + 8 + Math.ceil(dealObj.calls.length / 4) * 4 + 2
 		}
 
-		// Integrate auction advice (if available) ALWAYS (basic & full) below auction / diagram
-		let advice = resolveAdviceFor(dealObj)
-		if (!advice || !advice.auctions || !advice.auctions.length) {
-			// Last-chance build attempt per board (sync boundary)
-			// We can't await here (drawBlock not async); instead schedule synchronous promise resolution.
-			try {
-				import('./acolAdvisor.js')
-					.then((mod) => {
-						if (advice && advice.auctions && advice.auctions.length) return
-						if (mod.getOrBuildAcolAdvice && dealObj.hands) {
-							const built = mod.getOrBuildAcolAdvice(dealObj)
-							if (built) {
-								dealObj.auctionAdvice = built
-								advice = built
-								// NOTE: cannot retroactively draw in same pass; user will see placeholder this page render.
-							}
-						}
-					})
-					.catch((e) => {
-						console.warn(
-							'[PDF] per-board advisor build failed',
-							dealObj.number,
-							e
-						)
-					})
-			} catch (e) {
-				console.warn(
-					'[PDF] per-board advisor build scheduling failed',
-					dealObj.number,
-					e
-				)
-			}
-		}
-		if (advice && advice.auctions && advice.auctions.length) {
-			// Helper to downgrade Unicode suit symbols to letters if font lacks glyphs
-			const pdfBid = (b) =>
-				String(b || '')
-					.replace(/♠/g, 'S')
-					.replace(/♥/g, 'H')
-					.replace(/♦/g, 'D')
-					.replace(/♣/g, 'C')
-					.replace(/^Pass$/i, 'Pass')
-			const pdfSeq = (seq) => seq.map(pdfBid)
-			// horizontal rule
-			doc.setDrawColor(150)
-			doc.setLineWidth(0.2)
-			doc.line(
-				leftX,
-				lastContentY + 2,
-				leftX + notesW + gutter + diagramAreaW,
-				lastContentY + 2
-			)
-			let y = lastContentY + 5
+		// Makeable Contracts grid (Double Dummy table)
+		if (includeMakeableGrid) {
+			const gridTop = lastContentY + 4
 			doc.setFont('helvetica', 'bold')
-			doc.setFontSize(7.5)
-			doc.text('Auction Advice (ACOL)', leftX, y)
-			y += 3.5
-			const main = advice.auctions[advice.recommendation_index || 0]
-			// Render 4-column auction table for mainline
-			doc.setFont('helvetica', 'bold')
-			doc.setFontSize(7)
-			doc.text('Mainline Auction', leftX, y)
-			y += 3
+			doc.setFontSize(7.2)
+			doc.text('Makeable Contracts (DD Table)', leftX, gridTop)
 			doc.setFont('helvetica', 'normal')
-			const headerCols = ['N', 'E', 'S', 'W']
-			const colW = (notesW + diagramAreaW - 4) / 4
-			// table headers
-			headerCols.forEach((c, i) => {
-				doc.text(c, leftX + 1 + i * colW, y)
+			doc.setFontSize(6.6)
+			const table = dealObj._ddTable
+			const strains = ['S', 'H', 'D', 'C', 'NT']
+			const seats = ['N', 'E', 'S', 'W']
+			const colW = (notesW + diagramAreaW - 6) / (seats.length + 1)
+			let y = gridTop + 4
+			// header
+			seats.forEach((seat, i) => {
+				doc.text(seat, leftX + (i + 1) * colW, y)
 			})
 			y += 3
-			const rows = []
-			main.seq.forEach((call, idx) => {
-				const r = Math.floor(idx / 4)
-				if (!rows[r]) rows[r] = []
-				rows[r].push(String(call))
-			})
-			rows.forEach((r) => {
-				const rowCalls = pdfSeq(r)
-				rowCalls.forEach((c, i) => {
-					doc.text(c, leftX + 1 + i * colW, y)
-				})
-				y += 3
-			})
-			y += 1
-			// Bullets (≤3)
-			doc.setFont('helvetica', 'bold')
-			doc.text('Key Points:', leftX, y)
-			y += 3
-			doc.setFont('helvetica', 'normal')
-			doc.setFontSize(6.3)
-			main.bullets.slice(0, 3).forEach((b) => {
-				const lines = doc.splitTextToSize('• ' + b, notesW + diagramAreaW - 6)
-				lines.forEach((line) => {
-					doc.text(line, leftX + 1.5, y)
+			if (table) {
+				strains.forEach((st) => {
+					doc.text(st, leftX, y)
+					seats.forEach((seat, c) => {
+						const v = table?.[st]?.[seat]
+						doc.text(v == null ? '' : String(v), leftX + (c + 1) * colW, y)
+					})
 					y += 3
 				})
-			})
-			// Alternatives summary
-			const alts = advice.auctions.filter(
-				(_, i) => i !== (advice.recommendation_index || 0)
-			)
-			if (alts.length) {
-				y += 1
-				doc.setFont('helvetica', 'bold')
-				doc.setFontSize(7)
-				doc.text('Alternatives', leftX, y)
+			} else {
+				doc.setFont('helvetica', 'italic')
+				doc.text('unavailable', leftX + colW, y)
 				y += 3
-				doc.setFont('helvetica', 'normal')
-				doc.setFontSize(6.2)
-				alts.forEach((a) => {
-					const prob = (a.prob * 100).toFixed(0) + '%'
-					const altRows = []
-					a.seq.forEach((call, idx) => {
-						const r = Math.floor(idx / 4)
-						if (!altRows[r]) altRows[r] = []
-						altRows[r].push(pdfBid(call))
-					})
-					const flat = altRows.map((rw) => rw.join(' ')).join(' | ')
-					const line = `${prob}: ${flat}`
-					const lines = doc.splitTextToSize(line, notesW + diagramAreaW - 6)
-					lines.forEach((l) => {
-						doc.text(l, leftX + 1.5, y)
-						y += 3
-					})
-					if (a.bullets && a.bullets.length) {
-						const bLine = '• ' + a.bullets[0]
-						const split = doc.splitTextToSize(bLine, notesW + diagramAreaW - 6)
-						split.forEach((s) => {
-							doc.text(s, leftX + 2, y)
-							y += 3
-						})
-					}
-				})
 			}
-		} else {
-			// Draw placeholder to make absence visible for debugging
-			doc.setFontSize(6.4)
-			doc.setFont('helvetica', 'italic')
-			doc.text('No auction advice available (debug)', leftX, lastContentY + 6)
+			lastContentY = y + 1
 		}
 	}
 

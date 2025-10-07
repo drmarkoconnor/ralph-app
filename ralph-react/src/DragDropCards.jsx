@@ -174,8 +174,7 @@ export default function DragDropCards({ meta, setMeta }) {
 	const isIPhone = useIsIPhone()
 	const [activeSeat, setActiveSeat] = useState('N')
 	const [includeHandout, setIncludeHandout] = useState(false)
-	const [includeAuctionAdvice, setIncludeAuctionAdvice] = useState(true)
-	const [adviceReady, setAdviceReady] = useState(false)
+	const [includeMakeableGrid, setIncludeMakeableGrid] = useState(true)
 	// handoutMode deprecated – always full now
 	const handoutMode = 'full'
 
@@ -596,6 +595,22 @@ export default function DragDropCards({ meta, setMeta }) {
 		setDragSource(null)
 	}
 
+	// Simple click-to-remove: clicking a card in a seat moves it back to the deck
+	const removeCardFromSeat = (cardId, seat) => {
+		setDeal((prev) => {
+			const fromArr = prev.buckets[seat]
+			const idx = fromArr.findIndex((c) => c.id === cardId)
+			if (idx === -1) return prev
+			const card = fromArr[idx]
+			const nextFrom = fromArr.slice()
+			nextFrom.splice(idx, 1)
+			return {
+				deck: sortDeck([...prev.deck, card]),
+				buckets: { ...prev.buckets, [seat]: nextFrom },
+			}
+		})
+	}
+
 	// Keep deck ordered CDHS and by rank 2..A when cards return to the deck
 	const sortDeck = (arr) => {
 		const suitOrder = { Clubs: 0, Diamonds: 1, Hearts: 2, Spades: 3 }
@@ -841,7 +856,7 @@ export default function DragDropCards({ meta, setMeta }) {
 				try {
 					// Use shared PDF generator for consistency
 					const { generateHandoutPDF } = await import('./lib/handoutPdf')
-					let { getOrBuildAcolAdvice } = await import('./lib/acolAdvisor.js')
+					// Auction advice removed
 					// Normalize saved hands into shared format
 					const dealsForPdf = savedHands.map((h, i) => {
 						const boardNo = startBoard + i
@@ -873,32 +888,9 @@ export default function DragDropCards({ meta, setMeta }) {
 								auctionText: h.meta?.auctionText,
 							},
 						}
-						if (includeAuctionAdvice) {
-							try {
-								const adv = getOrBuildAcolAdvice(deal)
-								if (adv) deal.auctionAdvice = adv
-							} catch (e) {
-								console.warn(
-									'Auction advice generation failed for board',
-									boardNo,
-									e
-								)
-							}
-						}
+						// Auction advice no longer used
 						return deal
 					})
-					if (includeAuctionAdvice) {
-						const withAdvice = dealsForPdf.filter((d) => d.auctionAdvice)
-						if (withAdvice.length === 0) {
-							console.warn(
-								'[Handout] No auction advice attached to any deal - advisor may have failed to load.'
-							)
-						} else if (withAdvice.length < dealsForPdf.length) {
-							console.warn(
-								`[Handout] Auction advice present for ${withAdvice.length}/${dealsForPdf.length} deals.`
-							)
-						}
-					}
 					const now = new Date()
 					const yyyy = now.getFullYear()
 					const mm = String(now.getMonth() + 1).padStart(2, '0')
@@ -920,6 +912,8 @@ export default function DragDropCards({ meta, setMeta }) {
 						mode: 'full',
 						filenameBase: base,
 						autoNotes: true,
+						includeMakeableGrid: includeMakeableGrid,
+						copyright: '',
 					})
 				} catch (err) {
 					console.error('PDF handout failed', err)
@@ -1124,6 +1118,7 @@ export default function DragDropCards({ meta, setMeta }) {
 						draggable
 						onDragStart={(e) => onDragStartBucket(e, card, bucketId)}
 						onDragEnd={onDragEnd}
+						onClick={() => removeCardFromSeat(card.id, bucketId)}
 						className="font-semibold text-gray-900 px-1 select-none cursor-grab active:cursor-grabbing">
 						{card.rank}
 					</span>
@@ -1647,17 +1642,17 @@ export default function DragDropCards({ meta, setMeta }) {
 									{includeHandout && (
 										<Tooltip
 											label={
-												'Include ACOL mainline auction + alternatives with teaching bullets.'
+												'Include a makeable-contracts grid (double-dummy) in the PDF.'
 											}>
 											<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
 												<input
 													type="checkbox"
-													checked={includeAuctionAdvice}
+													checked={includeMakeableGrid}
 													onChange={(e) =>
-														setIncludeAuctionAdvice(e.target.checked)
+														setIncludeMakeableGrid(e.target.checked)
 													}
 												/>
-												<span>Auction Advice</span>
+												<span>Makeable contracts grid</span>
 											</label>
 										</Tooltip>
 									)}
