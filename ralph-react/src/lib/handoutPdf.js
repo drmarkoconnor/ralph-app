@@ -52,12 +52,19 @@ export async function generateHandoutPDF(deals, options = {}) {
 						const tbl = await dds.getDDTable(d)
 						if (tbl) d._ddTable = tbl
 					} catch (e) {
-						console.warn('[PDF] Failed to compute DD table for board', d?.number, e)
+						console.warn(
+							'[PDF] Failed to compute DD table for board',
+							d?.number,
+							e
+						)
 					}
 				}
 			}
 		} catch (e) {
-			console.warn('[PDF] DDS module not available; makeable grid will be skipped', e)
+			console.warn(
+				'[PDF] DDS module not available; makeable grid will be skipped',
+				e
+			)
 		}
 	}
 	const sortDisplay = (arr) =>
