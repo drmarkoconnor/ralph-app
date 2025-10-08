@@ -81,46 +81,46 @@ export function parsePBN(text) {
 			continue
 		}
 		if (inAuction) {
-				// Strip trailing comments and common footnote markers, then tokenize
-				const cleaned = line
-					.replace(/([;%].*)$/g, '')
-					.replace(/\$\d+/g, '') // remove $1, $2 references
-					.replace(/=\d+=/g, '') // remove =1= style references
-					.trim()
-				const rawTokens = cleaned.split(/\s+/).filter(Boolean)
-				const out = []
-				for (let tok of rawTokens) {
-					if (!tok) continue
-					let t = String(tok).trim()
-					// Remove trailing punctuation and stray markers
-					t = t.replace(/[.,;:]+$/g, '')
-					// Map synonyms and ignore non-calls
-					if (/^AP$/i.test(t)) {
-						// All Pass -> three passes after final bid; append 3 passes
-						out.push('P', 'P', 'P')
-						continue
-					}
-					if (/^P(ASS)?$/i.test(t)) {
-						out.push('P')
-						continue
-					}
-					if (/^XX$/i.test(t)) {
-						out.push('XX')
-						continue
-					}
-					if (/^X$/i.test(t)) {
-						out.push('X')
-						continue
-					}
-					// Normalize simple bids like 1C, 3NT
-					const m = t.match(/^([1-7])(C|D|H|S|NT)$/i)
-					if (m) {
-						out.push(`${m[1]}${m[2].toUpperCase()}`)
-						continue
-					}
-					// Otherwise ignore unknown/annotation tokens (e.g., =1=, $1, !, etc.)
+			// Strip trailing comments and common footnote markers, then tokenize
+			const cleaned = line
+				.replace(/([;%].*)$/g, '')
+				.replace(/\$\d+/g, '') // remove $1, $2 references
+				.replace(/=\d+=/g, '') // remove =1= style references
+				.trim()
+			const rawTokens = cleaned.split(/\s+/).filter(Boolean)
+			const out = []
+			for (let tok of rawTokens) {
+				if (!tok) continue
+				let t = String(tok).trim()
+				// Remove trailing punctuation and stray markers
+				t = t.replace(/[.,;:]+$/g, '')
+				// Map synonyms and ignore non-calls
+				if (/^AP$/i.test(t)) {
+					// All Pass -> three passes after final bid; append 3 passes
+					out.push('P', 'P', 'P')
+					continue
 				}
-				if (out.length) current.auction = [...(current.auction || []), ...out]
+				if (/^P(ASS)?$/i.test(t)) {
+					out.push('P')
+					continue
+				}
+				if (/^XX$/i.test(t)) {
+					out.push('XX')
+					continue
+				}
+				if (/^X$/i.test(t)) {
+					out.push('X')
+					continue
+				}
+				// Normalize simple bids like 1C, 3NT
+				const m = t.match(/^([1-7])(C|D|H|S|NT)$/i)
+				if (m) {
+					out.push(`${m[1]}${m[2].toUpperCase()}`)
+					continue
+				}
+				// Otherwise ignore unknown/annotation tokens (e.g., =1=, $1, !, etc.)
+			}
+			if (out.length) current.auction = [...(current.auction || []), ...out]
 			continue
 		}
 		if (inPlay) {

@@ -22,6 +22,9 @@ import {
 } from '../lib/bridgeCore'
 import { sanitizePBN, parsePBN } from '../lib/pbn'
 
+// Temporarily disable Declarer Insight until a live coach API is integrated
+const ADVICE_ENABLED = false
+
 // --- Tiny helpers ---
 const seatName = (s) =>
 	s === 'N' ? 'North' : s === 'E' ? 'East' : s === 'S' ? 'South' : 'West'
@@ -431,7 +434,7 @@ export default function Player() {
 	const [lastAutoPlay, setLastAutoPlay] = useState(null)
 	const [aiLogs, setAiLogs] = useState([])
 	const [adviceEntries, setAdviceEntries] = useState([]) // learning feedback entries
-	const [showAdvice, setShowAdvice] = useState(true)
+	const [showAdvice, setShowAdvice] = useState(false)
 	const [showCompletedTricks, setShowCompletedTricks] = useState(true)
 	// Teacher focus mode (collapses sidebar, darkens background, highlights seats & trick area)
 	const [teacherFocus, setTeacherFocus] = useState(false)
@@ -903,18 +906,20 @@ export default function Player() {
 	const onPlayCard = useCallback(
 		(seat, cardId) => {
 			if (usingManual && history.length === 0 && !planSubmitted) {
-				setAdviceEntries((list) => [
-					...list,
-					{
-						id: Date.now() + Math.random().toString(36).slice(2, 7),
-						quality: 'neutral',
-						why: 'First, fill in your plan (sure winners + likely losers).',
-						next: 'Planning helps you decide whether to draw trumps now.',
-						seat,
-						card: '',
-						principle: 'Plan first.',
-					},
-				])
+				if (ADVICE_ENABLED) {
+					setAdviceEntries((list) => [
+						...list,
+						{
+							id: Date.now() + Math.random().toString(36).slice(2, 7),
+							quality: 'neutral',
+							why: 'First, fill in your plan (sure winners + likely losers).',
+							next: 'Planning helps you decide whether to draw trumps now.',
+							seat,
+							card: '',
+							principle: 'Plan first.',
+						},
+					])
+				}
 				return
 			}
 			if (!usingManual || !turnSeat) return
@@ -959,15 +964,17 @@ export default function Player() {
 						effTrump,
 						trickBefore,
 					})
-					setAdviceEntries((list) =>
-						[
-							...list,
-							{
-								id: Date.now() + Math.random().toString(36).slice(2, 7),
-								...evalRes,
-							},
-						].slice(-70)
-					)
+					if (ADVICE_ENABLED) {
+						setAdviceEntries((list) =>
+							[
+								...list,
+								{
+									id: Date.now() + Math.random().toString(36).slice(2, 7),
+									...evalRes,
+								},
+							].slice(-70)
+						)
+					}
 				} catch {}
 			}
 			if (r.winner) {
@@ -1394,14 +1401,7 @@ export default function Player() {
 						/>{' '}
 						<span>Pause at trick end</span>
 					</label>
-					<label className="flex items-center gap-1">
-						<input
-							type="checkbox"
-							checked={showAdvice}
-							onChange={(e) => setShowAdvice(e.target.checked)}
-						/>{' '}
-						<span>Show advice panel</span>
-					</label>
+					{/* Advice panel temporarily disabled */}
 					<label className="flex items-center gap-1">
 						<input
 							type="checkbox"
@@ -1679,20 +1679,22 @@ export default function Player() {
 													'Plan how each loser might disappear.',
 												])
 												const principle = `Reference: winners ${actualWinners} / losers ${actualLosers}`
-												setAdviceEntries((list) => [
-													...list,
-													{
-														id:
-															Date.now() +
-															Math.random().toString(36).slice(2, 7),
-														quality,
-														why,
-														next,
-														seat: effDeclarer,
-														card: '',
-														principle,
-													},
-												])
+												if (ADVICE_ENABLED) {
+													setAdviceEntries((list) => [
+														...list,
+														{
+															id:
+																Date.now() +
+																Math.random().toString(36).slice(2, 7),
+															quality,
+															why,
+															next,
+															seat: effDeclarer,
+															card: '',
+															principle,
+														},
+													])
+												}
 												setPlanEvaluated(true)
 											}
 										}}
@@ -1704,20 +1706,22 @@ export default function Player() {
 											// skip / start immediately
 											if (!planSubmitted) {
 												setPlanSubmitted(true)
-												setAdviceEntries((list) => [
-													...list,
-													{
-														id:
-															Date.now() +
-															Math.random().toString(36).slice(2, 7),
-														quality: 'neutral',
-														why: 'You skipped detailed planning. Try still counting winners/losers as you play.',
-														next: 'Track remaining trumps & spot ways to turn losers into winners.',
-														seat: effDeclarer,
-														card: '',
-														principle: 'Started without plan',
-													},
-												])
+												if (ADVICE_ENABLED) {
+													setAdviceEntries((list) => [
+														...list,
+														{
+															id:
+																Date.now() +
+																Math.random().toString(36).slice(2, 7),
+															quality: 'neutral',
+															why: 'You skipped detailed planning. Try still counting winners/losers as you play.',
+															next: 'Track remaining trumps & spot ways to turn losers into winners.',
+															seat: effDeclarer,
+															card: '',
+															principle: 'Started without plan',
+														},
+													])
+												}
 											}
 											setPlanningOpen(false)
 											setHideDefenders(true) // auto-hide defenders when starting immediately
@@ -1824,7 +1828,7 @@ export default function Player() {
 						)}
 						{/* Cross layout with advice panel to left of North */}
 						<div className="flex items-start gap-6">
-							{showAdvice && !teacherFocus && (
+							{ADVICE_ENABLED && showAdvice && !teacherFocus && (
 								<div className="pt-1">
 									<AdvicePanel entries={adviceEntries} />
 								</div>
