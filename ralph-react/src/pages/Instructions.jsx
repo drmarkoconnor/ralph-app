@@ -40,7 +40,7 @@ export default function Instructions() {
 				<section id="player" className="mb-8">
 					<h2 className="text-2xl font-semibold text-gray-800 mb-2">Player</h2>
 					<p className="text-sm text-gray-700 leading-6 mb-3">
-						Load PBN boards, reveal the auction when ready, and step through tricks with a classroom-friendly layout. The Player supports Extended PBN tags, validates auctions, and derives opening leader as right-hand opponent of declarer when needed.
+						Load PBN boards, reveal the auction when ready, and step through tricks with a classroom-friendly layout. The Player supports Extended PBN tags, validates auctions, and derives opening leader as right-hand opponent of declarer when needed. Auctions are sanitized to remove annotations (e.g., =1=, $1) and map AP to triple pass.
 					</p>
 					<div className="space-y-3">
 						<div>
@@ -55,7 +55,7 @@ export default function Instructions() {
 							<h3 className="text-lg font-semibold text-gray-800">Auction</h3>
 							<ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
 								<li>Toggle “Reveal Auction” to hide/reveal bidding. In Teacher Focus, auction starts hidden.</li>
-								<li>Auctions are trimmed to the final call and passes for clarity.</li>
+								<li>Auctions are sanitized (annotations removed) and shown cleanly; “AP” (All Pass) appears as three passes.</li>
 							</ul>
 						</div>
 						<div>
@@ -114,9 +114,7 @@ export default function Instructions() {
 							Each bucket shows the High Card Points (HCP) total at the bottom.
 						</li>
 						<li>
-							Per-card removal: drag a card out of a seat and drop it on the
-							deck row to return it to the deck. You can also drag a card
-							directly between seats.
+							Per-card removal: click a card in a seat to return it to the deck (or drag it out). You can also drag a card directly between seats.
 						</li>
 					</ul>
 				</section>
@@ -172,7 +170,7 @@ export default function Instructions() {
 						</li>
 						<li>
 							Line endings are CRLF. Tags include Event, Site, Date, Board,
-							Dealer, Vulnerable, Deal.
+							Dealer, Vulnerable, Deal. Text fields are sanitized to ASCII and suit glyphs are replaced for Dealer4 compatibility.
 						</li>
 						<li>
 							Use Download PBN to save a .pbn file; Copy PBN places the text on
@@ -195,10 +193,8 @@ export default function Instructions() {
 						<li>
 							If buttons are disabled, check that a selection exists (for Send)
 							or that at least one hand is saved (for PBN).
-						</li>
-						<li>
-							On smaller screens, the layout condenses to fit within one
-							viewport height; the toolbar stays reachable.
+						<li>For deterministic boards, place all 52 cards manually before saving.</li>
+						<li>Handout PDF includes a Makeable Contracts grid computed via a WASM double-dummy solver.</li>
 						</li>
 						<li>
 							For deterministic boards, place all 52 cards manually before

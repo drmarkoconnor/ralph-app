@@ -1,5 +1,5 @@
 // Generates a single-page (A4) App Usage Guide PDF
-// Replaces earlier ACOL cheat sheet with a practical guide to using the Generator and Player modules.
+// Practical guide to using the Generator and Player modules.
 // Audience: Teachers running a session; quick reference to workflow and feature toggles.
 
 export async function generateTeacherCheatSheetPDF(options = {}) {
@@ -78,7 +78,7 @@ export async function generateTeacherCheatSheetPDF(options = {}) {
 	doc.setFontSize(8)
 	doc.setFont('helvetica', 'normal')
 	doc.text(
-		'Generator & Player workflow | Deterministic ACOL advisor | Teaching-focused features',
+		'Generator & Player workflow | Makeable contracts grid (DD) | Dealer4‑safe PBN export',
 		pageW / 2,
 		y,
 		{ align: 'center' }
@@ -89,8 +89,8 @@ export async function generateTeacherCheatSheetPDF(options = {}) {
 		'Deal cards manually (drag / select & send / keyboard mode) until all 52 placed.',
 		'Click "Save Hand" to snapshot hands + current metadata & notes.',
 		'Repeat to accumulate boards; board number, dealer & vulnerability auto-rotate.',
-		'Toggle "Full Handout PDF" then export (adds formatted 2-up PDF).',
-		'Enable "Auction Advice" to include deterministic ACOL mainline + alternatives.',
+		'Toggle "Full Handout PDF" to export formatted 2‑up handouts.',
+		'Makeable Contracts Grid: keep enabled to include a double‑dummy table per board.',
 		'"Save all to PBN now" downloads cumulative PBN (and PDF if enabled).',
 	])
 
@@ -98,7 +98,7 @@ export async function generateTeacherCheatSheetPDF(options = {}) {
 		'Event / Location / Date populate standard PBN tags & PDF header.',
 		'Theme: choose preset or "Custom..." for ad-hoc session focus.',
 		'System / Interf / Lead / DDPar / Scoring: optional teaching context lines.',
-		'Auction (ideal) field: free-form reference; PDF still shows generated advice separately.',
+		'Auction (reference) field: optional free‑form notes (no auto advice is added).',
 		'Notes box: write teaching bullet(s); "Set Notes" stores snapshot for current board.',
 		'Reset Board only clears current unsaved deal; Delete PBN wipes all saved boards.',
 	])
@@ -107,8 +107,8 @@ export async function generateTeacherCheatSheetPDF(options = {}) {
 		'Keyboard Mode: type ranks in suit order; Enter advances; Esc exits.',
 		'Random Complete: fills remaining deck randomly (useful baseline).',
 		'Dealer buttons realign next board number so chosen seat becomes dealer.',
-		'Auction Advice engine: deterministic (no RNG) - consistent session handouts.',
-		'PDF sanitises suit symbols to ensure font safety (fallback S H D C if needed).',
+		'Click-to-remove: click a card in a seat to return it to the deck (or drag it out).',
+		'PBN export sanitises to ASCII and replaces suit glyphs to ensure Dealer4 compatibility.',
 		'In-memory caching avoids re-computation across multiple exports.',
 	])
 
@@ -124,7 +124,7 @@ export async function generateTeacherCheatSheetPDF(options = {}) {
 	section('Player - Play & Planning', [
 		'Pre-Play Planning panel prompts sure winners & likely losers before first card.',
 		'Submitting plan logs feedback vs reference heuristic counts.',
-		'Advice Panel: live declarer feedback (quality + next thought + principle).',
+		'Declarer Advice panel is currently disabled; a live coach API will be integrated later.',
 		'Teacher Focus mode darkens chrome & highlights cards / trick display.',
 		'Pause at trick end: briefly freezes between tricks - aid discussion.',
 		'Completed Tricks panel lists each trick (winner + four cards).',
@@ -134,28 +134,26 @@ export async function generateTeacherCheatSheetPDF(options = {}) {
 		'History controls (<< < > >>) allow stepping through your manual play record.',
 		'Adjust planning numbers (winners / losers) before first card if miscounted.',
 		'AI Log (when defenders hidden) shows reasoning: seat + chosen card + heuristic.',
-		'Auction graphic (top-right) renders raw auction if present (separate from advice).',
+		'Auction graphic (top-right) renders sanitized raw auction if present (annotations removed).',
 		'Score panel auto-updates trick counts & final duplicate score on completion.',
 		'Manual contract override persists for current loaded board until file reload.',
 	])
 
-	section('Auction Advice Engine (Summary)', [
-		'Deterministic ACOL: opens >=12 HCP; major preference; 12-14 1NT.',
-		'Responder logic: raises with 3+ support; simple NT responses else.',
-		'Generates mainline + up to 2 alternatives with probabilities (88% / remainder split).',
-		'Bullets: <=3 concise teaching points (opening rationale, responder action, plan).',
-		'Alternatives show comparative responder action & probability weighting.',
-		'Caching ensures identical deal always returns identical labelled sequence.',
+	section('Makeable Contracts Grid (Double Dummy)', [
+		'Handout PDF includes a 5×4 DD table: strains S H D C NT vs seats N E S W.',
+		'Computed client‑side via WebAssembly (bridge‑dds); no server required.',
+		'If the grid is blank, reload and try again (rare compile/load hiccup).',
+		'The grid reflects the given deal exactly; use it to compare with classroom lines.',
 	])
 
 	section(
 		'Tips & Troubleshooting',
 		[
-			'If PDF misses advice: ensure "Auction Advice" was ticked before export.',
-			'Suit symbols fallback automatically if font glyphs absent (display as S H D C).',
+			'If the makeable grid is missing: keep the toggle enabled and retry the export.',
+			'Suit symbols fall back automatically if font glyphs absent (S H D C).',
 			'Long notes auto-wrap; keep to punchy bullets for space efficiency.',
 			'Use a fresh browser tab/session if keyboard handler becomes unresponsive.',
-			'Deleting PBN is irreversible - download first if in doubt.',
+			'Deleting PBN is irreversible — download first if in doubt.',
 			'Plan numbers are heuristic: encourage recounting rather than memorising output.',
 		],
 		{ twoCol: true }
