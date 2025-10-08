@@ -20,6 +20,7 @@ import {
 	isSeatVul,
 	evaluateTrick,
 } from '../lib/bridgeCore'
+import { sanitizePBN, parsePBN } from '../lib/pbn'
 
 // --- Tiny helpers ---
 const seatName = (s) =>
@@ -27,123 +28,7 @@ const seatName = (s) =>
 const suitSymbol = (s) =>
 	s === 'Spades' ? '♠' : s === 'Hearts' ? '♥' : s === 'Diamonds' ? '♦' : '♣'
 
-// Very small PBN parser (Boards + tags we actually use)
-function parsePbn(text) {
-	const lines = text.split(/\r?\n/)
-	const out = []
-	let cur = null
-	const tagLine = /^\[(\w+)(?:\s+"(.*)")?\]\s*(.*)$/
-	const push = () => {
-		if (cur) out.push(cur)
-		cur = null
-	}
-	for (const raw of lines) {
-		const lineRaw = raw
-		const line = lineRaw.trim()
-		if (!line) continue
-		const m = line.match(tagLine)
-		if (m) {
-			const k = m[1]
-			const v = (m[2] || '').trim()
-			const trailing = (m[3] || '').trim()
-			if (k === 'Board') {
-				if (cur) push()
-				cur = {
-					board: v,
-					dealer: 'N',
-					vul: 'None',
-					deal: '',
-					auction: [],
-					auctionDealer: 'N',
-					play: '',
-					playLeader: '',
-					notes: [],
-					system: '',
-					theme: '',
-					interf: '',
-					ddpar: '',
-					scoring: '',
-				}
-			}
-			if (!cur)
-				cur = {
-					board: v || '',
-					dealer: 'N',
-					vul: 'None',
-					deal: '',
-					auction: [],
-					auctionDealer: 'N',
-					play: '',
-					playLeader: '',
-					notes: [],
-					system: '',
-					theme: '',
-					interf: '',
-					ddpar: '',
-					scoring: '',
-				}
-			switch (k) {
-				case 'Dealer':
-					cur.dealer = v || 'N'
-					break
-				case 'Vulnerable':
-					cur.vul = v || 'None'
-					break
-				case 'Deal':
-					cur.deal = v
-					break
-				case 'Auction':
-					cur.auctionDealer = v || cur.dealer
-					cur._mode = 'a'
-					if (trailing)
-						cur.auction.push(...trailing.split(/\s+/).filter(Boolean))
-					break
-				case 'Play':
-					cur.playLeader = v || cur.dealer
-					cur._mode = 'p'
-					if (trailing) cur.play += (cur.play ? ' ' : '') + trailing
-					break
-				case 'Contract':
-					cur.contract = v
-					break
-				case 'Declarer':
-					cur.declarer = v
-					break
-				case 'Note':
-					cur.notes.push(v)
-					break
-				case 'System':
-					cur.system = v
-					break
-				case 'Theme':
-					cur.theme = v
-					break
-				case 'Interf':
-					cur.interf = v
-					break
-				case 'DDPar':
-					cur.ddpar = v
-					break
-				case 'Scoring':
-					cur.scoring = v
-					break
-				default:
-					break
-			}
-			continue
-		}
-		if (cur) {
-			if (cur._mode === 'a') {
-				if (/^[^-]/.test(line))
-					cur.auction.push(...line.split(/\s+/).filter(Boolean))
-			} else if (cur._mode === 'p') {
-				cur.play += (cur.play ? ' ' : '') + line
-			}
-		}
-	}
-	push()
-	return out.filter((b) => b.deal)
-}
+// Note: use shared sanitized PBN parser from lib/pbn
 
 // --- UI Atoms ---
 function SeatPanel({
@@ -1259,9 +1144,31 @@ export default function Player() {
 		const r = new FileReader()
 		r.onload = () => {
 			try {
-				const boards = parsePbn(String(r.result))
+				const text = sanitizePBN(String(r.result))
+				const parsed = parsePBN(text) || []
+				// Map to the shape Player expects; keep known fields and defaults
+				const boards = parsed
+					.filter((b) => b.deal)
+					.map((b) => ({
+						board: b.board || '',
+						dealer: b.dealer || 'N',
+						vul: b.vul || 'None',
+						deal: b.deal,
+						auction: Array.isArray(b.auction) ? b.auction : [],
+						auctionDealer: b.auctionDealer || b.dealer || 'N',
+						play: b.play || [],
+						playLeader: b.playLeader || b.dealer || 'N',
+						contract: b.contract || '',
+						declarer: b.declarer || '',
+						ext: b.ext || {},
+					}))
 				setDeals(boards)
 				setIndex(0)
+				// Reset any manual overrides so the badge reflects imported PBN
+				setManualDeclarer('')
+				setManualLevel('')
+				setManualStrain('')
+				setManualDbl('')
 			} catch (err) {
 				console.error(err)
 			}
