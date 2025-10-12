@@ -1640,7 +1640,10 @@ export default function DragDropCards({ meta, setMeta }) {
 											<span>Full Handout PDF</span>
 										</label>
 									</Tooltip>
-									<Tooltip label={'Export PBN in a legacy-friendly format preferred by Dealer4 (minimal tags, multiline auctions).'}>
+									<Tooltip
+										label={
+											'Export PBN in a legacy-friendly format preferred by Dealer4 (minimal tags, multiline auctions).'
+										}>
 										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
 											<input
 												type="checkbox"
