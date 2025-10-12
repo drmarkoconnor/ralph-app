@@ -175,6 +175,7 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [activeSeat, setActiveSeat] = useState('N')
 	const [includeHandout, setIncludeHandout] = useState(false)
 	const [includeMakeableGrid, setIncludeMakeableGrid] = useState(true)
+	const [dealer4Mode, setDealer4Mode] = useState(true) // Export PBN in Dealer4-compatible mode
 	// handoutMode deprecated – always full now
 	const handoutMode = 'full'
 
@@ -841,7 +842,7 @@ export default function DragDropCards({ meta, setMeta }) {
 		for (let i = 0; i < savedHands.length; i++) {
 			const bno = startBoard + i
 			const board = buildBoardFromHand(savedHands[i], bno)
-			const txt = await exportBoardPBN(board)
+			const txt = await exportBoardPBN(board, { dealer4Mode })
 			texts.push(txt)
 		}
 		return texts.join('')
@@ -1637,6 +1638,16 @@ export default function DragDropCards({ meta, setMeta }) {
 												onChange={(e) => setIncludeHandout(e.target.checked)}
 											/>
 											<span>Full Handout PDF</span>
+										</label>
+									</Tooltip>
+									<Tooltip label={'Export PBN in a legacy-friendly format preferred by Dealer4 (minimal tags, multiline auctions).'}>
+										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
+											<input
+												type="checkbox"
+												checked={dealer4Mode}
+												onChange={(e) => setDealer4Mode(e.target.checked)}
+											/>
+											<span>Dealer4‑compatible PBN</span>
 										</label>
 									</Tooltip>
 									{includeHandout && (

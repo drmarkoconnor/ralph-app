@@ -44,7 +44,11 @@ function suitBlock(h: {
 	return [suit(h.S), suit(h.H), suit(h.D), suit(h.C)].join('.')
 }
 
-export async function exportBoardPBN(board: Board): Promise<string> {
+export async function exportBoardPBN(
+	board: Board,
+	opts?: { dealer4Mode?: boolean }
+): Promise<string> {
+	const dealer4Mode = !!opts?.dealer4Mode
 	const order = seatOrderFrom(board.dealPrefix)
 	const handBlocks = order.map((s) => suitBlock(board.hands[s]))
 	const dealLine = `${board.dealPrefix}:${handBlocks.join(' ')}`
@@ -77,28 +81,33 @@ export async function exportBoardPBN(board: Board): Promise<string> {
 	if (board.declarer) core.push(`[Declarer "${board.declarer}"]`)
 
 	const ext: string[] = []
-	ext.push(
-		'[TagSpec "System,Theme,Interf,Lead,DDPar,Diagram,PlayScript,Scoring,DealHash"]'
-	)
-	if (board.ext.system)
-		ext.push(`[System "${sanitizePbnText(board.ext.system)}"]`)
-	if (board.ext.theme) ext.push(`[Theme "${sanitizePbnText(board.ext.theme)}"]`)
-	if (board.ext.interf)
-		ext.push(`[Interf "${sanitizePbnText(board.ext.interf)}"]`)
-	if (board.ext.lead) ext.push(`[Lead "${sanitizePbnText(board.ext.lead)}"]`)
-	if (board.ext.ddpar) ext.push(`[DDPar "${sanitizePbnText(board.ext.ddpar)}"]`)
-	if (board.ext.diagram)
-		ext.push(`[Diagram "${sanitizePbnText(board.ext.diagram)}"]`)
-	if (board.ext.playscript)
+	if (!dealer4Mode) {
 		ext.push(
-			`[PlayScript "${sanitizePbnText(board.ext.playscript).replace(
-				/\n/g,
-				'\\n'
-			)}"]`
+			'[TagSpec "System,Theme,Interf,Lead,DDPar,Diagram,PlayScript,Scoring,DealHash"]'
 		)
-	if (board.ext.scoring)
-		ext.push(`[Scoring "${sanitizePbnText(board.ext.scoring)}"]`)
-	if (dealHash) ext.push(`[DealHash "${dealHash}"]`)
+		if (board.ext.system)
+			ext.push(`[System "${sanitizePbnText(board.ext.system)}"]`)
+		if (board.ext.theme)
+			ext.push(`[Theme "${sanitizePbnText(board.ext.theme)}"]`)
+		if (board.ext.interf)
+			ext.push(`[Interf "${sanitizePbnText(board.ext.interf)}"]`)
+		if (board.ext.lead)
+			ext.push(`[Lead "${sanitizePbnText(board.ext.lead)}"]`)
+		if (board.ext.ddpar)
+			ext.push(`[DDPar "${sanitizePbnText(board.ext.ddpar)}"]`)
+		if (board.ext.diagram)
+			ext.push(`[Diagram "${sanitizePbnText(board.ext.diagram)}"]`)
+		if (board.ext.playscript)
+			ext.push(
+				`[PlayScript "${sanitizePbnText(board.ext.playscript).replace(
+					/\n/g,
+					'\\n'
+				)}"]`
+			)
+		if (board.ext.scoring)
+			ext.push(`[Scoring "${sanitizePbnText(board.ext.scoring)}"]`)
+		if (dealHash) ext.push(`[DealHash "${dealHash}"]`)
+	}
 
 	const notes = (board.notes || []).map(
 		(n) => `[Note "${sanitizePbnText(n).slice(0, 300)}"]`
@@ -106,8 +115,21 @@ export async function exportBoardPBN(board: Board): Promise<string> {
 
 	const auction: string[] = []
 	if (board.auctionStart && board.auction && board.auction.length) {
-		const calls = board.auction.map((c) => sanitizePbnText(String(c)))
-		auction.push(`[Auction "${board.auctionStart}"] ${calls.join(' ')}`)
+		const canon = (c: string) => {
+			const t = sanitizePbnText(c).toUpperCase().trim()
+			if (/^(P|PASS)$/.test(t)) return 'P'
+			if (/^AP$/.test(t)) return 'AP'
+			if (/^XX$/.test(t)) return 'XX'
+			if (/^X$/.test(t)) return 'X'
+			const m = t.match(/^([1-7])(C|D|H|S|NT)$/)
+			return m ? `${m[1]}${m[2]}` : t
+		}
+		const calls = board.auction.map((c) => canon(String(c)))
+		// Emit header on its own line, then calls on subsequent lines (wrap every 4 for readability)
+		auction.push(`[Auction "${board.auctionStart}"]`)
+		for (let i = 0; i < calls.length; i += 4) {
+			auction.push(calls.slice(i, i + 4).join(' '))
+		}
 	}
 
 	return [...core, ...ext, ...notes, ...auction, ''].join(CRLF) + CRLF
