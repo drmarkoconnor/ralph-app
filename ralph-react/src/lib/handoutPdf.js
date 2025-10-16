@@ -333,7 +333,7 @@ export async function generateHandoutPDF(deals, options = {}) {
 			const gridTop = lastContentY + 4
 			doc.setFont('helvetica', 'bold')
 			doc.setFontSize(7.2)
-			doc.text('Makeable Contracts (DD Table)', leftX, gridTop)
+			doc.text('Makeable Contracts (DD Table — tricks over book)', leftX, gridTop)
 			doc.setFont('helvetica', 'normal')
 			doc.setFontSize(6.6)
 			const table = dealObj._ddTable
@@ -350,8 +350,9 @@ export async function generateHandoutPDF(deals, options = {}) {
 				strains.forEach((st) => {
 					doc.text(st, leftX, y)
 					seats.forEach((seat, c) => {
-						const v = table?.[st]?.[seat]
-						doc.text(v == null ? '' : String(v), leftX + (c + 1) * colW, y)
+						const raw = table?.[st]?.[seat]
+						const adj = Number.isFinite(raw) ? Math.max(0, raw - 6) : ''
+						doc.text(adj === '' ? '' : String(adj), leftX + (c + 1) * colW, y)
 					})
 					y += 3
 				})

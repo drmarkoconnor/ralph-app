@@ -17,6 +17,7 @@ function Tooltip({ label, children, className = '' }) {
 }
 import { BoardZ } from './schemas/board'
 import { exportBoardPBN } from './pbn/export'
+import { parsePBN, sanitizePBN } from './lib/pbn'
 import useIsIPhone from './hooks/useIsIPhone'
 
 // Deck suit order: Clubs, Diamonds, Hearts, Spades (traditional CDHS)
@@ -120,6 +121,61 @@ const SUIT_TEXT = {
 // For seat display and PBN formatting
 const SUIT_ORDER = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
 
+// --- PBN import helpers for editor ---
+function parseDealToSeatStrings(dealStr) {
+	// dealStr like: "N:KQT85.Q.KQT863.Q 32.A832.95.T9643 ..."
+	const m = String(dealStr || '').trim().match(/^([NESW]):\s*(.+)$/)
+	if (!m) return null
+	const start = m[1]
+	const rest = m[2].trim()
+	const parts = rest.split(/\s+/)
+	if (parts.length !== 4) return null
+	const seats = ['N', 'E', 'S', 'W']
+	const startIdx = seats.indexOf(start)
+	const seatOrder = [seats[startIdx], seats[(startIdx+1)%4], seats[(startIdx+2)%4], seats[(startIdx+3)%4]]
+	const seatToSuits = {}
+	for (let i=0;i<4;i++){
+		const seat = seatOrder[i]
+		const seg = parts[i]
+		const [s,h,d,c] = seg.split('.').map(x=>x||'')
+		const norm = (s) => Array.from(s).map(ch => ch === 'T' ? '10' : ch.toUpperCase())
+		seatToSuits[seat] = {
+			Spades: norm(s),
+			Hearts: norm(h),
+			Diamonds: norm(d),
+			Clubs: norm(c),
+		}
+	}
+	return seatToSuits
+}
+
+function buildBucketsFromDealString(dealStr) {
+	const seatMap = parseDealToSeatStrings(dealStr)
+	if (!seatMap) return null
+	// Clone initial deck to remove as we place cards
+	const deckCopy = initialCards.map(c => ({...c}))
+	const takeCard = (suitName, rank) => {
+		const idx = deckCopy.findIndex(c => c.suit === suitName && c.rank === rank)
+		if (idx === -1) return null
+		const [card] = deckCopy.splice(idx,1)
+		return card
+	}
+	const buckets = { N: [], E: [], S: [], W: [] }
+	for (const seat of SEATS){
+		const suits = seatMap[seat]
+		if (!suits) return null
+		for (const suitName of SUIT_ORDER){
+			for (const r of suits[suitName]){
+				const card = takeCard(suitName, r)
+				if (!card) return null
+				buckets[seat].push(card)
+			}
+		}
+		if (buckets[seat].length !== 13) return null
+	}
+	return { buckets, remainingDeck: deckCopy }
+}
+
 function hcpOfCards(cards) {
 	const pts = { A: 4, K: 3, Q: 2, J: 1 }
 	return cards.reduce((sum, c) => sum + (pts[c.rank] || 0), 0)
@@ -166,6 +222,9 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [hintsEnabled, setHintsEnabled] = useState(true)
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const copyTimerRef = useRef(null)
+	// PBN import session
+	const [pbnImport, setPbnImport] = useState(null) // { filename, deals:[{deal, board, dealer, vul, auctionDealer, auctionTokens, ext}], index }
+	const fileInputRef = useRef(null)
 
 	const toPbnDate = (iso) => (iso ? String(iso).replace(/-/g, '.') : '')
 
@@ -749,9 +808,58 @@ export default function DragDropCards({ meta, setMeta }) {
 				.replace(/[^a-z0-9]+/g, '-')
 				.replace(/^-+|-+$/g, '')
 				.slice(0, 40) || 'session'
-		a.download = `ralph-${datePart}-${safeTheme}-hand.pbn`
+		const edited = pbnImport ? '-edited' : ''
+		a.download = `ralph-${datePart}-${safeTheme}-hand${edited}.pbn`
 		a.click()
 		URL.revokeObjectURL(url)
+	}
+
+	const applyImportedBoard = (dealsArr, idx) => {
+		if (!Array.isArray(dealsArr) || !dealsArr[idx]) return false
+		const d = dealsArr[idx]
+		const built = buildBucketsFromDealString(d.deal)
+		if (!built) return false
+		setDeal({ deck: sortDeck(built.remainingDeck), buckets: built.buckets })
+		// Seed metadata from PBN
+		setMeta?.((m) => ({
+			...m,
+			auctionStart: d.auctionDealer || d.dealer || m?.auctionStart || 'N',
+			auctionText: (d.auctionTokens || []).join(' '),
+			date: d.ext?.Date || m?.date,
+			dateISO: (d.ext?.Date || '').replace(/\./g, '-'),
+			event: d.ext?.Event || m?.event,
+			siteChoice: d.ext?.Site || m?.siteChoice,
+		}))
+		// Align startBoard to this board number for export continuity
+		const bno = parseInt(d.board, 10)
+		if (!Number.isNaN(bno) && bno > 0) setStartBoard(bno)
+		return true
+	}
+
+	const handleLoadPbnFile = async (file) => {
+		if (!file) return
+		try {
+			const text = await file.text()
+			const clean = sanitizePBN(text)
+			const parsed = parsePBN(clean)
+			const deals = parsed
+				.filter((d) => d && d.deal)
+				.map((d) => ({
+					deal: d.deal,
+					board: d.board || '',
+					dealer: d.dealer || d.auctionDealer || '',
+					vul: d.vul || '',
+					auctionDealer: d.auctionDealer || d.dealer || '',
+					auctionTokens: Array.isArray(d.auction) ? d.auction : [],
+					ext: d.ext || {},
+				}))
+			if (!deals.length) return
+			const info = { filename: file.name, deals, index: 0 }
+			setPbnImport(info)
+			applyImportedBoard(deals, 0)
+		} catch (e) {
+			console.error('Failed to parse PBN', e)
+		}
 	}
 
 	// Helpers to map picker hands to Extended Board hands (rank chars and suit letters)
@@ -1510,7 +1618,7 @@ export default function DragDropCards({ meta, setMeta }) {
 			<div className="flex-1 min-h-screen bg-gradient-to-b from-white to-slate-50">
 				<div className="flex flex-col items-center w-full max-w-[1100px] mx-auto gap-2 px-2 py-2">
 					{/* Randomize first: prominent and above the deck */}
-					<div className="w-full flex items-center justify-center">
+					<div className="w-full flex items-center justify-center flex-wrap gap-2">
 						<button
 							className="px-4 py-2 rounded-full bg-purple-600 text-white text-sm shadow hover:bg-purple-700"
 							onClick={handleRandomComplete}
@@ -1537,6 +1645,56 @@ export default function DragDropCards({ meta, setMeta }) {
 								Quick Use Guide PDF
 							</button>
 						</Tooltip>
+						{/* PBN import for editing */}
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept=".pbn,text/plain"
+							className="hidden"
+							onChange={(e) => {
+								const f = e.target.files && e.target.files[0]
+								if (f) handleLoadPbnFile(f)
+								e.target.value = ''
+							}}
+						/>
+						<button
+							className="px-4 py-2 rounded-full bg-amber-600 text-white text-sm shadow hover:bg-amber-700"
+							onClick={() => fileInputRef.current?.click()}
+							title="Load a PBN file, pick a board, and edit the cards here">
+							Load PBN for Editing…
+						</button>
+						{pbnImport && (
+							<div className="flex items-center gap-2 text-[11px] text-gray-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+								<span className="font-semibold max-w-[220px] truncate" title={pbnImport.filename}>
+									Loaded: {pbnImport.filename}
+								</span>
+								{pbnImport.deals.length > 1 && (
+									<>
+										<button
+											className="px-2 py-0.5 rounded border bg-white"
+											onClick={() => {
+												const next = (pbnImport.index - 1 + pbnImport.deals.length) % pbnImport.deals.length
+												if (applyImportedBoard(pbnImport.deals, next))
+													setPbnImport({ ...pbnImport, index: next })
+											}}>
+											◀
+										</button>
+										<span>
+											Board {pbnImport.deals[pbnImport.index].board || pbnImport.index + 1} ({pbnImport.index + 1}/{pbnImport.deals.length})
+										</span>
+										<button
+											className="px-2 py-0.5 rounded border bg-white"
+											onClick={() => {
+												const next = (pbnImport.index + 1) % pbnImport.deals.length
+												if (applyImportedBoard(pbnImport.deals, next))
+													setPbnImport({ ...pbnImport, index: next })
+											}}>
+											▶
+										</button>
+									</>
+								)}
+							</div>
+						)}
 					</div>
 
 					{/* Deck with DnD */}
