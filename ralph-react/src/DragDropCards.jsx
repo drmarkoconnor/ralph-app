@@ -124,7 +124,9 @@ const SUIT_ORDER = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
 // --- PBN import helpers for editor ---
 function parseDealToSeatStrings(dealStr) {
 	// dealStr like: "N:KQT85.Q.KQT863.Q 32.A832.95.T9643 ..."
-	const m = String(dealStr || '').trim().match(/^([NESW]):\s*(.+)$/)
+	const m = String(dealStr || '')
+		.trim()
+		.match(/^([NESW]):\s*(.+)$/)
 	if (!m) return null
 	const start = m[1]
 	const rest = m[2].trim()
@@ -132,13 +134,19 @@ function parseDealToSeatStrings(dealStr) {
 	if (parts.length !== 4) return null
 	const seats = ['N', 'E', 'S', 'W']
 	const startIdx = seats.indexOf(start)
-	const seatOrder = [seats[startIdx], seats[(startIdx+1)%4], seats[(startIdx+2)%4], seats[(startIdx+3)%4]]
+	const seatOrder = [
+		seats[startIdx],
+		seats[(startIdx + 1) % 4],
+		seats[(startIdx + 2) % 4],
+		seats[(startIdx + 3) % 4],
+	]
 	const seatToSuits = {}
-	for (let i=0;i<4;i++){
+	for (let i = 0; i < 4; i++) {
 		const seat = seatOrder[i]
 		const seg = parts[i]
-		const [s,h,d,c] = seg.split('.').map(x=>x||'')
-		const norm = (s) => Array.from(s).map(ch => ch === 'T' ? '10' : ch.toUpperCase())
+		const [s, h, d, c] = seg.split('.').map((x) => x || '')
+		const norm = (s) =>
+			Array.from(s).map((ch) => (ch === 'T' ? '10' : ch.toUpperCase()))
 		seatToSuits[seat] = {
 			Spades: norm(s),
 			Hearts: norm(h),
@@ -153,19 +161,21 @@ function buildBucketsFromDealString(dealStr) {
 	const seatMap = parseDealToSeatStrings(dealStr)
 	if (!seatMap) return null
 	// Clone initial deck to remove as we place cards
-	const deckCopy = initialCards.map(c => ({...c}))
+	const deckCopy = initialCards.map((c) => ({ ...c }))
 	const takeCard = (suitName, rank) => {
-		const idx = deckCopy.findIndex(c => c.suit === suitName && c.rank === rank)
+		const idx = deckCopy.findIndex(
+			(c) => c.suit === suitName && c.rank === rank
+		)
 		if (idx === -1) return null
-		const [card] = deckCopy.splice(idx,1)
+		const [card] = deckCopy.splice(idx, 1)
 		return card
 	}
 	const buckets = { N: [], E: [], S: [], W: [] }
-	for (const seat of SEATS){
+	for (const seat of SEATS) {
 		const suits = seatMap[seat]
 		if (!suits) return null
-		for (const suitName of SUIT_ORDER){
-			for (const r of suits[suitName]){
+		for (const suitName of SUIT_ORDER) {
+			for (const r of suits[suitName]) {
 				const card = takeCard(suitName, r)
 				if (!card) return null
 				buckets[seat].push(card)
@@ -1665,7 +1675,9 @@ export default function DragDropCards({ meta, setMeta }) {
 						</button>
 						{pbnImport && (
 							<div className="flex items-center gap-2 text-[11px] text-gray-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-								<span className="font-semibold max-w-[220px] truncate" title={pbnImport.filename}>
+								<span
+									className="font-semibold max-w-[220px] truncate"
+									title={pbnImport.filename}>
 									Loaded: {pbnImport.filename}
 								</span>
 								{pbnImport.deals.length > 1 && (
@@ -1673,19 +1685,25 @@ export default function DragDropCards({ meta, setMeta }) {
 										<button
 											className="px-2 py-0.5 rounded border bg-white"
 											onClick={() => {
-												const next = (pbnImport.index - 1 + pbnImport.deals.length) % pbnImport.deals.length
+												const next =
+													(pbnImport.index - 1 + pbnImport.deals.length) %
+													pbnImport.deals.length
 												if (applyImportedBoard(pbnImport.deals, next))
 													setPbnImport({ ...pbnImport, index: next })
 											}}>
 											◀
 										</button>
 										<span>
-											Board {pbnImport.deals[pbnImport.index].board || pbnImport.index + 1} ({pbnImport.index + 1}/{pbnImport.deals.length})
+											Board{' '}
+											{pbnImport.deals[pbnImport.index].board ||
+												pbnImport.index + 1}{' '}
+											({pbnImport.index + 1}/{pbnImport.deals.length})
 										</span>
 										<button
 											className="px-2 py-0.5 rounded border bg-white"
 											onClick={() => {
-												const next = (pbnImport.index + 1) % pbnImport.deals.length
+												const next =
+													(pbnImport.index + 1) % pbnImport.deals.length
 												if (applyImportedBoard(pbnImport.deals, next))
 													setPbnImport({ ...pbnImport, index: next })
 											}}>

@@ -333,7 +333,11 @@ export async function generateHandoutPDF(deals, options = {}) {
 			const gridTop = lastContentY + 4
 			doc.setFont('helvetica', 'bold')
 			doc.setFontSize(7.2)
-			doc.text('Makeable Contracts (DD Table — tricks over book)', leftX, gridTop)
+			doc.text(
+				'Makeable Contracts (DD Table — tricks over book)',
+				leftX,
+				gridTop
+			)
 			doc.setFont('helvetica', 'normal')
 			doc.setFontSize(6.6)
 			const table = dealObj._ddTable
