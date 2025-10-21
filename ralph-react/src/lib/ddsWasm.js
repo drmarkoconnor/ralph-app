@@ -11,15 +11,14 @@
 // } | null
 
 // We rely on the bridge-dds WASM wrapper. It exposes loadDds() -> module and a Dds class.
-// We'll lazily load it on first call to avoid impacting initial app load.
+// Avoid dynamic import when used inside inline worker to prevent code-splitting issues.
+import * as ddsLib from 'bridge-dds'
 let _ddsModulePromise = null
 let _ddsInstance = null
 
 async function ensureDds() {
 	if (_ddsInstance) return _ddsInstance
 	if (!_ddsModulePromise) {
-		// Dynamic import so this code only loads when needed
-		const ddsLib = await import('bridge-dds')
 		_ddsModulePromise = ddsLib.loadDds()
 		const mod = await _ddsModulePromise
 		_ddsInstance = new ddsLib.Dds(mod)
@@ -38,8 +37,10 @@ function toDdTableDealPbn(deal) {
 		hand.forEach((c) => {
 			const k = c.suit && c.suit[0] ? c.suit[0].toUpperCase() : null
 			if (!k || !bySuit[k]) return
-			const r = String(c.rank).toUpperCase()
-			bySuit[k].push(ranksMap[r] || r)
+			const rRaw = String(c.rank)
+			const rUpper = rRaw.toUpperCase()
+			const r = rUpper === '10' ? 'T' : rUpper
+			bySuit[k].push(r)
 		})
 		const segs = suitOrder.map((s) =>
 			bySuit[s].length ? bySuit[s].join('') : '-'

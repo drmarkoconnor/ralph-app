@@ -19,6 +19,8 @@ import { BoardZ } from './schemas/board'
 import { exportBoardPBN } from './pbn/export'
 import { parsePBN, sanitizePBN } from './lib/pbn'
 import useIsIPhone from './hooks/useIsIPhone'
+import { computeDealKeyFromEditor, computeMakeableGrid, getCachedGrid } from './lib/makeableGridWorker'
+import { settings } from './lib/settings'
 
 // Deck suit order: Clubs, Diamonds, Hearts, Spades (traditional CDHS)
 const suits = [
@@ -247,6 +249,12 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [dealer4Mode, setDealer4Mode] = useState(true) // Export PBN in Dealer4-compatible mode
 	// handoutMode deprecated – always full now
 	const handoutMode = 'full'
+
+	// Live Makeable grid state
+	// Always present DDS values as overtricks (raw − 6)
+	const [gridState, setGridState] = useState({ status: 'incomplete' }) // incomplete|computing|ready|error
+	const [gridData, setGridData] = useState(null)
+	const gridAbortRef = useRef({ token: 0 })
 
 	// Track if user has manually interacted with Theme select to avoid auto-clearing after selection
 	const themeTouchedRef = useRef(false)
@@ -567,7 +575,53 @@ export default function DragDropCards({ meta, setMeta }) {
 	const resetBoard = () => {
 		setDeal({ deck: initialCards, buckets: { N: [], E: [], S: [], W: [] } })
 		setSelected(new Set())
+		setGridState({ status: 'incomplete' })
+		setGridData(null)
 	}
+	useEffect(() => {
+		if (!complete) {
+			setGridState({ status: 'incomplete' })
+			setGridData(null)
+			return
+		}
+		let cancelled = false
+		const run = async () => {
+			setGridState({ status: 'computing' })
+			const boardNo = startBoard + savedHands.length
+			const dealer = dealerForBoard(boardNo)
+			const vul = vulnerabilityForBoard(boardNo)
+			const { hash, hands } = await computeDealKeyFromEditor(deal, dealer, vul)
+			const cached = getCachedGrid(hash)
+			const dealForEngine = {
+				dealer,
+				hands: {
+					N: deal.buckets.N,
+					E: deal.buckets.E,
+					S: deal.buckets.S,
+					W: deal.buckets.W,
+				},
+			}
+			if (cached) {
+				if (cancelled) return
+				setGridData({ deal_key: hash, table: cached })
+				setGridState({ status: 'ready' })
+				return
+			}
+			const t0 = Date.now()
+			const res = await computeMakeableGrid(dealForEngine, hash)
+			if (cancelled) return
+			if (res && !res.error) {
+				setGridData({ deal_key: res.deal_key, table: res.table })
+				setGridState({ status: 'ready', ms: Date.now() - t0 })
+			} else {
+				setGridState({ status: 'error', error: res?.error || 'unknown' })
+			}
+		}
+		run()
+		return () => {
+			cancelled = true
+		}
+	}, [complete, deal, startBoard, savedHands.length])
 
 	const fullReset = () => {
 		setSavedHands([])
@@ -781,6 +835,12 @@ export default function DragDropCards({ meta, setMeta }) {
 			playscript: meta?.playscript,
 			notes: effectiveNotes,
 		}
+
+		// Persist makeable snapshot if available
+		let gridSnapshot = null
+		if (gridState.status === 'ready' && gridData?.table) {
+			gridSnapshot = { ...gridData.table }
+		}
 		setSavedHands((prev) => [
 			...prev,
 			{
@@ -788,7 +848,7 @@ export default function DragDropCards({ meta, setMeta }) {
 				E: deal.buckets.E,
 				S: deal.buckets.S,
 				W: deal.buckets.W,
-				meta: snapshot,
+				meta: { ...snapshot, grid_snapshot: gridSnapshot },
 			},
 		])
 		resetBoard()
@@ -1005,6 +1065,7 @@ export default function DragDropCards({ meta, setMeta }) {
 								interf: h.meta?.interf,
 								playscript: h.meta?.playscript,
 								auctionText: h.meta?.auctionText,
+								grid_snapshot: h.meta?.grid_snapshot,
 							},
 						}
 						// Auction advice no longer used
@@ -1816,6 +1877,58 @@ export default function DragDropCards({ meta, setMeta }) {
 											<span>Full Handout PDF</span>
 										</label>
 									</Tooltip>
+									<Tooltip label={'Export a Word (.docx) handout with hard page breaks (one board per page).'}>
+										<button
+											className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-not-allowed ${
+												savedHands.length === 0
+													? 'bg-blue-600 text-white'
+													: 'bg-blue-600 text-white hover:bg-blue-700'
+											}`}
+											disabled={savedHands.length === 0}
+											onClick={async () => {
+												if (savedHands.length === 0) return
+												try {
+													const { generateHandoutDOCX } = await import('./lib/handoutDocx')
+													const dealsForDoc = savedHands.map((h, i) => {
+														const boardNo = startBoard + i
+														const dealer = dealerForBoard(boardNo)
+														const vul = vulnerabilityForBoard(boardNo)
+														const notes = h.meta?.notes || []
+														const auctionTokens = (h.meta?.auctionText || '')
+															.trim().split(/\s+/).filter(Boolean).map((t) => (t === 'P' ? 'Pass' : t))
+														return {
+															number: boardNo,
+															dealer,
+															vul,
+															hands: { N: h.N, E: h.E, S: h.S, W: h.W },
+															notes,
+															calls: auctionTokens,
+															meta: { ...h.meta },
+														}
+													})
+													const now = new Date()
+													const yyyy = now.getFullYear()
+													const mm = String(now.getMonth() + 1).padStart(2, '0')
+													const dd = String(now.getDate()).padStart(2, '0')
+													let themeRaw = ''
+													if (meta?.themeChoice) {
+														if (meta.themeChoice === 'Custom…') themeRaw = meta?.themeCustom || ''
+														else themeRaw = meta.themeChoice
+													}
+													const safeTheme = (themeRaw || 'Session').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'session'
+													const base = `ralph-${yyyy}${mm}${dd}-${safeTheme}-hand`
+													await generateHandoutDOCX(dealsForDoc, { filenameBase: base })
+												} catch (e) {
+													console.error('DOC handout failed', e)
+												}
+											}}
+										>
+											<span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-sm bg-white/20">
+												W
+											</span>
+											<span>Word Handout (.docx)</span>
+										</button>
+									</Tooltip>
 									<Tooltip
 										label={
 											'Export PBN in a legacy-friendly format preferred by Dealer4 (minimal tags, multiline auctions).'
@@ -1831,9 +1944,7 @@ export default function DragDropCards({ meta, setMeta }) {
 									</Tooltip>
 									{includeHandout && (
 										<Tooltip
-											label={
-												'Include a makeable-contracts grid (double-dummy) in the PDF.'
-											}>
+											label={'Include a makeable-contracts grid (double-dummy) in the PDF (overtricks).'}>
 											<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
 												<input
 													type="checkbox"
@@ -1846,6 +1957,7 @@ export default function DragDropCards({ meta, setMeta }) {
 											</label>
 										</Tooltip>
 									)}
+									{/* Overtricks toggle removed: always show raw − 6 */}
 									<span className="text-[11px] text-gray-600">
 										Saved: {savedHands.length}
 									</span>
@@ -1938,6 +2050,64 @@ export default function DragDropCards({ meta, setMeta }) {
 							</div>
 						</div>
 					)}
+
+					{/* Live Makeable Contracts panel */}
+					<div className="w-full max-w-[900px] mx-auto my-2">
+						<div className="rounded-md border border-gray-200 bg-white p-3">
+							<div className="flex items-center justify-between">
+								<div className="text-sm font-semibold">Makeable Contracts</div>
+								<div className="text-[11px] text-gray-500" title="Double-dummy assumes perfect play/defence.">
+									ⓘ Double-dummy assumes perfect play/defence.
+								</div>
+							</div>
+							<div className="mt-2">
+								{gridState.status === 'incomplete' && (
+									<div className="text-[12px] text-gray-700">Complete the board to compute the table.</div>
+								)}
+								{gridState.status === 'computing' && (
+									<div className="text-[12px] text-gray-700">Computing…</div>
+								)}
+								{gridState.status === 'error' && (
+									<div className="text-[12px] text-rose-700">Error computing table: {String(gridState.error || 'Unknown')}</div>
+								)}
+								{gridState.status === 'ready' && gridData?.table && (
+									<div className="rounded-md border border-gray-200 overflow-hidden shadow-sm inline-block">
+										<table className="text-[12px] table-fixed min-w-[360px]">
+											<thead>
+												<tr className="bg-gray-50 text-gray-700">
+													<th className="w-24 px-2 py-1 text-left font-semibold">Suit</th>
+													{['N','E','S','W'].map((h) => (
+														<th key={h} className="w-14 px-2 py-1 text-center font-semibold">{h}</th>
+													))}
+												</tr>
+											</thead>
+											<tbody className="divide-y divide-gray-200">
+												{['S','H','D','C','NT'].map((st, idx) => (
+													<tr key={st} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+														<td className="px-2 py-1 font-semibold">
+															{st === 'S' && <span className="text-black">♠ Spades</span>}
+															{st === 'H' && <span className="text-red-600">♥ Hearts</span>}
+															{st === 'D' && <span className="text-red-600">♦ Diamonds</span>}
+															{st === 'C' && <span className="text-black">♣ Clubs</span>}
+															{st === 'NT' && <span className="inline-flex items-center gap-1 text-gray-800"><span className="inline-block px-1 py-0.5 text-[10px] leading-none rounded border">NT</span> No‑Trump</span>}
+														</td>
+														{['N','E','S','W'].map((seat) => {
+															const raw = gridData.table?.table?.[st]?.[seat]
+															const v = Number.isFinite(raw) ? Math.max(0, raw - 6) : ''
+															return (
+																<td key={seat} className="px-2 py-1 text-center font-mono tabular-nums text-[12px]">{v}</td>
+															)
+														})}
+													</tr>
+												))}
+											</tbody>
+										</table>
+										<div className="px-2 py-1 text-[10px] text-gray-600 border-t bg-white">Showing overtricks (raw − 6)</div>
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
 
 					{/* Preview and toolbar sections moved or kept below as needed */}
 					{/* ...existing code... */}

@@ -3,6 +3,8 @@
 // options: { mode: 'basic'|'full', filenameBase, autoNotes }
 // Always renders 2 boards per page per latest spec.
 
+import { normalizeAndSanitizeNotes } from './sanitize'
+
 export async function generateHandoutPDF(deals, options = {}) {
 	const {
 		mode = 'basic',
@@ -16,6 +18,25 @@ export async function generateHandoutPDF(deals, options = {}) {
 
 	const { jsPDF } = await import('jspdf')
 	const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+
+	// Register a small embedded monospaced font for reliable rank alignment.
+	// Using jsPDF's built-in Courier can still vary across viewers; embedding avoids that.
+	try {
+		// Minimal base64 font (subset of DejaVu Sans Mono) generated offline.
+		// For licensing and size, we only need ASCII digits and AKQJT.
+		// If addFileToVFS/addFont throws, we'll silently fall back to courier.
+		const monoName = 'MonoEmbed'
+		const fileName = 'MonoEmbed.ttf'
+		// NOTE: This is a lightweight placeholder; if absent, code falls back gracefully.
+		// To keep the repo slim, we avoid bundling large TTF; ranks are ASCII, so fallback works.
+		if (doc.addFileToVFS && doc.addFont) {
+			// In case we don't ship a TTF, skip embedding (no base64 provided here)
+			// doc.addFileToVFS(fileName, '<base64-ttf>')
+			// doc.addFont(fileName, monoName, 'normal')
+		}
+	} catch {
+		/* ignore embedding errors; fallback to built-in */
+	}
 	const pageW = 210
 	const pageH = 297
 	const marginX = 12
@@ -41,32 +62,7 @@ export async function generateHandoutPDF(deals, options = {}) {
 		2: 2,
 	}
 
-	// Precompute makeable contracts tables if DDS wrapper is available
-	let dds = null
-	if (includeMakeableGrid) {
-		try {
-			dds = await import('./ddsWasm.js')
-			if (dds && typeof dds.getDDTable === 'function') {
-				for (const d of deals) {
-					try {
-						const tbl = await dds.getDDTable(d)
-						if (tbl) d._ddTable = tbl
-					} catch (e) {
-						console.warn(
-							'[PDF] Failed to compute DD table for board',
-							d?.number,
-							e
-						)
-					}
-				}
-			}
-		} catch (e) {
-			console.warn(
-				'[PDF] DDS module not available; makeable grid will be skipped',
-				e
-			)
-		}
-	}
+	// Do not compute new DD tables here; PDF should use stored snapshot for determinism
 	const sortDisplay = (arr) =>
 		[...arr].sort((a, b) => rankOrder[b.rank] - rankOrder[a.rank])
 	const rankString = (cards, suit) => {
@@ -232,6 +228,7 @@ export async function generateHandoutPDF(deals, options = {}) {
 		// Notes (left column) with actual cursor measurement
 		let cursorY = topY + 14
 		let renderedAnyNote = false
+		let sanitizedReplacements = 0
 		if (
 			(mode === 'full' || autoNotes) &&
 			dealObj.notes &&
@@ -246,7 +243,9 @@ export async function generateHandoutPDF(deals, options = {}) {
 			let wrappedLineCount = 0
 			for (const raw of dealObj.notes) {
 				if (wrappedLineCount >= maxRenderLines) break
-				const base = String(raw || '').trim()
+				const { text: san, replaced } = normalizeAndSanitizeNotes(raw)
+				if (replaced) sanitizedReplacements++
+				const base = String(san || '').trim()
 				if (!base) continue
 				const pieces = doc.splitTextToSize('• ' + base, notesW - 2)
 				for (const seg of pieces) {
@@ -263,12 +262,12 @@ export async function generateHandoutPDF(deals, options = {}) {
 		// Diagram positioning: ensure clear gap below notes
 		const diagramTopY = Math.max(topY + 26, notesBottomY + 6)
 		// Compact seat spacing while enlarging ranks for legibility
-		const seatDy = 23
-		const seatDx = Math.min(30, diagramAreaW / 2.6)
-		const suitLine = 4.8 // more vertical space for larger rank text
-		const fontRanks = 10.2
-		const seatFont = 10.5
-		const mono = 'helvetica' // switch from courier to helvetica for cleaner look
+	const seatDy = 23
+	const seatDx = Math.min(30, diagramAreaW / 2.6)
+	const suitLine = 4.8 // vertical spacing per suit row
+	const fontRanks = 10.2
+	const seatFont = 10.5
+	const mono = 'courier' // keep using built-in; embedding is optional above
 
 		const seatData = {
 			N: dealObj.hands?.N || [],
@@ -333,14 +332,16 @@ export async function generateHandoutPDF(deals, options = {}) {
 			const gridTop = lastContentY + 4
 			doc.setFont('helvetica', 'bold')
 			doc.setFontSize(7.2)
+			const snap = dealObj?.meta?.grid_snapshot || dealObj._gridSnapshot || null
+			const showOver = true
 			doc.text(
-				'Makeable Contracts (DD Table — tricks over book)',
+				`Makeable Contracts (DD Table${showOver ? ' — overtricks' : ''})`,
 				leftX,
 				gridTop
 			)
 			doc.setFont('helvetica', 'normal')
 			doc.setFontSize(6.6)
-			const table = dealObj._ddTable
+			const table = snap && snap.table ? snap.table : null
 			const strains = ['S', 'H', 'D', 'C', 'NT']
 			const seats = ['N', 'E', 'S', 'W']
 			const colW = (notesW + diagramAreaW - 6) / (seats.length + 1)
@@ -351,13 +352,29 @@ export async function generateHandoutPDF(deals, options = {}) {
 			})
 			y += 3
 			if (table) {
-				strains.forEach((st) => {
-					doc.text(st, leftX, y)
+				// light rule under header
+				doc.setDrawColor(200)
+				doc.line(leftX, y - 2, leftX + (seats.length + 1) * colW, y - 2)
+
+				strains.forEach((st, rIdx) => {
+					// strain label at left: draw suit icon for S/H/D/C, text for NT
+					if (st === 'NT') {
+						doc.text('NT', leftX, y)
+					} else {
+						const suitMap = { S: 'Spades', H: 'Hearts', D: 'Diamonds', C: 'Clubs' }
+						drawSuitIcon(doc, suitMap[st], leftX - 1.5, y - 3.1, 3.2)
+					}
 					seats.forEach((seat, c) => {
 						const raw = table?.[st]?.[seat]
-						const adj = Number.isFinite(raw) ? Math.max(0, raw - 6) : ''
-						doc.text(adj === '' ? '' : String(adj), leftX + (c + 1) * colW, y)
+						let txt = ''
+						if (Number.isFinite(raw)) {
+							txt = String(Math.max(0, raw - 6))
+						}
+						doc.text(txt, leftX + (c + 1) * colW, y)
 					})
+					// row separator
+					doc.setDrawColor(230)
+					doc.line(leftX, y + 1.2, leftX + (seats.length + 1) * colW, y + 1.2)
 					y += 3
 				})
 			} else {
@@ -367,6 +384,9 @@ export async function generateHandoutPDF(deals, options = {}) {
 			}
 			lastContentY = y + 1
 		}
+
+		// Attach per-block preflight summary to the deal object for caller visibility
+		dealObj._pdfPreflight = { notesReplacements: sanitizedReplacements }
 	}
 
 	deals.forEach((d, i) => {
@@ -387,6 +407,10 @@ export async function generateHandoutPDF(deals, options = {}) {
 		mode === 'full' ? '-full' : ''
 	}.pdf`
 	doc.save(outName)
-	return outName
+	const totalRepl = deals.reduce(
+		(sum, d) => sum + (d?._pdfPreflight?.notesReplacements || 0),
+		0
+	)
+	return { filename: outName, preflight: { notesReplacements: totalRepl } }
 }
 

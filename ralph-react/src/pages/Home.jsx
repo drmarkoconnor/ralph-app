@@ -1,10 +1,21 @@
 import { Link } from 'react-router-dom'
 import HeroCards from '../components/HeroCards'
+import suitsPattern from '../assets/flat-design-playing-cards-pattern_23-2151015501.jpg'
 
 export default function Home() {
 	return (
-		<div className="min-h-screen bg-gradient-to-b from-rose-50 via-white to-sky-50">
-			<div className="max-w-6xl mx-auto px-6 py-12 min-h-screen flex flex-col md:flex-row items-center justify-center gap-10">
+		<div className="relative min-h-screen bg-gradient-to-br from-fuchsia-50 via-rose-50 to-sky-100">
+			{/* Suits pattern overlay (more visible) */}
+			<div
+				aria-hidden
+				className="pointer-events-none absolute inset-0 opacity-40 md:opacity-30"
+				style={{
+					backgroundImage: `url(${suitsPattern})`,
+					backgroundSize: '200px 200px',
+					backgroundRepeat: 'repeat',
+				}}
+			/>
+			<div className="relative max-w-6xl mx-auto px-6 py-12 min-h-screen flex flex-col md:flex-row items-center justify-center gap-10">
 				{/* Left: copy + CTAs */}
 				<div className="flex-1 flex flex-col items-start">
 					<h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight">

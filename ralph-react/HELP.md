@@ -13,13 +13,12 @@ Ralph lets you:
 - Save a set of boards for a session
 - Export:
   - PBN file (for archiving / other softwares)
-  - A printable PDF handout (2 boards per page) with diagrams, notes and
-    automated auction guidance (ACOL style)
+  - A printable PDF handout (2 boards per page) with diagrams, notes, and optional makeable-contracts grid (overtricks)
+  - A Word handout (.docx) with one board per page using hard page breaks (macOS‑reliable), NESW cross layout, and a centered mini makeables grid
 - Teach and replay deals interactively in the Player screen (step through the
   auction you set, then play out the cards)
 
-Its goal is to reduce prep time and give consistent, well‑explained examples for
-club teaching.
+Its goal is to reduce prep time and give consistent, well‑explained examples for club teaching.
 
 ---
 
@@ -31,8 +30,7 @@ board by board). Vulnerability: Affects scoring (cycle follows the standard
 16‑board pattern automatically). Auction: The sequence of calls (bids and Pass)
 used to reach a final contract. Contract: The final agreed level and strain
 (e.g. 3♠, 4♥, 3NT). Declarer is the first player of the partnership who bid that
-strain. Handout: A PDF summary for students – includes hands, metadata, and (if
-enabled) ACOL auction advice.
+ strain. Handout: A PDF or Word summary for students – includes hands, metadata, and (if enabled) ACOL auction advice.
 
 ---
 
@@ -125,22 +123,26 @@ Linking auction to play:
 
 ---
 
-## 8. PDF Handout Structure
+## 8. Handouts (PDF and Word)
 
-Per board (2 per page):
+PDF: Per page shows two boards; Word: each board starts on a new page deterministically.
+
+Per board includes:
 
 - Header: Board number, Dealer, Vulnerability
 - Hand Diagram: All four hands with suits in conventional layout
 - Metadata panel: Contract (if set), DD Par (if provided), Lead suggestion,
   Theme, etc.
 - Notes: Your curated teaching points (if entered)
+- Optional Makeables mini‑grid (double‑dummy, shown as overtricks): in Word it is centered with no title; in PDF it appears in the metadata/makeables area
 - Auction Advice (if enabled):
   - Mainline auction table (columns N E S W)
   - Key Points (≤3 bullets)
   - Alternatives (probabilities + brief rationale)
 
-Students can annotate the physical handout; you can reference consistent bullet
-vocabulary across lessons (e.g. “Combined HCP” or “Aim for game” cues).
+Visual alignment details (Word): the NESW cross has no borders; seat content is left‑aligned with a tiny tabbed indent so suit icons and ranks align in a clean column; N/S and E/W have subtle partnership shading. The mini makeables grid is centered and has no heading/title.
+
+Students can annotate the physical handout; you can reference consistent bullet vocabulary across lessons (e.g. “Combined HCP” or “Aim for game” cues).
 
 ---
 
@@ -165,9 +167,9 @@ advisor couldn’t build in time. Re‑export or ensure each seat has 13 cards.
 Q: A board passed out. Is that useful? A: Yes – great for opening lead and
 defensive carding practice. The advisor will note which seat held the most HCP.
 
-Q: Unicode suit symbols differ between the hand diagram and auctions. A: For
-reliability, auction bids may show letters (S, H, D, C) where fonts could drop
-symbols. The card diagrams retain full symbols.
+Q: Unicode suit symbols differ between the hand diagram and auctions. A: For reliability, auction bids may show letters (S, H, D, C) where fonts could drop symbols. The card diagrams retain full symbols.
+
+Q: Word for Mac isn’t honoring page breaks. A: The app now generates native .docx with hard PageBreaks; each board will always begin on a new page in Word for Mac.
 
 Q: Can I force a different opening (e.g. aggressive style)? A: Enter the auction
 manually in the builder; the Player will then follow your sequence. The advisor

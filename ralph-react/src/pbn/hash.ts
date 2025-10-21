@@ -7,16 +7,24 @@ export async function computeDealHashV1(
 		throw new Error('ownerString52 must be 52 chars of N/E/S/W')
 	}
 	const enc = new TextEncoder().encode(ownerString52)
-	if (typeof window !== 'undefined' && (window as any).crypto?.subtle) {
-		const buf = await (window as any).crypto.subtle.digest('SHA-256', enc)
+	const cryptoObj: Crypto | undefined = (globalThis as any).crypto
+	if (cryptoObj?.subtle) {
+		const buf = await cryptoObj.subtle.digest('SHA-256', enc)
 		const hex = Array.from(new Uint8Array(buf))
 			.map((b) => b.toString(16).padStart(2, '0'))
 			.join('')
 		return 'v1:sha256:' + hex
 	}
-	const { createHash } = await import('crypto')
-	const hex = createHash('sha256').update(enc).digest('hex')
-	return 'v1:sha256:' + hex
+	// Fallback: FNV-1a 32-bit for environments without Web Crypto (e.g., older/some mobile browsers).
+	// This is only used to key a cache; cryptographic strength is not required.
+	let hash = 0x811c9dc5 >>> 0
+	for (let i = 0; i < enc.length; i++) {
+		hash ^= enc[i]
+		// hash *= 16777619 (use shifts to stay in 32-bit space)
+		hash = (hash + (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)) >>> 0
+	}
+	const hex = (hash >>> 0).toString(16).padStart(8, '0')
+	return 'v1:fnv1a32:' + hex
 }
 
 export const SUITS = ['S', 'H', 'D', 'C'] as const
