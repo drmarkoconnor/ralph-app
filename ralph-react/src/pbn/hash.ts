@@ -21,7 +21,14 @@ export async function computeDealHashV1(
 	for (let i = 0; i < enc.length; i++) {
 		hash ^= enc[i]
 		// hash *= 16777619 (use shifts to stay in 32-bit space)
-		hash = (hash + (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)) >>> 0
+		hash =
+			(hash +
+				(hash << 1) +
+				(hash << 4) +
+				(hash << 7) +
+				(hash << 8) +
+				(hash << 24)) >>>
+			0
 	}
 	const hex = (hash >>> 0).toString(16).padStart(8, '0')
 	return 'v1:fnv1a32:' + hex

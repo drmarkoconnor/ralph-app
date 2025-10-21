@@ -262,12 +262,12 @@ export async function generateHandoutPDF(deals, options = {}) {
 		// Diagram positioning: ensure clear gap below notes
 		const diagramTopY = Math.max(topY + 26, notesBottomY + 6)
 		// Compact seat spacing while enlarging ranks for legibility
-	const seatDy = 23
-	const seatDx = Math.min(30, diagramAreaW / 2.6)
-	const suitLine = 4.8 // vertical spacing per suit row
-	const fontRanks = 10.2
-	const seatFont = 10.5
-	const mono = 'courier' // keep using built-in; embedding is optional above
+		const seatDy = 23
+		const seatDx = Math.min(30, diagramAreaW / 2.6)
+		const suitLine = 4.8 // vertical spacing per suit row
+		const fontRanks = 10.2
+		const seatFont = 10.5
+		const mono = 'courier' // keep using built-in; embedding is optional above
 
 		const seatData = {
 			N: dealObj.hands?.N || [],
@@ -361,7 +361,12 @@ export async function generateHandoutPDF(deals, options = {}) {
 					if (st === 'NT') {
 						doc.text('NT', leftX, y)
 					} else {
-						const suitMap = { S: 'Spades', H: 'Hearts', D: 'Diamonds', C: 'Clubs' }
+						const suitMap = {
+							S: 'Spades',
+							H: 'Hearts',
+							D: 'Diamonds',
+							C: 'Clubs',
+						}
 						drawSuitIcon(doc, suitMap[st], leftX - 1.5, y - 3.1, 3.2)
 					}
 					seats.forEach((seat, c) => {

@@ -2,24 +2,35 @@
 // This produces a clean document with NESW aligned using a table and a styled makeables grid.
 
 export async function generateHandoutDOC(deals, options = {}) {
-  const { filenameBase = 'handout' } = options
-  if (!Array.isArray(deals) || !deals.length) throw new Error('No deals provided')
+	const { filenameBase = 'handout' } = options
+	if (!Array.isArray(deals) || !deals.length)
+		throw new Error('No deals provided')
 
-  const escape = (s) => String(s == null ? '' : s)
+	const escape = (s) => String(s == null ? '' : s)
 
-  const suit = (s) => ({
-    S: '♠', H: '♥', D: '♦', C: '♣', NT: 'NT'
-  })[s] || s
+	const suit = (s) =>
+		({
+			S: '♠',
+			H: '♥',
+			D: '♦',
+			C: '♣',
+			NT: 'NT',
+		}[s] || s)
 
-  const suitClass = (s) => (s === 'H' || s === 'D' ? 'red' : 'blk')
+	const suitClass = (s) => (s === 'H' || s === 'D' ? 'red' : 'blk')
 
-  const topMeta = (d) => {
-    const meta = d.meta || {}
-    const notesHtml = (d.notes||[]).length
-      ? (d.notes||[]).map((n)=>`<div class="note-line">${escape(n)}</div>`).join('')
-      : '<div class="note-line empty">—</div>'
-    const kvRow = (k, v) => `<tr><td class="k">${k}</td><td class="v">${v ? escape(v) : '—'}</td></tr>`
-    return `
+	const topMeta = (d) => {
+		const meta = d.meta || {}
+		const notesHtml = (d.notes || []).length
+			? (d.notes || [])
+					.map((n) => `<div class="note-line">${escape(n)}</div>`)
+					.join('')
+			: '<div class="note-line empty">—</div>'
+		const kvRow = (k, v) =>
+			`<tr><td class="k">${k}</td><td class="v">${
+				v ? escape(v) : '—'
+			}</td></tr>`
+		return `
       <table class="top-meta" role="presentation">
         <tbody>
           <tr>
@@ -42,41 +53,68 @@ export async function generateHandoutDOC(deals, options = {}) {
           </tr>
         </tbody>
       </table>`
-  }
+	}
 
-  const crossHandsBlock = (d, snap) => {
-    const seatCards = (id) => d.hands?.[id] || []
-    const order = { A:14,K:13,Q:12,J:11,T:10,10:10,9:9,8:8,7:7,6:6,5:5,4:4,3:3,2:2 }
-    const ranks = (arr, suitName) => {
-      const inSuit = arr.filter((c) => c.suit === suitName)
-      const sorted = [...inSuit].sort((a,b)=> (order[b.rank]||0)-(order[a.rank]||0))
-      return sorted.map((c)=> (c.rank==='10'?'T':c.rank)).join('') || '—'
-    }
-    const dealerId = String(d?.dealer || '').toUpperCase().charAt(0)
-    const miniMakeables = (snapIn) => {
-      const table = snapIn && snapIn.table ? snapIn.table : null
-      const seats = ['N','E','S','W']
-      const strains = ['S','H','D','C','NT']
-      if (!table) return `<div class="mini-empty">unavailable</div>`
-      const rows = strains.map((st)=>{
-        const icon = st==='NT' ? 'NT' : `<span class="${suitClass(st)}">${suit(st)}</span>`
-        const tds = seats.map((seat)=>{
-          const raw = table?.[st]?.[seat]
-          const v = Number.isFinite(raw) ? Math.max(0, raw - 6) : ''
-          return `<td>${v}</td>`
-        }).join('')
-        return `<tr><th>${icon}</th>${tds}</tr>`
-      }).join('')
-      return `
+	const crossHandsBlock = (d, snap) => {
+		const seatCards = (id) => d.hands?.[id] || []
+		const order = {
+			A: 14,
+			K: 13,
+			Q: 12,
+			J: 11,
+			T: 10,
+			10: 10,
+			9: 9,
+			8: 8,
+			7: 7,
+			6: 6,
+			5: 5,
+			4: 4,
+			3: 3,
+			2: 2,
+		}
+		const ranks = (arr, suitName) => {
+			const inSuit = arr.filter((c) => c.suit === suitName)
+			const sorted = [...inSuit].sort(
+				(a, b) => (order[b.rank] || 0) - (order[a.rank] || 0)
+			)
+			return sorted.map((c) => (c.rank === '10' ? 'T' : c.rank)).join('') || '—'
+		}
+		const dealerId = String(d?.dealer || '')
+			.toUpperCase()
+			.charAt(0)
+		const miniMakeables = (snapIn) => {
+			const table = snapIn && snapIn.table ? snapIn.table : null
+			const seats = ['N', 'E', 'S', 'W']
+			const strains = ['S', 'H', 'D', 'C', 'NT']
+			if (!table) return `<div class="mini-empty">unavailable</div>`
+			const rows = strains
+				.map((st) => {
+					const icon =
+						st === 'NT'
+							? 'NT'
+							: `<span class="${suitClass(st)}">${suit(st)}</span>`
+					const tds = seats
+						.map((seat) => {
+							const raw = table?.[st]?.[seat]
+							const v = Number.isFinite(raw) ? Math.max(0, raw - 6) : ''
+							return `<td>${v}</td>`
+						})
+						.join('')
+					return `<tr><th>${icon}</th>${tds}</tr>`
+				})
+				.join('')
+			return `
         <table class="mini-make" role="presentation">
           <thead><tr><th>Suit</th><th>N</th><th>E</th><th>S</th><th>W</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>`
-    }
-    const seatBlock = (id, title) => {
-      const cards = seatCards(id)
-      const dealerTag = dealerId === id ? '<span class="dealer">(dealer)</span>' : ''
-      return `
+		}
+		const seatBlock = (id, title) => {
+			const cards = seatCards(id)
+			const dealerTag =
+				dealerId === id ? '<span class="dealer">(dealer)</span>' : ''
+			return `
         <div class="seat">
           <div class="seat-title">${title} ${dealerTag}</div>
           <table class="seat-lines">
@@ -100,47 +138,49 @@ export async function generateHandoutDOC(deals, options = {}) {
             </tbody>
           </table>
         </div>`
-    }
-    return `
+		}
+		return `
       <table class="cross" role="presentation">
         <tbody>
           <tr>
             <td class="corner empty"></td>
-            <td class="north">${seatBlock('N','North')}</td>
+            <td class="north">${seatBlock('N', 'North')}</td>
             <td class="corner empty"></td>
           </tr>
           <tr>
-            <td class="west">${seatBlock('W','West')}</td>
+            <td class="west">${seatBlock('W', 'West')}</td>
             <td class="centerTag">${miniMakeables(snap)}</td>
-            <td class="east">${seatBlock('E','East')}</td>
+            <td class="east">${seatBlock('E', 'East')}</td>
           </tr>
           <tr>
             <td class="corner empty"></td>
-            <td class="south">${seatBlock('S','South')}</td>
+            <td class="south">${seatBlock('S', 'South')}</td>
             <td class="corner empty"></td>
           </tr>
         </tbody>
       </table>`
-  }
+	}
 
-  // Removed main makeables block in favor of center mini table
+	// Removed main makeables block in favor of center mini table
 
-  const section = (d) => {
-    const snap = d?.meta?.grid_snapshot || d._gridSnapshot || null
-    const header = `
+	const section = (d) => {
+		const snap = d?.meta?.grid_snapshot || d._gridSnapshot || null
+		const header = `
       <div class="hdr">
         <div><strong>Board ${escape(d.number)}</strong></div>
-        <div>Dealer: ${escape(d.dealer || '')} &nbsp; Vul: ${escape(d.vul || 'None')}</div>
+        <div>Dealer: ${escape(d.dealer || '')} &nbsp; Vul: ${escape(
+			d.vul || 'None'
+		)}</div>
       </div>`
-    return `
+		return `
       <div class="board">
         ${header}
         ${topMeta(d)}
         <div class="cross-wrap">${crossHandsBlock(d, snap)}</div>
       </div>`
-  }
+	}
 
-  const css = `
+	const css = `
     <style>
       body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
   .board { page-break-inside: avoid; border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin: 0; }
@@ -197,22 +237,23 @@ export async function generateHandoutDOC(deals, options = {}) {
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; }
     </style>`
 
-  const sections = deals.map((d) => section(d))
-  // Use a Word-specific page break (MSO) plus a fallback paragraph for non-Word consumers.
-  const wordBreak = `<!--[if mso]><p class="page-break" style="page-break-before:always;mso-break-type:page-break;"><span style="mso-special-character:page-break"></span></p><![endif]--><!--[if !mso]><!--><p class="page-break"></p><!--<![endif]-->`
-  const html = `<!DOCTYPE html>
+	const sections = deals.map((d) => section(d))
+	// Use a Word-specific page break (MSO) plus a fallback paragraph for non-Word consumers.
+	const wordBreak = `<!--[if mso]><p class="page-break" style="page-break-before:always;mso-break-type:page-break;"><span style="mso-special-character:page-break"></span></p><![endif]--><!--[if !mso]><!--><p class="page-break"></p><!--<![endif]-->`
+	const html = `<!DOCTYPE html>
   <html><head><meta charset="utf-8"/>${css}</head><body>
     ${sections.join(wordBreak)}
   </body></html>`
 
-  // Create a Word-compatible .doc blob from the HTML
-  const blob = new Blob([html], { type: 'application/msword' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-  a.href = url
-  a.download = `${filenameBase || 'handout'}-${dateStr}.doc`
-  a.click()
-  URL.revokeObjectURL(url)
-  return { filename: a.download }
+	// Create a Word-compatible .doc blob from the HTML
+	const blob = new Blob([html], { type: 'application/msword' })
+	const url = URL.createObjectURL(blob)
+	const a = document.createElement('a')
+	const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+	a.href = url
+	a.download = `${filenameBase || 'handout'}-${dateStr}.doc`
+	a.click()
+	URL.revokeObjectURL(url)
+	return { filename: a.download }
 }
+
