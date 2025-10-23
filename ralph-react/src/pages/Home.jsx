@@ -6,7 +6,12 @@ export default function Home() {
 	return (
 		<div className="relative min-h-screen bg-gradient-to-br from-fuchsia-50 via-rose-50 to-sky-100">
 			{/* Falling suits background (Matrix-style) */}
-			<CardRainBackground fontSize={16} baseSpeed={0.28} density={1.85} zIndex={0} />
+			<CardRainBackground
+				fontSize={16}
+				baseSpeed={0.28}
+				density={1.85}
+				zIndex={0}
+			/>
 			<div className="relative max-w-6xl mx-auto px-6 py-12 min-h-screen flex flex-col md:flex-row items-center justify-center gap-10">
 				{/* Left: copy + CTAs */}
 				<div className="flex-1 flex flex-col items-start">
