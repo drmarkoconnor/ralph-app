@@ -833,8 +833,8 @@ export default function DragDropCards({ meta, setMeta }) {
 			lead: meta?.lead,
 			ddpar: meta?.ddpar,
 			scoring: meta?.scoring,
-			 contract: meta?.contract,
-			 declarer: meta?.declarer,
+			contract: meta?.contract,
+			declarer: meta?.declarer,
 			auctionStart: meta?.auctionStart,
 			auctionText: meta?.auctionText,
 			playscript: meta?.playscript,
@@ -1431,21 +1431,28 @@ export default function DragDropCards({ meta, setMeta }) {
 								<div className="pt-1 border-t space-y-1">
 									<div className="grid grid-cols-1 gap-1">
 										<label className="flex items-center justify-between gap-1">
-											<span className="text-[11px] text-gray-600">Contract</span>
+											<span className="text-[11px] text-gray-600">
+												Contract
+											</span>
 											<input
 												className="border rounded px-1 py-0.5 text-[11px] flex-1"
 												placeholder="e.g. 3NT, 4H X, 5CXX"
 												value={meta?.contract || ''}
-												onChange={(e) => setMeta?.((m) => ({ ...m, contract: e.target.value }))}
+												onChange={(e) =>
+													setMeta?.((m) => ({ ...m, contract: e.target.value }))
+												}
 											/>
 										</label>
 										<label className="flex items-center justify-between gap-1">
-											<span className="text-[11px] text-gray-600">Declarer</span>
+											<span className="text-[11px] text-gray-600">
+												Declarer
+											</span>
 											<select
 												className="border rounded px-1 py-0.5 text-[11px] flex-1"
 												value={meta?.declarer || ''}
-												onChange={(e) => setMeta?.((m) => ({ ...m, declarer: e.target.value }))}
-											>
+												onChange={(e) =>
+													setMeta?.((m) => ({ ...m, declarer: e.target.value }))
+												}>
 												<option value="">(auto)</option>
 												<option value="N">N</option>
 												<option value="E">E</option>
@@ -1831,8 +1838,9 @@ export default function DragDropCards({ meta, setMeta }) {
 										</button>
 									</Tooltip>
 									<Tooltip
-										label={'Generate a formatted PDF handout (2 boards/page) including notes, metadata, and makeables.'}
-									>
+										label={
+											'Generate a formatted PDF handout (2 boards/page) including notes, metadata, and makeables.'
+										}>
 										<button
 											className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-40 disabled:cursor-not-allowed ${
 												savedHands.length === 0
@@ -1843,7 +1851,9 @@ export default function DragDropCards({ meta, setMeta }) {
 											onClick={async () => {
 												if (savedHands.length === 0) return
 												try {
-													const { generateHandoutPDF } = await import('./lib/handoutPdf')
+													const { generateHandoutPDF } = await import(
+														'./lib/handoutPdf'
+													)
 													const dealsForPdf = savedHands.map((h, i) => {
 														const boardNo = startBoard + i
 														const dealer = dealerForBoard(boardNo)
@@ -1872,14 +1882,16 @@ export default function DragDropCards({ meta, setMeta }) {
 													const dd = String(now.getDate()).padStart(2, '0')
 													let themeRaw = ''
 													if (meta?.themeChoice) {
-														if (meta.themeChoice === 'Custom…') themeRaw = meta?.themeCustom || ''
+														if (meta.themeChoice === 'Custom…')
+															themeRaw = meta?.themeCustom || ''
 														else themeRaw = meta.themeChoice
 													}
-													const safeTheme = (themeRaw || 'Session')
-														.toLowerCase()
-														.replace(/[^a-z0-9]+/g, '-')
-														.replace(/^-+|-+$/g, '')
-														.slice(0, 40) || 'session'
+													const safeTheme =
+														(themeRaw || 'Session')
+															.toLowerCase()
+															.replace(/[^a-z0-9]+/g, '-')
+															.replace(/^-+|-+$/g, '')
+															.slice(0, 40) || 'session'
 													const base = `bbc-pbn`
 													await generateHandoutPDF(dealsForPdf, {
 														mode: 'full',
@@ -1891,8 +1903,7 @@ export default function DragDropCards({ meta, setMeta }) {
 												} catch (e) {
 													console.error('PDF handout failed', e)
 												}
-											}}
-										>
+											}}>
 											<span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-sm bg-white/20">
 												PDF
 											</span>
@@ -1982,7 +1993,9 @@ export default function DragDropCards({ meta, setMeta }) {
 											onClick={async () => {
 												if (savedHands.length === 0) return
 												try {
-													const { generateHandoutRTF } = await import('./lib/handoutRtf')
+													const { generateHandoutRTF } = await import(
+														'./lib/handoutRtf'
+													)
 													const dealsForRtf = savedHands.map((h, i) => {
 														const boardNo = startBoard + i
 														const dealer = dealerForBoard(boardNo)
@@ -2011,21 +2024,24 @@ export default function DragDropCards({ meta, setMeta }) {
 													const dd = String(now.getDate()).padStart(2, '0')
 													let themeRaw = ''
 													if (meta?.themeChoice) {
-														if (meta.themeChoice === 'Custom…') themeRaw = meta?.themeCustom || ''
+														if (meta.themeChoice === 'Custom…')
+															themeRaw = meta?.themeCustom || ''
 														else themeRaw = meta.themeChoice
 													}
-													const safeTheme = (themeRaw || 'Session')
-														.toLowerCase()
-														.replace(/[^a-z0-9]+/g, '-')
-														.replace(/^-+|-+$/g, '')
-														.slice(0, 40) || 'session'
+													const safeTheme =
+														(themeRaw || 'Session')
+															.toLowerCase()
+															.replace(/[^a-z0-9]+/g, '-')
+															.replace(/^-+|-+$/g, '')
+															.slice(0, 40) || 'session'
 													const base = `bbc-pbn`
-													await generateHandoutRTF(dealsForRtf, { filenameBase: base })
+													await generateHandoutRTF(dealsForRtf, {
+														filenameBase: base,
+													})
 												} catch (e) {
 													console.error('Pages handout failed', e)
 												}
-											}}
-										>
+											}}>
 											<span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-sm bg-white/20">
 												P
 											</span>
@@ -2053,9 +2069,10 @@ export default function DragDropCards({ meta, setMeta }) {
 								</div>
 							</div>
 							<div className="text-[11px] text-gray-600 mt-1">
-								Save hands as you go. Click "Download PBN (saved boards)" anytime to download the
-								current PBN with all saved boards; re-click after adding more. At the
-								end of your session, download a final PBN.
+								Save hands as you go. Click "Download PBN (saved boards)"
+								anytime to download the current PBN with all saved boards;
+								re-click after adding more. At the end of your session, download
+								a final PBN.
 							</div>
 						</div>
 					</div>

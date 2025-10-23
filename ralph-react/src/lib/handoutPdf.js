@@ -331,7 +331,8 @@ export async function generateHandoutPDF(deals, options = {}) {
 		}
 
 		// Play Script (if present)
-		const playRaw = dealObj.meta?.play || dealObj.meta?.playscript || dealObj.meta?.playScript
+		const playRaw =
+			dealObj.meta?.play || dealObj.meta?.playscript || dealObj.meta?.playScript
 		if (playRaw) {
 			const playTop = lastContentY + 2
 			doc.setFontSize(7)
@@ -339,7 +340,9 @@ export async function generateHandoutPDF(deals, options = {}) {
 			doc.text('Play', leftX, playTop)
 			doc.setFont('courier', 'normal')
 			doc.setFontSize(6.6)
-			const lines = Array.isArray(playRaw) ? playRaw : String(playRaw).split(/\r?\n/)
+			const lines = Array.isArray(playRaw)
+				? playRaw
+				: String(playRaw).split(/\r?\n/)
 			let y = playTop + 4
 			lines.filter(Boolean).forEach((ln) => {
 				doc.text(String(ln), leftX, y, { maxWidth: notesW + diagramAreaW - 6 })

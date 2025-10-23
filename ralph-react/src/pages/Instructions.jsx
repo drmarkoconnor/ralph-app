@@ -249,8 +249,8 @@ export default function Instructions() {
 							suit glyphs are replaced for Dealer4 compatibility.
 						</li>
 						<li>
-							Use "Download PBN (saved boards)" to save a .pbn file; Copy PBN places the text on
-							your clipboard; Email opens an email draft.
+							Use "Download PBN (saved boards)" to save a .pbn file; Copy PBN
+							places the text on your clipboard; Email opens an email draft.
 						</li>
 						<li>
 							Extended tags supported: System, Theme, Interf, Lead, DDPar,

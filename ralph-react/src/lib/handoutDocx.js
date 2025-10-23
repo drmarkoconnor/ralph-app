@@ -432,11 +432,17 @@ function topMeta(d) {
 }
 
 function sectionTitle(text) {
-	return new Paragraph({ spacing: { before: 200, after: 80 }, children: [new TextRun({ text, bold: true, size: 20 })] })
+	return new Paragraph({
+		spacing: { before: 200, after: 80 },
+		children: [new TextRun({ text, bold: true, size: 20 })],
+	})
 }
 
 function monoParagraph(text) {
-	return new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text, font: 'Courier New', size: 18 })] })
+	return new Paragraph({
+		spacing: { after: 60 },
+		children: [new TextRun({ text, font: 'Courier New', size: 18 })],
+	})
 }
 
 function deriveContract(d) {
@@ -445,12 +451,15 @@ function deriveContract(d) {
 	const calls = Array.isArray(d.calls) ? d.calls.map(String) : []
 	const bidRe = /^([1-7])(C|D|H|S|NT)$/i
 	let last = ''
-	for (let i = 0; i < calls.length; i++) if (bidRe.test(calls[i])) last = calls[i]
+	for (let i = 0; i < calls.length; i++)
+		if (bidRe.test(calls[i])) last = calls[i]
 	if (!last) return ''
 	const mm = last.toUpperCase().match(bidRe)
 	const level = mm[1]
 	const strain = mm[2]
-	const trailer = calls.slice(calls.lastIndexOf(last) + 1, calls.lastIndexOf(last) + 4).map((c) => c.toUpperCase())
+	const trailer = calls
+		.slice(calls.lastIndexOf(last) + 1, calls.lastIndexOf(last) + 4)
+		.map((c) => c.toUpperCase())
 	const hasXX = trailer.includes('XX')
 	const hasX = trailer.includes('X')
 	return `${level}${strain}${hasXX ? 'XX' : hasX ? 'X' : ''}`
@@ -478,7 +487,11 @@ export async function generateHandoutDOCX(deals, options = {}) {
 		const calls = Array.isArray(d.calls) ? d.calls : []
 		if (calls.length) {
 			children.push(sectionTitle('Auction'))
-			const auctionLine = calls.map(String).join(' ').replace(/\s+/g, ' ').trim()
+			const auctionLine = calls
+				.map(String)
+				.join(' ')
+				.replace(/\s+/g, ' ')
+				.trim()
 			children.push(monoParagraph(auctionLine))
 		}
 		// Play Script section (if present) — single-line, strip seat prefixes like N:/E:/S:/W:
