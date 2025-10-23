@@ -328,12 +328,19 @@ function topHeader(d) {
 function topMeta(d) {
 	const meta = d.meta || {}
 	const notes = (d.notes || []).length ? d.notes : ['—']
+	const contract = deriveContract(d)
 	const kv = [
+		['Event', meta.event],
+		['Site', meta.site || meta.siteChoice],
+		['Date', meta.date],
 		['Theme', meta.theme],
 		['System', meta.system],
+		['Interf', meta.interf],
 		['Lead', meta.lead],
 		['DDPar', meta.ddpar || meta.DDPar || meta.ddPar],
 		['Scoring', meta.scoring || 'MPs'],
+		['Contract', contract || '—'],
+		['Declarer', meta.declarer || d.declarer || '—'],
 	]
 	const notesCell = new TableCell({
 		width: { size: 65, type: WidthType.PERCENTAGE },
@@ -424,6 +431,31 @@ function topMeta(d) {
 	})
 }
 
+function sectionTitle(text) {
+	return new Paragraph({ spacing: { before: 200, after: 80 }, children: [new TextRun({ text, bold: true, size: 20 })] })
+}
+
+function monoParagraph(text) {
+	return new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text, font: 'Courier New', size: 18 })] })
+}
+
+function deriveContract(d) {
+	if (d?.meta?.contract) return String(d.meta.contract)
+	if (d.contract) return String(d.contract)
+	const calls = Array.isArray(d.calls) ? d.calls.map(String) : []
+	const bidRe = /^([1-7])(C|D|H|S|NT)$/i
+	let last = ''
+	for (let i = 0; i < calls.length; i++) if (bidRe.test(calls[i])) last = calls[i]
+	if (!last) return ''
+	const mm = last.toUpperCase().match(bidRe)
+	const level = mm[1]
+	const strain = mm[2]
+	const trailer = calls.slice(calls.lastIndexOf(last) + 1, calls.lastIndexOf(last) + 4).map((c) => c.toUpperCase())
+	const hasXX = trailer.includes('XX')
+	const hasX = trailer.includes('X')
+	return `${level}${strain}${hasXX ? 'XX' : hasX ? 'X' : ''}`
+}
+
 export async function generateHandoutDOCX(deals, options = {}) {
 	const { filenameBase = 'handout' } = options
 	if (!Array.isArray(deals) || !deals.length)
@@ -439,6 +471,34 @@ export async function generateHandoutDOCX(deals, options = {}) {
 			new Paragraph({ spacing: { after: 120 } }),
 			crossTable(d)
 		)
+		// Extra breathing room below the cross
+		children.push(new Paragraph({ spacing: { after: 120 } }))
+
+		// Auction section (if present) — single-line plain text
+		const calls = Array.isArray(d.calls) ? d.calls : []
+		if (calls.length) {
+			children.push(sectionTitle('Auction'))
+			const auctionLine = calls.map(String).join(' ').replace(/\s+/g, ' ').trim()
+			children.push(monoParagraph(auctionLine))
+		}
+		// Play Script section (if present) — single-line, strip seat prefixes like N:/E:/S:/W:
+		const play = d.meta?.play || d.meta?.playscript || d.meta?.playScript
+		if (play) {
+			children.push(sectionTitle('Play'))
+			let playLine = ''
+			if (Array.isArray(play)) {
+				playLine = play
+					.map(String)
+					.map((s) => s.replace(/^\s*(?:N|E|S|W):\s*/i, ''))
+					.join(' ')
+			} else {
+				playLine = String(play)
+					.replace(/\r?\n/g, ' ')
+					.replace(/\b(?:N|E|S|W):\s*/gi, '')
+			}
+			playLine = playLine.replace(/\s+/g, ' ').trim()
+			if (playLine) children.push(monoParagraph(playLine))
+		}
 		if (idx < deals.length - 1) {
 			children.push(new Paragraph({ children: [new PageBreak()] }))
 		}

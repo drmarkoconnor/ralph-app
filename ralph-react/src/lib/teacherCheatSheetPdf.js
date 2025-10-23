@@ -89,9 +89,9 @@ export async function generateTeacherCheatSheetPDF(options = {}) {
 		'Deal cards manually (drag / select & send / keyboard mode) until all 52 placed.',
 		'Click "Save Hand" to snapshot hands + current metadata & notes.',
 		'Repeat to accumulate boards; board number, dealer & vulnerability auto-rotate.',
-		'Toggle "Full Handout PDF" to export formatted 2‑up handouts.',
+		'Use the PDF Handout button to export formatted 2‑up handouts.',
 		'Makeable Contracts Grid: keep enabled to include a double‑dummy table per board.',
-		'"Save all to PBN now" downloads cumulative PBN (and PDF if enabled).',
+		'"Download PBN (saved boards)" downloads the cumulative PBN; you can re-save after each additional board.',
 	])
 
 	section('Generator - Metadata & Notes', [

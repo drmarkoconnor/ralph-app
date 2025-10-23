@@ -248,8 +248,7 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [leftOpen, setLeftOpen] = useState(true)
 	const isIPhone = useIsIPhone()
 	const [activeSeat, setActiveSeat] = useState('N')
-	const [includeHandout, setIncludeHandout] = useState(false)
-	const [includeMakeableGrid, setIncludeMakeableGrid] = useState(true)
+	// Makeable grid is always included in handouts now; no toggle state needed
 	const [dealer4Mode, setDealer4Mode] = useState(true) // Export PBN in Dealer4-compatible mode
 	// handoutMode deprecated – always full now
 	const handoutMode = 'full'
@@ -834,6 +833,8 @@ export default function DragDropCards({ meta, setMeta }) {
 			lead: meta?.lead,
 			ddpar: meta?.ddpar,
 			scoring: meta?.scoring,
+			 contract: meta?.contract,
+			 declarer: meta?.declarer,
 			auctionStart: meta?.auctionStart,
 			auctionText: meta?.auctionText,
 			playscript: meta?.playscript,
@@ -883,7 +884,7 @@ export default function DragDropCards({ meta, setMeta }) {
 				.replace(/^-+|-+$/g, '')
 				.slice(0, 40) || 'session'
 		const edited = pbnImport ? '-edited' : ''
-		a.download = `ralph-${datePart}-${safeTheme}-hand${edited}.pbn`
+		a.download = `bbc-pbn-${datePart}${edited}.pbn`
 		a.click()
 		URL.revokeObjectURL(url)
 	}
@@ -1035,74 +1036,6 @@ export default function DragDropCards({ meta, setMeta }) {
 		try {
 			const pbn = await exportSavedBoards()
 			downloadPBN(pbn)
-			if (includeHandout) {
-				try {
-					// Use shared PDF generator for consistency
-					const { generateHandoutPDF } = await import('./lib/handoutPdf')
-					// Auction advice removed
-					// Normalize saved hands into shared format
-					const dealsForPdf = savedHands.map((h, i) => {
-						const boardNo = startBoard + i
-						const dealer = dealerForBoard(boardNo)
-						const vul = vulnerabilityForBoard(boardNo)
-						const notes = h.meta?.notes || []
-						const auctionTokens = (h.meta?.auctionText || '')
-							.trim()
-							.split(/\s+/)
-							.filter(Boolean)
-							.map((t) => (t === 'P' ? 'Pass' : t))
-						const deal = {
-							number: boardNo,
-							dealer,
-							vul,
-							hands: { N: h.N, E: h.E, S: h.S, W: h.W },
-							notes,
-							calls: auctionTokens,
-							contract: h.meta?.contract,
-							declarer: h.meta?.declarer,
-							meta: {
-								system: h.meta?.system,
-								theme: h.meta?.theme,
-								ddpar: h.meta?.ddpar,
-								lead: h.meta?.lead,
-								scoring: h.meta?.scoring,
-								interf: h.meta?.interf,
-								playscript: h.meta?.playscript,
-								auctionText: h.meta?.auctionText,
-								grid_snapshot: h.meta?.grid_snapshot,
-							},
-						}
-						// Auction advice no longer used
-						return deal
-					})
-					const now = new Date()
-					const yyyy = now.getFullYear()
-					const mm = String(now.getMonth() + 1).padStart(2, '0')
-					const dd = String(now.getDate()).padStart(2, '0')
-					let themeRaw = ''
-					if (meta?.themeChoice) {
-						if (meta.themeChoice === 'Custom…')
-							themeRaw = meta?.themeCustom || ''
-						else themeRaw = meta.themeChoice
-					}
-					const safeTheme =
-						(themeRaw || 'Session')
-							.toLowerCase()
-							.replace(/[^a-z0-9]+/g, '-')
-							.replace(/^-+|-+$/g, '')
-							.slice(0, 40) || 'session'
-					const base = `ralph-${yyyy}${mm}${dd}-${safeTheme}-hand`
-					await generateHandoutPDF(dealsForPdf, {
-						mode: 'full',
-						filenameBase: base,
-						autoNotes: true,
-						includeMakeableGrid: includeMakeableGrid,
-						copyright: '',
-					})
-				} catch (err) {
-					console.error('PDF handout failed', err)
-				}
-			}
 		} catch (e) {
 			console.error('Export failed', e)
 		}
@@ -1494,8 +1427,37 @@ export default function DragDropCards({ meta, setMeta }) {
 									</select>
 								</label>
 
-								{/* Auction & Play */}
+								{/* Contract & Declarer */}
 								<div className="pt-1 border-t space-y-1">
+									<div className="grid grid-cols-1 gap-1">
+										<label className="flex items-center justify-between gap-1">
+											<span className="text-[11px] text-gray-600">Contract</span>
+											<input
+												className="border rounded px-1 py-0.5 text-[11px] flex-1"
+												placeholder="e.g. 3NT, 4H X, 5CXX"
+												value={meta?.contract || ''}
+												onChange={(e) => setMeta?.((m) => ({ ...m, contract: e.target.value }))}
+											/>
+										</label>
+										<label className="flex items-center justify-between gap-1">
+											<span className="text-[11px] text-gray-600">Declarer</span>
+											<select
+												className="border rounded px-1 py-0.5 text-[11px] flex-1"
+												value={meta?.declarer || ''}
+												onChange={(e) => setMeta?.((m) => ({ ...m, declarer: e.target.value }))}
+											>
+												<option value="">(auto)</option>
+												<option value="N">N</option>
+												<option value="E">E</option>
+												<option value="S">S</option>
+												<option value="W">W</option>
+											</select>
+										</label>
+									</div>
+								</div>
+
+								{/* Auction & Play */}
+								<div className="space-y-1">
 									<div className="text-[11px] font-semibold text-gray-800">
 										Ideal Bidding
 									</div>
@@ -1858,28 +1820,84 @@ export default function DragDropCards({ meta, setMeta }) {
 									<Tooltip
 										label={
 											savedHands.length
-												? 'Export all saved boards now. Will also generate PDF if Handout is ticked.'
+												? 'Download your current PBN file with all saved boards. You can re-save after each additional board.'
 												: 'Save at least one board first.'
 										}>
 										<button
 											className="px-4 py-2 rounded bg-teal-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
 											onClick={handleGeneratePBN}
 											disabled={savedHands.length === 0}>
-											Save all to PBN now
+											Download PBN (saved boards)
 										</button>
 									</Tooltip>
 									<Tooltip
-										label={
-											'Adds a formatted PDF handout (2 boards/page) including notes & metadata.'
-										}>
-										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
-											<input
-												type="checkbox"
-												checked={includeHandout}
-												onChange={(e) => setIncludeHandout(e.target.checked)}
-											/>
-											<span>Full Handout PDF</span>
-										</label>
+										label={'Generate a formatted PDF handout (2 boards/page) including notes, metadata, and makeables.'}
+									>
+										<button
+											className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-40 disabled:cursor-not-allowed ${
+												savedHands.length === 0
+													? 'bg-rose-600 text-white'
+													: 'bg-rose-600 text-white hover:bg-rose-700'
+											}`}
+											disabled={savedHands.length === 0}
+											onClick={async () => {
+												if (savedHands.length === 0) return
+												try {
+													const { generateHandoutPDF } = await import('./lib/handoutPdf')
+													const dealsForPdf = savedHands.map((h, i) => {
+														const boardNo = startBoard + i
+														const dealer = dealerForBoard(boardNo)
+														const vul = vulnerabilityForBoard(boardNo)
+														const notes = h.meta?.notes || []
+														const auctionTokens = (h.meta?.auctionText || '')
+															.trim()
+															.split(/\s+/)
+															.filter(Boolean)
+															.map((t) => (t === 'P' ? 'Pass' : t))
+														return {
+															number: boardNo,
+															dealer,
+															vul,
+															hands: { N: h.N, E: h.E, S: h.S, W: h.W },
+															notes,
+															calls: auctionTokens,
+															contract: h.meta?.contract,
+															declarer: h.meta?.declarer,
+															meta: { ...h.meta },
+														}
+													})
+													const now = new Date()
+													const yyyy = now.getFullYear()
+													const mm = String(now.getMonth() + 1).padStart(2, '0')
+													const dd = String(now.getDate()).padStart(2, '0')
+													let themeRaw = ''
+													if (meta?.themeChoice) {
+														if (meta.themeChoice === 'Custom…') themeRaw = meta?.themeCustom || ''
+														else themeRaw = meta.themeChoice
+													}
+													const safeTheme = (themeRaw || 'Session')
+														.toLowerCase()
+														.replace(/[^a-z0-9]+/g, '-')
+														.replace(/^-+|-+$/g, '')
+														.slice(0, 40) || 'session'
+													const base = `bbc-pbn`
+													await generateHandoutPDF(dealsForPdf, {
+														mode: 'full',
+														filenameBase: base,
+														autoNotes: true,
+														includeMakeableGrid: true,
+														copyright: '',
+													})
+												} catch (e) {
+													console.error('PDF handout failed', e)
+												}
+											}}
+										>
+											<span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-sm bg-white/20">
+												PDF
+											</span>
+											<span>PDF Handout (.pdf)</span>
+										</button>
 									</Tooltip>
 									<Tooltip
 										label={
@@ -1915,6 +1933,8 @@ export default function DragDropCards({ meta, setMeta }) {
 															hands: { N: h.N, E: h.E, S: h.S, W: h.W },
 															notes,
 															calls: auctionTokens,
+															contract: h.meta?.contract,
+															declarer: h.meta?.declarer,
 															meta: { ...h.meta },
 														}
 													})
@@ -1934,7 +1954,7 @@ export default function DragDropCards({ meta, setMeta }) {
 															.replace(/[^a-z0-9]+/g, '-')
 															.replace(/^-+|-+$/g, '')
 															.slice(0, 40) || 'session'
-													const base = `ralph-${yyyy}${mm}${dd}-${safeTheme}-hand`
+													const base = `bbc-pbn`
 													await generateHandoutDOCX(dealsForDoc, {
 														filenameBase: base,
 													})
@@ -1950,6 +1970,70 @@ export default function DragDropCards({ meta, setMeta }) {
 									</Tooltip>
 									<Tooltip
 										label={
+											'Export a Pages-friendly handout (.rtf) with one board per page. Opens cleanly in Apple Pages.'
+										}>
+										<button
+											className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed ${
+												savedHands.length === 0
+													? 'bg-emerald-600 text-white'
+													: 'bg-emerald-600 text-white hover:bg-emerald-700'
+											}`}
+											disabled={savedHands.length === 0}
+											onClick={async () => {
+												if (savedHands.length === 0) return
+												try {
+													const { generateHandoutRTF } = await import('./lib/handoutRtf')
+													const dealsForRtf = savedHands.map((h, i) => {
+														const boardNo = startBoard + i
+														const dealer = dealerForBoard(boardNo)
+														const vul = vulnerabilityForBoard(boardNo)
+														const notes = h.meta?.notes || []
+														const auctionTokens = (h.meta?.auctionText || '')
+															.trim()
+															.split(/\s+/)
+															.filter(Boolean)
+															.map((t) => (t === 'P' ? 'Pass' : t))
+														return {
+															number: boardNo,
+															dealer,
+															vul,
+															hands: { N: h.N, E: h.E, S: h.S, W: h.W },
+															notes,
+															calls: auctionTokens,
+															contract: h.meta?.contract,
+															declarer: h.meta?.declarer,
+															meta: { ...h.meta },
+														}
+													})
+													const now = new Date()
+													const yyyy = now.getFullYear()
+													const mm = String(now.getMonth() + 1).padStart(2, '0')
+													const dd = String(now.getDate()).padStart(2, '0')
+													let themeRaw = ''
+													if (meta?.themeChoice) {
+														if (meta.themeChoice === 'Custom…') themeRaw = meta?.themeCustom || ''
+														else themeRaw = meta.themeChoice
+													}
+													const safeTheme = (themeRaw || 'Session')
+														.toLowerCase()
+														.replace(/[^a-z0-9]+/g, '-')
+														.replace(/^-+|-+$/g, '')
+														.slice(0, 40) || 'session'
+													const base = `bbc-pbn`
+													await generateHandoutRTF(dealsForRtf, { filenameBase: base })
+												} catch (e) {
+													console.error('Pages handout failed', e)
+												}
+											}}
+										>
+											<span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-sm bg-white/20">
+												P
+											</span>
+											<span>Pages Handout (.rtf)</span>
+										</button>
+									</Tooltip>
+									<Tooltip
+										label={
 											'Export PBN in a legacy-friendly format preferred by Dealer4 (minimal tags, multiline auctions).'
 										}>
 										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
@@ -1961,23 +2045,7 @@ export default function DragDropCards({ meta, setMeta }) {
 											<span>Dealer4‑compatible PBN</span>
 										</label>
 									</Tooltip>
-									{includeHandout && (
-										<Tooltip
-											label={
-												'Include a makeable-contracts grid (double-dummy) in the PDF (overtricks).'
-											}>
-											<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
-												<input
-													type="checkbox"
-													checked={includeMakeableGrid}
-													onChange={(e) =>
-														setIncludeMakeableGrid(e.target.checked)
-													}
-												/>
-												<span>Makeable contracts grid</span>
-											</label>
-										</Tooltip>
-									)}
+									{/* Makeable contracts grid is always included in handouts */}
 									{/* Overtricks toggle removed: always show raw − 6 */}
 									<span className="text-[11px] text-gray-600">
 										Saved: {savedHands.length}
@@ -1985,8 +2053,9 @@ export default function DragDropCards({ meta, setMeta }) {
 								</div>
 							</div>
 							<div className="text-[11px] text-gray-600 mt-1">
-								Keep dealing and saving boards. When ready, click "Save all to
-								PBN now" to download your cumulative PBN file.
+								Save hands as you go. Click "Download PBN (saved boards)" anytime to download the
+								current PBN with all saved boards; re-click after adding more. At the
+								end of your session, download a final PBN.
 							</div>
 						</div>
 					</div>

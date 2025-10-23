@@ -24,6 +24,9 @@ function App() {
 		lead: '',
 		ddpar: '',
 		scoring: 'MPs',
+		// explicit contract/declarer (for handout exports)
+		contract: '',
+		declarer: '',
 		// teacher authored
 		notes: [],
 		notesDraft: '',

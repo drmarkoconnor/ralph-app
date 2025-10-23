@@ -10,6 +10,7 @@ Key features:
 - Automated ACOL auction advisor (mainline + alternatives)
 - PDF handout export (2 boards per page)
 - Word handout export (.docx, one board per page with hard page breaks)
+- Pages handout export (.rtf, one board per page, optimized for Apple Pages)
 - Player view to step through auction & play for teaching
 
 Full non-technical user documentation: see <a href="./HELP.md">HELP.md</a>
@@ -27,6 +28,7 @@ Structure overview:
 - `src/lib/acolAdvisor.js` – Deterministic ACOL auction advice engine
 - `src/lib/handoutPdf.js` – PDF generator (jsPDF)
 - `src/lib/handoutDocx.js` – Native DOCX generator with hard PageBreaks
+- `src/lib/handoutRtf.js` – RTF generator for Apple Pages
 
 License: Internal teaching aid (add a LICENSE file if distributing externally).
 

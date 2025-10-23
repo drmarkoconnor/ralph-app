@@ -197,6 +197,9 @@ export async function generateHandoutPDF(deals, options = {}) {
 		const contract = deriveContract(dealObj)
 		const declarer = dealObj.declarer || meta.declarer || ''
 		const theme = meta.theme || meta.themeChoice || ''
+		const event = meta.event || ''
+		const site = meta.site || meta.siteChoice || ''
+		const date = meta.date || ''
 		const system = meta.system || ''
 		const ddpar = meta.ddpar || meta.DDPar || meta.ddPar || ''
 		const lead = meta.lead || ''
@@ -213,6 +216,9 @@ export async function generateHandoutPDF(deals, options = {}) {
 		}
 		pushMeta('Contract', contract + (declarer ? ` (${declarer})` : ''))
 		pushMeta('Theme', theme)
+		pushMeta('Event', event)
+		pushMeta('Site', site)
+		pushMeta('Date', date)
 		if (mode === 'full') {
 			pushMeta('System', system)
 			pushMeta('Interf', interf)
@@ -304,12 +310,9 @@ export async function generateHandoutPDF(deals, options = {}) {
 		// Bottom line index is 3, so add 3 * suitLine, plus extra breathing room
 		const diagramBottomY = diagramTopY + seatDy + suitLine * 3 + 8
 		// Auction (full mode) placed under diagram spanning notes + diagram width (leave meta column untouched)
-		let lastContentY = diagramBottomY
-		if (
-			mode === 'full' &&
-			Array.isArray(dealObj.calls) &&
-			dealObj.calls.length
-		) {
+		let lastContentY = diagramBottomY + 2 // small extra spacing for aesthetics
+		// Auction (if present) — render even in basic mode per metadata completeness principle
+		if (Array.isArray(dealObj.calls) && dealObj.calls.length) {
 			const auctionTop = lastContentY
 			doc.setFontSize(7)
 			doc.setFont('helvetica', 'bold')
@@ -325,6 +328,24 @@ export async function generateHandoutPDF(deals, options = {}) {
 			})
 			lastContentY =
 				auctionTop + 8 + Math.ceil(dealObj.calls.length / 4) * 4 + 2
+		}
+
+		// Play Script (if present)
+		const playRaw = dealObj.meta?.play || dealObj.meta?.playscript || dealObj.meta?.playScript
+		if (playRaw) {
+			const playTop = lastContentY + 2
+			doc.setFontSize(7)
+			doc.setFont('helvetica', 'bold')
+			doc.text('Play', leftX, playTop)
+			doc.setFont('courier', 'normal')
+			doc.setFontSize(6.6)
+			const lines = Array.isArray(playRaw) ? playRaw : String(playRaw).split(/\r?\n/)
+			let y = playTop + 4
+			lines.filter(Boolean).forEach((ln) => {
+				doc.text(String(ln), leftX, y, { maxWidth: notesW + diagramAreaW - 6 })
+				y += 3.4
+			})
+			lastContentY = y
 		}
 
 		// Makeable Contracts grid (Double Dummy table)
