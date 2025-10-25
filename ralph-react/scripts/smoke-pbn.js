@@ -13,56 +13,65 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { sanitizePBN, parsePBN } from '../src/lib/pbn.js'
-import { dealToHands, rightOf, parseTrump, evaluateTrick, partnerOf } from '../src/lib/bridgeCore.js'
-import { createInitialManualState, playCardManual } from '../src/lib/manualPlayEngine.js'
+import {
+	dealToHands,
+	rightOf,
+	parseTrump,
+	evaluateTrick,
+	partnerOf,
+} from '../src/lib/bridgeCore.js'
+import {
+	createInitialManualState,
+	playCardManual,
+} from '../src/lib/manualPlayEngine.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 function assert(cond, msg) {
-  if (!cond) throw new Error(msg)
+	if (!cond) throw new Error(msg)
 }
 
 function tryParseDeal(dealStr) {
-  try {
-    return dealToHands(dealStr)
-  } catch (e) {
-    return null
-  }
+	try {
+		return dealToHands(dealStr)
+	} catch (e) {
+		return null
+	}
 }
 
 function firstPlayableCard(hand, leadSuit) {
-  if (!Array.isArray(hand) || hand.length === 0) return null
-  if (leadSuit) {
-    const follow = hand.filter(c => c.suit === leadSuit)
-    if (follow.length) return follow[0]
-  }
-  return hand[0]
+	if (!Array.isArray(hand) || hand.length === 0) return null
+	if (leadSuit) {
+		const follow = hand.filter((c) => c.suit === leadSuit)
+		if (follow.length) return follow[0]
+	}
+	return hand[0]
 }
 
 function playOneTrick(hands, openingLeader, trump, declarer) {
-  const st0 = createInitialManualState(hands, openingLeader, trump, declarer)
-  let st = st0
-  const order = ['N','E','S','W']
-  for (let i=0; i<4; i++) {
-    const seat = st.turnSeat
-    const leadSuit = st.trick.length ? st.trick[0].card.suit : null
-    const card = firstPlayableCard(st.remaining[seat], leadSuit)
-    assert(card, `no playable card for ${seat}`)
-    const res = playCardManual(st, seat, card.id)
-    assert(res.ok, `playCardManual failed for ${seat}: ${res.error}`)
-    st = res.state
-  }
-  assert(st.trick.length === 4, 'trick not complete after 4 plays')
-  const winner = evaluateTrick(st.trick, trump)
-  assert(['N','E','S','W'].includes(winner), 'winner invalid')
-  return true
+	const st0 = createInitialManualState(hands, openingLeader, trump, declarer)
+	let st = st0
+	const order = ['N', 'E', 'S', 'W']
+	for (let i = 0; i < 4; i++) {
+		const seat = st.turnSeat
+		const leadSuit = st.trick.length ? st.trick[0].card.suit : null
+		const card = firstPlayableCard(st.remaining[seat], leadSuit)
+		assert(card, `no playable card for ${seat}`)
+		const res = playCardManual(st, seat, card.id)
+		assert(res.ok, `playCardManual failed for ${seat}: ${res.error}`)
+		st = res.state
+	}
+	assert(st.trick.length === 4, 'trick not complete after 4 plays')
+	const winner = evaluateTrick(st.trick, trump)
+	assert(['N', 'E', 'S', 'W'].includes(winner), 'winner invalid')
+	return true
 }
 
 function loadSamplePBNs() {
-  const samples = []
-  // 1) Dealer numeric, simple auction with AP, lowercase nt
-  samples.push(`
+	const samples = []
+	// 1) Dealer numeric, simple auction with AP, lowercase nt
+	samples.push(`
 [Board "1"]
 [Dealer "1"]
 [Vulnerable "Both"]
@@ -72,8 +81,8 @@ function loadSamplePBNs() {
 [Play "S"]
 SA SK SQ SJ
 `)
-  // 2) Spelled dealer, explicit passes/doubles
-  samples.push(`
+	// 2) Spelled dealer, explicit passes/doubles
+	samples.push(`
 [Board "2"]
 [Dealer "SOUTH"]
 [Vulnerable "Neither"]
@@ -81,21 +90,21 @@ SA SK SQ SJ
 [Auction "W"]
 1NT P 2H X XX P P P
 `)
-  // 3) Our app style (use local file if present)
-  try {
-    const p = path.join(__dirname, '..', '66891.pbn')
-    const text = fs.readFileSync(p, 'utf8')
-    samples.push(text)
-  } catch {}
-  // 4) Minimal PBN without auction (manual contract later in UI)
-  samples.push(`
+	// 3) Our app style (use local file if present)
+	try {
+		const p = path.join(__dirname, '..', '66891.pbn')
+		const text = fs.readFileSync(p, 'utf8')
+		samples.push(text)
+	} catch {}
+	// 4) Minimal PBN without auction (manual contract later in UI)
+	samples.push(`
 [Board "4"]
 [Dealer "W"]
 [Vulnerable "NS"]
 [Deal "W:AKQJ.AKQ.JT9.32 T98.T98.8765.76 76.7654.AKQ.AT9 5432.J2.432.KQJ8"]
 `)
-  // 5) Numeric dealer 4 (W), mixed case auction bids
-  samples.push(`
+	// 5) Numeric dealer 4 (W), mixed case auction bids
+	samples.push(`
 [Board "5"]
 [Dealer "4"]
 [Vulnerable "All"]
@@ -103,46 +112,71 @@ SA SK SQ SJ
 [Auction "2"]
 1h p 2h p p p
 `)
-  return samples
+	return samples
 }
 
 function run() {
-  const samples = loadSamplePBNs()
-  const results = []
-  for (let i=0; i<samples.length; i++) {
-    const raw = samples[i]
-    const sanitized = sanitizePBN(raw)
-    const parsed = parsePBN(sanitized)
-    assert(Array.isArray(parsed) && parsed.length > 0, `parsed empty for sample ${i+1}`)
-    let valid = 0
-    let warnings = 0
-    for (const deal of parsed) {
-      if (!deal.deal) { warnings++; continue }
-      const hands = tryParseDeal(deal.deal)
-      if (!hands) { warnings++; continue }
-      const dealer = deal.dealer || 'N'
-      // opening leader: right of declarer if contract/declarer provided, else dealer
-      const decl = deal.declarer || null
-      const trump = parseTrump(deal.contract || '')
-      const leader = decl ? rightOf(decl) : dealer
-      // sanity: leaders and seats valid
-      if (!['N','E','S','W'].includes(leader)) { warnings++; continue }
-      // smoke: can we play one trick in engine
-      playOneTrick(hands, leader, trump, decl)
-      valid++
-    }
-    assert(valid > 0, `no valid deals playable for sample ${i+1}`)
-    results.push({ sample: i+1, deals: parsed.length, valid, warnings, ok: true })
-  }
-  return results
+	const samples = loadSamplePBNs()
+	const results = []
+	for (let i = 0; i < samples.length; i++) {
+		const raw = samples[i]
+		const sanitized = sanitizePBN(raw)
+		const parsed = parsePBN(sanitized)
+		assert(
+			Array.isArray(parsed) && parsed.length > 0,
+			`parsed empty for sample ${i + 1}`
+		)
+		let valid = 0
+		let warnings = 0
+		for (const deal of parsed) {
+			if (!deal.deal) {
+				warnings++
+				continue
+			}
+			const hands = tryParseDeal(deal.deal)
+			if (!hands) {
+				warnings++
+				continue
+			}
+			const dealer = deal.dealer || 'N'
+			// opening leader: right of declarer if contract/declarer provided, else dealer
+			const decl = deal.declarer || null
+			const trump = parseTrump(deal.contract || '')
+			const leader = decl ? rightOf(decl) : dealer
+			// sanity: leaders and seats valid
+			if (!['N', 'E', 'S', 'W'].includes(leader)) {
+				warnings++
+				continue
+			}
+			// smoke: can we play one trick in engine
+			playOneTrick(hands, leader, trump, decl)
+			valid++
+		}
+		assert(valid > 0, `no valid deals playable for sample ${i + 1}`)
+		results.push({
+			sample: i + 1,
+			deals: parsed.length,
+			valid,
+			warnings,
+			ok: true,
+		})
+	}
+	return results
 }
 
 try {
-  const out = run()
-  console.log('PBN smoke tests: PASS')
-  out.forEach(r => console.log(`  Sample ${r.sample}: ${r.deals} deal(s), valid ${r.valid}${r.warnings?`, warnings ${r.warnings}`:''}`))
-  process.exit(0)
+	const out = run()
+	console.log('PBN smoke tests: PASS')
+	out.forEach((r) =>
+		console.log(
+			`  Sample ${r.sample}: ${r.deals} deal(s), valid ${r.valid}${
+				r.warnings ? `, warnings ${r.warnings}` : ''
+			}`
+		)
+	)
+	process.exit(0)
 } catch (e) {
-  console.error('PBN smoke tests: FAIL\n', e && e.stack ? e.stack : e)
-  process.exit(1)
+	console.error('PBN smoke tests: FAIL\n', e && e.stack ? e.stack : e)
+	process.exit(1)
 }
+

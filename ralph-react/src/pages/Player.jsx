@@ -132,13 +132,19 @@ function SeatPanel({
 													? 'text-rose-600 border-rose-300'
 													: 'text-slate-800 border-slate-300'
 											} ${
-												legal && isTurn && playStarted ? 'ring-2 ring-yellow-300' : ''
+												legal && isTurn && playStarted
+													? 'ring-2 ring-yellow-300'
+													: ''
 											} ${
-												openingLeadPulse && isTurn && playStarted ? 'animate-pulse' : ''
-											} ${!playStarted || !legal || !isTurn ? 'opacity-40' : ''} ${
-												highlight ? 'outline outline-white/70' : ''
-											}`}>
-											<span className="font-extrabold tracking-tight">{c.rank}</span>
+												openingLeadPulse && isTurn && playStarted
+													? 'animate-pulse'
+													: ''
+											} ${
+												!playStarted || !legal || !isTurn ? 'opacity-40' : ''
+											} ${highlight ? 'outline outline-white/70' : ''}`}>
+											<span className="font-extrabold tracking-tight">
+												{c.rank}
+											</span>
 											<span className="ml-0.5">{suitSymbol(c.suit)}</span>
 										</button>
 									)
@@ -242,7 +248,14 @@ function ScorePanel({
 	)
 }
 
-function CardSlot({ seat, trick, size = 'lg', isWinner = false, dim = false, tilt = true }) {
+function CardSlot({
+	seat,
+	trick,
+	size = 'lg',
+	isWinner = false,
+	dim = false,
+	tilt = true,
+}) {
 	const it = trick.find((t) => t.seat === seat)
 	const dims =
 		size === 'lg'
@@ -252,27 +265,38 @@ function CardSlot({ seat, trick, size = 'lg', isWinner = false, dim = false, til
 			: { w: 'w-16', h: 'h-24', text: 'text-2xl', corner: 'text-[10px]' }
 	if (!it)
 		return (
-			<div className={`${dims.w} ${dims.h} rounded-xl border bg-white/90 shadow-inner`} />
+			<div
+				className={`${dims.w} ${dims.h} rounded-xl border bg-white/90 shadow-inner`}
+			/>
 		)
 	const isRed = it.card.suit === 'Hearts' || it.card.suit === 'Diamonds'
 	const suitColor = isRed ? 'text-rose-600' : 'text-slate-800'
 	const isFace = ['J', 'Q', 'K'].includes(it.card.rank)
-	const rotateClass = tilt ? (seat === 'E' ? 'rotate-6' : seat === 'W' ? '-rotate-6' : '') : ''
+	const rotateClass = tilt
+		? seat === 'E'
+			? 'rotate-6'
+			: seat === 'W'
+			? '-rotate-6'
+			: ''
+		: ''
 	const borderClass = isRed ? 'border-rose-200' : 'border-slate-200'
 	return (
 		<div
-			className={`relative ${dims.w} ${dims.h} rounded-[14px] ${borderClass} bg-white flex items-center justify-center overflow-hidden ${rotateClass} ${isWinner ? 'winner-gold animate-spin-once' : ''} ${dim ? 'animate-fade-dim' : ''}`}
+			className={`relative ${dims.w} ${
+				dims.h
+			} rounded-[14px] ${borderClass} bg-white flex items-center justify-center overflow-hidden ${rotateClass} ${
+				isWinner ? 'winner-gold animate-spin-once' : ''
+			} ${dim ? 'animate-fade-dim' : ''}`}
 			style={{
 				boxShadow:
-					'0 8px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -3px 10px rgba(0,0,0,0.10)'
-			}}
-		>
+					'0 8px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -3px 10px rgba(0,0,0,0.10)',
+			}}>
 			{/* faint paper texture */}
 			<div
 				className="absolute inset-0 opacity-[0.04] pointer-events-none"
 				style={{
 					backgroundImage:
-						'repeating-linear-gradient(135deg, #000 0, #000 1px, transparent 1px, transparent 6px)'
+						'repeating-linear-gradient(135deg, #000 0, #000 1px, transparent 1px, transparent 6px)',
 				}}
 			/>
 			{/* gloss highlight */}
@@ -280,27 +304,49 @@ function CardSlot({ seat, trick, size = 'lg', isWinner = false, dim = false, til
 				className="absolute inset-0 pointer-events-none"
 				style={{
 					background:
-						'radial-gradient(circle at 20% 0%, rgba(255,255,255,0.55), rgba(255,255,255,0.05) 40%, rgba(255,255,255,0) 60%)'
+						'radial-gradient(circle at 20% 0%, rgba(255,255,255,0.55), rgba(255,255,255,0.05) 40%, rgba(255,255,255,0) 60%)',
 				}}
 			/>
 			{/* subtle suit watermark for face cards */}
 			{isFace && (
 				<div className="absolute inset-0 opacity-10 pointer-events-none select-none">
-					<div className={`absolute -rotate-12 ${dims.text} ${suitColor} right-2 bottom-2`}>{suitSymbol(it.card.suit)}</div>
-					<div className={`absolute rotate-12 ${dims.text} ${suitColor} left-2 top-2`}>{suitSymbol(it.card.suit)}</div>
+					<div
+						className={`absolute -rotate-12 ${dims.text} ${suitColor} right-2 bottom-2`}>
+						{suitSymbol(it.card.suit)}
+					</div>
+					<div
+						className={`absolute rotate-12 ${dims.text} ${suitColor} left-2 top-2`}>
+						{suitSymbol(it.card.suit)}
+					</div>
 				</div>
 			)}
 			{/* face-card icon overlays */}
 			{isFace && (
 				<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
 					{it.card.rank === 'K' || it.card.rank === 'Q' ? (
-						<svg width="72" height="72" viewBox="0 0 64 64" className="opacity-15" aria-hidden>
-							<path d="M8 40 L20 12 L32 28 L44 12 L56 40 L8 40 Z" fill={isRed ? '#dc2626' : '#1f2937'} />
+						<svg
+							width="72"
+							height="72"
+							viewBox="0 0 64 64"
+							className="opacity-15"
+							aria-hidden>
+							<path
+								d="M8 40 L20 12 L32 28 L44 12 L56 40 L8 40 Z"
+								fill={isRed ? '#dc2626' : '#1f2937'}
+							/>
 							<circle cx="32" cy="36" r="6" fill="white" opacity="0.5" />
 						</svg>
 					) : (
-						<svg width="72" height="72" viewBox="0 0 64 64" className="opacity-15" aria-hidden>
-							<path d="M10 44 C20 28, 44 28, 54 44 L48 46 C42 36, 22 36, 16 46 Z" fill={isRed ? '#dc2626' : '#1f2937'} />
+						<svg
+							width="72"
+							height="72"
+							viewBox="0 0 64 64"
+							className="opacity-15"
+							aria-hidden>
+							<path
+								d="M10 44 C20 28, 44 28, 54 44 L48 46 C42 36, 22 36, 16 46 Z"
+								fill={isRed ? '#dc2626' : '#1f2937'}
+							/>
 							<circle cx="24" cy="30" r="5" fill="white" opacity="0.45" />
 							<circle cx="40" cy="30" r="5" fill="white" opacity="0.45" />
 						</svg>
@@ -312,11 +358,13 @@ function CardSlot({ seat, trick, size = 'lg', isWinner = false, dim = false, til
 				{suitSymbol(it.card.suit)}
 			</div>
 			{/* bottom-right small suit (rotated) */}
-			<div className={`absolute bottom-1 right-1 ${dims.corner} ${suitColor} rotate-180`}>
+			<div
+				className={`absolute bottom-1 right-1 ${dims.corner} ${suitColor} rotate-180`}>
 				{suitSymbol(it.card.suit)}
 			</div>
 			{/* center rank + suit */}
-			<div className={`${dims.text} font-extrabold ${suitColor} drop-shadow-sm`}>
+			<div
+				className={`${dims.text} font-extrabold ${suitColor} drop-shadow-sm`}>
 				{it.card.rank}
 				<span className="ml-0.5">{suitSymbol(it.card.suit)}</span>
 			</div>
@@ -324,22 +372,35 @@ function CardSlot({ seat, trick, size = 'lg', isWinner = false, dim = false, til
 	)
 }
 
-function CrossTrick({ trick, winner, turnSeat, lastAutoPlay, highlight, openingLeader }) {
+function CrossTrick({
+	trick,
+	winner,
+	turnSeat,
+	lastAutoPlay,
+	highlight,
+	openingLeader,
+}) {
 	return (
 		<div
 			className={`relative rounded-3xl border-2 w-[560px] h-[340px] shadow-inner overflow-hidden ${
 				highlight ? 'ring-2 ring-yellow-300' : ''
 			}`}
-			style={{ background: '#0b5d27' }}
-		>
+			style={{ background: '#0b5d27' }}>
 			{/* felt texture overlays */}
-			<div className="absolute inset-0 pointer-events-none" style={{
-				background:
-					'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.12), rgba(255,255,255,0) 40%), radial-gradient(circle at 70% 80%, rgba(0,0,0,0.10), rgba(0,0,0,0) 55%)'
-			}} />
-			<div className="absolute inset-0 opacity-[0.06] pointer-events-none" style={{
-				backgroundImage: 'repeating-linear-gradient(145deg, rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 1px, transparent 1px, transparent 7px)'
-			}} />
+			<div
+				className="absolute inset-0 pointer-events-none"
+				style={{
+					background:
+						'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.12), rgba(255,255,255,0) 40%), radial-gradient(circle at 70% 80%, rgba(0,0,0,0.10), rgba(0,0,0,0) 55%)',
+				}}
+			/>
+			<div
+				className="absolute inset-0 opacity-[0.06] pointer-events-none"
+				style={{
+					backgroundImage:
+						'repeating-linear-gradient(145deg, rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 1px, transparent 1px, transparent 7px)',
+				}}
+			/>
 			<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
 				<div className="text-[11px] text-gray-500">
 					{winner ? (
@@ -359,16 +420,40 @@ function CrossTrick({ trick, winner, turnSeat, lastAutoPlay, highlight, openingL
 				</div>
 			)}
 			<div className="absolute left-1/2 -translate-x-1/2 top-3">
-				<CardSlot seat="N" trick={trick} size="lg" isWinner={winner==='N'} dim={!!winner && winner!=='N'} />
+				<CardSlot
+					seat="N"
+					trick={trick}
+					size="lg"
+					isWinner={winner === 'N'}
+					dim={!!winner && winner !== 'N'}
+				/>
 			</div>
 			<div className="absolute right-4 top-1/2 -translate-y-1/2">
-				<CardSlot seat="E" trick={trick} size="lg" isWinner={winner==='E'} dim={!!winner && winner!=='E'} />
+				<CardSlot
+					seat="E"
+					trick={trick}
+					size="lg"
+					isWinner={winner === 'E'}
+					dim={!!winner && winner !== 'E'}
+				/>
 			</div>
 			<div className="absolute left-4 top-1/2 -translate-y-1/2">
-				<CardSlot seat="W" trick={trick} size="lg" isWinner={winner==='W'} dim={!!winner && winner!=='W'} />
+				<CardSlot
+					seat="W"
+					trick={trick}
+					size="lg"
+					isWinner={winner === 'W'}
+					dim={!!winner && winner !== 'W'}
+				/>
 			</div>
 			<div className="absolute left-1/2 -translate-x-1/2 bottom-3">
-				<CardSlot seat="S" trick={trick} size="lg" isWinner={winner==='S'} dim={!!winner && winner!=='S'} />
+				<CardSlot
+					seat="S"
+					trick={trick}
+					size="lg"
+					isWinner={winner === 'S'}
+					dim={!!winner && winner !== 'S'}
+				/>
 			</div>
 			{/* Auto-play details hidden from central panel to keep visuals clean */}
 		</div>
@@ -531,8 +616,8 @@ export default function Player() {
 	const [showAuctionModal, setShowAuctionModal] = useState(false)
 	const [handInfoOpen, setHandInfoOpen] = useState(false)
 	const [playStarted, setPlayStarted] = useState(false)
-    const [soundOn, setSoundOn] = useState(true)
-    const [showCelebration, setShowCelebration] = useState(false)
+	const [soundOn, setSoundOn] = useState(true)
+	const [showCelebration, setShowCelebration] = useState(false)
 
 	const playIdxRef = useRef(0)
 	const pauseRef = useRef(false)
@@ -649,7 +734,8 @@ export default function Player() {
 			return
 		}
 		// otherwise, show modal only if nothing to derive and no manual
-		if (!hasAuction && !current.contract && !hasManual) setShowAuctionModal(true)
+		if (!hasAuction && !current.contract && !hasManual)
+			setShowAuctionModal(true)
 		else setShowAuctionModal(false)
 	}, [current, manualLevel, manualStrain, validatedAuction])
 
@@ -730,12 +816,7 @@ export default function Player() {
 			return
 		}
 		const leader = openingLeader
-		const init = createInitialManualState(
-			hands,
-			leader,
-			effTrump,
-			effDeclarer
-		)
+		const init = createInitialManualState(hands, leader, effTrump, effDeclarer)
 		setRemaining(init.remaining)
 		setTrick(init.trick)
 		setTurnSeat(init.turnSeat)
@@ -751,7 +832,14 @@ export default function Player() {
 		setVisibilityMode('hidden')
 		setHideDefenders(true)
 		setPlayStarted(false)
-	}, [hands, effTrump, effDeclarer, current?.playLeader, current?.dealer, openingLeader])
+	}, [
+		hands,
+		effTrump,
+		effDeclarer,
+		current?.playLeader,
+		current?.dealer,
+		openingLeader,
+	])
 
 	useEffect(() => {
 		if (!hands || !effTrump || !effDeclarer) {
@@ -921,7 +1009,7 @@ export default function Player() {
 			}
 			const r = playCardManual(engine, seat, cardId)
 			if (!r.ok) return
-            playSwish()
+			playSwish()
 			const next = r.state
 			setRemaining(next.remaining)
 			setTrick(next.trick)
@@ -944,12 +1032,16 @@ export default function Player() {
 				if (!pauseRef.current) {
 					setTimeout(() => setFlashWinner(null), 800)
 				}
-                if (effDeclarer) {
-                    if (isDeclarerSide(r.winner, effDeclarer)) playTing()
-                    else playKlaxon()
-                }
+				if (effDeclarer) {
+					if (isDeclarerSide(r.winner, effDeclarer)) playTing()
+					else playKlaxon()
+				}
 				setCompletedTrickList((lst) => {
-					const entry = { no: lst.length + 1, winner: r.winner, cards: next.trick }
+					const entry = {
+						no: lst.length + 1,
+						winner: r.winner,
+						cards: next.trick,
+					}
 					// update last trick preview
 					setLastTrickPreview(entry)
 					return [...lst, entry]
@@ -1119,7 +1211,9 @@ export default function Player() {
 	// Celebration when contract is made at end of hand
 	useEffect(() => {
 		if (completedTricks < 13 || !effContract) return
-		const m = String(effContract).toUpperCase().match(/^(\d)(C|D|H|S|NT)/)
+		const m = String(effContract)
+			.toUpperCase()
+			.match(/^(\d)(C|D|H|S|NT)/)
 		if (!m) return
 		const target = 6 + parseInt(m[1], 10)
 		if (tricksDecl >= target) {
@@ -1197,12 +1291,7 @@ export default function Player() {
 		(to) => {
 			if (!hands) return
 			const leader = openingLeader
-			let st = createInitialManualState(
-				hands,
-				leader,
-				effTrump,
-				effDeclarer
-			)
+			let st = createInitialManualState(hands, leader, effTrump, effDeclarer)
 			for (const mv of history.slice(0, to)) {
 				const r = playCardManual(st, mv.seat, mv.cardId)
 				if (!r.ok) break
@@ -1450,7 +1539,9 @@ export default function Player() {
 						<span>Show completed tricks</span>
 					</label>
 					<div className="mt-1 border-t pt-2">
-						<div className="font-semibold text-[11px] text-gray-700 mb-1">Audio</div>
+						<div className="font-semibold text-[11px] text-gray-700 mb-1">
+							Audio
+						</div>
 						<label className="flex items-center gap-1">
 							<input
 								type="checkbox"
@@ -1598,22 +1689,56 @@ export default function Player() {
 						<div className="text-[10px] text-gray-600 mb-1">Last trick</div>
 						<div className="relative rounded-2xl border bg-emerald-900/30 backdrop-blur-sm p-2">
 							<div className="relative w-[320px] h-[200px] bg-[#0b5d27] rounded-xl border overflow-hidden">
-								<div className="absolute inset-0 opacity-[0.06]" style={{backgroundImage:'repeating-linear-gradient(145deg, rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 1px, transparent 1px, transparent 7px)'}} />
+								<div
+									className="absolute inset-0 opacity-[0.06]"
+									style={{
+										backgroundImage:
+											'repeating-linear-gradient(145deg, rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 1px, transparent 1px, transparent 7px)',
+									}}
+								/>
 								<div className="absolute left-1/2 -translate-x-1/2 top-3">
-									<CardSlot seat="N" trick={lastTrickPreview.cards} size="md" tilt={false} />
-									<div className="text-[10px] text-white/80 text-center mt-0.5">N</div>
+									<CardSlot
+										seat="N"
+										trick={lastTrickPreview.cards}
+										size="md"
+										tilt={false}
+									/>
+									<div className="text-[10px] text-white/80 text-center mt-0.5">
+										N
+									</div>
 								</div>
 								<div className="absolute right-3 top-1/2 -translate-y-1/2">
-									<CardSlot seat="E" trick={lastTrickPreview.cards} size="md" tilt={false} />
-									<div className="text-[10px] text-white/80 text-center mt-0.5">E</div>
+									<CardSlot
+										seat="E"
+										trick={lastTrickPreview.cards}
+										size="md"
+										tilt={false}
+									/>
+									<div className="text-[10px] text-white/80 text-center mt-0.5">
+										E
+									</div>
 								</div>
 								<div className="absolute left-3 top-1/2 -translate-y-1/2">
-									<CardSlot seat="W" trick={lastTrickPreview.cards} size="md" tilt={false} />
-									<div className="text-[10px] text-white/80 text-center mt-0.5">W</div>
+									<CardSlot
+										seat="W"
+										trick={lastTrickPreview.cards}
+										size="md"
+										tilt={false}
+									/>
+									<div className="text-[10px] text-white/80 text-center mt-0.5">
+										W
+									</div>
 								</div>
 								<div className="absolute left-1/2 -translate-x-1/2 bottom-3">
-									<CardSlot seat="S" trick={lastTrickPreview.cards} size="md" tilt={false} />
-									<div className="text-[10px] text-white/80 text-center mt-0.5">S</div>
+									<CardSlot
+										seat="S"
+										trick={lastTrickPreview.cards}
+										size="md"
+										tilt={false}
+									/>
+									<div className="text-[10px] text-white/80 text-center mt-0.5">
+										S
+									</div>
 								</div>
 								<div className="absolute bottom-2 right-2 text-[11px] bg-yellow-300/90 text-black px-1.5 py-0.5 rounded">
 									Winner: {lastTrickPreview.winner}
@@ -1634,8 +1759,7 @@ export default function Player() {
 									onClick={() => setPlayStarted((v) => !v)}
 									className={`px-2 py-1 rounded text-white text-[12px] disabled:opacity-50 ${
 										playStarted ? 'bg-rose-600' : 'bg-emerald-600'
-									}`}
-								>
+									}`}>
 									{playStarted ? 'Stop' : 'Start Play'}
 								</button>
 								<button
@@ -1663,28 +1787,92 @@ export default function Player() {
 									</div>
 									<div className="mb-2 grid grid-cols-1 md:grid-cols-2 gap-3">
 										<div className="border rounded bg-white/70 p-2">
-											<div className="font-semibold text-indigo-700 mb-1">Declarer snapshot</div>
+											<div className="font-semibold text-indigo-700 mb-1">
+												Declarer snapshot
+											</div>
 											{preAnalysis ? (
 												<ul className="list-disc ml-4 space-y-0.5">
-													<li>Partnership HCP: <span className="font-semibold">{preAnalysis.partnershipHcp}</span> (You: {preAnalysis.hcpDecl}, Dummy: {preAnalysis.hcpDummy})</li>
-													<li>Shapes: <span className="font-semibold">{preAnalysis.shapeDecl}</span> (You), <span className="font-semibold">{preAnalysis.shapeDummy}</span> (Dummy)</li>
-													<li>Trump: <span className="font-semibold">{preAnalysis.trumpSuit || 'NT'}</span> — length You/Dummy: <span className="font-semibold">{preAnalysis.trumpLens.decl}/{preAnalysis.trumpLens.dummy}</span> (Total {preAnalysis.trumpLens.total})</li>
-													<li>Sure winners: <span className="font-semibold">{preAnalysis.sureWinnerSuits.join(', ') || '—'}</span></li>
-													<li>Problem suits: <span className="font-semibold">{preAnalysis.problemSuits.join(', ') || '—'}</span></li>
-													<li>Likely entries (A/K outside trump): <span className="font-semibold">{preAnalysis.entryCount}</span></li>
+													<li>
+														Partnership HCP:{' '}
+														<span className="font-semibold">
+															{preAnalysis.partnershipHcp}
+														</span>{' '}
+														(You: {preAnalysis.hcpDecl}, Dummy:{' '}
+														{preAnalysis.hcpDummy})
+													</li>
+													<li>
+														Shapes:{' '}
+														<span className="font-semibold">
+															{preAnalysis.shapeDecl}
+														</span>{' '}
+														(You),{' '}
+														<span className="font-semibold">
+															{preAnalysis.shapeDummy}
+														</span>{' '}
+														(Dummy)
+													</li>
+													<li>
+														Trump:{' '}
+														<span className="font-semibold">
+															{preAnalysis.trumpSuit || 'NT'}
+														</span>{' '}
+														— length You/Dummy:{' '}
+														<span className="font-semibold">
+															{preAnalysis.trumpLens.decl}/
+															{preAnalysis.trumpLens.dummy}
+														</span>{' '}
+														(Total {preAnalysis.trumpLens.total})
+													</li>
+													<li>
+														Sure winners:{' '}
+														<span className="font-semibold">
+															{preAnalysis.sureWinnerSuits.join(', ') || '—'}
+														</span>
+													</li>
+													<li>
+														Problem suits:{' '}
+														<span className="font-semibold">
+															{preAnalysis.problemSuits.join(', ') || '—'}
+														</span>
+													</li>
+													<li>
+														Likely entries (A/K outside trump):{' '}
+														<span className="font-semibold">
+															{preAnalysis.entryCount}
+														</span>
+													</li>
 												</ul>
 											) : (
-												<div className="text-gray-500 italic">Load a deal and set the contract to see planning hints.</div>
+												<div className="text-gray-500 italic">
+													Load a deal and set the contract to see planning
+													hints.
+												</div>
 											)}
 										</div>
 										<div className="border rounded bg-white/70 p-2">
-											<div className="font-semibold text-indigo-700 mb-1">Teacher prompts</div>
+											<div className="font-semibold text-indigo-700 mb-1">
+												Teacher prompts
+											</div>
 											<ul className="list-disc ml-4 space-y-0.5">
-												<li>What are the sure tricks? Where will extra tricks come from?</li>
-												<li>Which suit(s) to develop? Where are the entries?</li>
-												<li>What could defenders hold in long suits? Who guards trumps?</li>
-												<li>If dummy is short in trump, plan ruffs; if long, consider drawing trumps early.</li>
-												<li>Consider the lead: does it suggest a specific holding or sequence?</li>
+												<li>
+													What are the sure tricks? Where will extra tricks come
+													from?
+												</li>
+												<li>
+													Which suit(s) to develop? Where are the entries?
+												</li>
+												<li>
+													What could defenders hold in long suits? Who guards
+													trumps?
+												</li>
+												<li>
+													If dummy is short in trump, plan ruffs; if long,
+													consider drawing trumps early.
+												</li>
+												<li>
+													Consider the lead: does it suggest a specific holding
+													or sequence?
+												</li>
 											</ul>
 										</div>
 									</div>
@@ -1714,7 +1902,9 @@ export default function Player() {
 											(effDeclarer === 'N' || partnerOf(effDeclarer) === 'N')
 										}
 										lastAutoSeat={lastAutoSeat}
-										openingLeader={history.length === 0 && openingLeader === 'N'}
+										openingLeader={
+											history.length === 0 && openingLeader === 'N'
+										}
 										playStarted={playStarted}
 										openingLeadPulse={openingLeadPulse && openingLeader === 'N'}
 									/>
@@ -1746,7 +1936,9 @@ export default function Player() {
 											(effDeclarer === 'W' || partnerOf(effDeclarer) === 'W')
 										}
 										lastAutoSeat={lastAutoSeat}
-										openingLeader={history.length === 0 && openingLeader === 'W'}
+										openingLeader={
+											history.length === 0 && openingLeader === 'W'
+										}
 										playStarted={playStarted}
 										openingLeadPulse={openingLeadPulse && openingLeader === 'W'}
 									/>
@@ -1768,7 +1960,9 @@ export default function Player() {
 											(effDeclarer === 'E' || partnerOf(effDeclarer) === 'E')
 										}
 										lastAutoSeat={lastAutoSeat}
-										openingLeader={history.length === 0 && openingLeader === 'E'}
+										openingLeader={
+											history.length === 0 && openingLeader === 'E'
+										}
 										playStarted={playStarted}
 										openingLeadPulse={openingLeadPulse && openingLeader === 'E'}
 									/>
@@ -1790,7 +1984,9 @@ export default function Player() {
 											(effDeclarer === 'S' || partnerOf(effDeclarer) === 'S')
 										}
 										lastAutoSeat={lastAutoSeat}
-										openingLeader={history.length === 0 && openingLeader === 'S'}
+										openingLeader={
+											history.length === 0 && openingLeader === 'S'
+										}
 										playStarted={playStarted}
 										openingLeadPulse={openingLeadPulse && openingLeader === 'S'}
 									/>

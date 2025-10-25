@@ -31,7 +31,9 @@ export function parsePBN(text) {
 		return 'N'
 	}
 	const normVul = (val) => {
-		const up = String(val || '').trim().toUpperCase()
+		const up = String(val || '')
+			.trim()
+			.toUpperCase()
 		if (up === 'BOTH') return 'All'
 		if (up === 'NEITHER') return 'None'
 		if (up === 'LOVE' || up === 'NONE') return 'None'
@@ -167,7 +169,11 @@ export function parsePBN(text) {
 				let up = calls.map((c) => String(c).toUpperCase())
 				while (
 					up.length < lastBidIdx + 4 ||
-					!(isPass(up[up.length - 1]) && isPass(up[up.length - 2]) && isPass(up[up.length - 3]))
+					!(
+						isPass(up[up.length - 1]) &&
+						isPass(up[up.length - 2]) &&
+						isPass(up[up.length - 3])
+					)
 				) {
 					calls.push('P')
 					up = calls.map((c) => String(c).toUpperCase())

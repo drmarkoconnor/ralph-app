@@ -12,17 +12,27 @@ body {
 
 /* Winner animation for trick completion (global so all routes can use) */
 @keyframes spinOnce {
-	0% { transform: rotate(0deg) scale(1); }
-	50% { transform: rotate(360deg) scale(1.08); }
-	100% { transform: rotate(360deg) scale(1); }
+	0% {
+		transform: rotate(0deg) scale(1);
+	}
+	50% {
+		transform: rotate(360deg) scale(1.08);
+	}
+	100% {
+		transform: rotate(360deg) scale(1);
+	}
 }
 .animate-spin-once {
 	animation: spinOnce 600ms ease-out 1 forwards;
 }
 
 @keyframes fadeDim {
-	from { opacity: 1; }
-	to { opacity: 0.35; }
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0.35;
+	}
 }
 .animate-fade-dim {
 	animation: fadeDim 500ms ease-out 1 forwards;
@@ -37,9 +47,17 @@ body {
 
 /* Celebration effects */
 @keyframes confettiFall {
-	0% { transform: translateY(-20vh) rotate(0deg); opacity: 0; }
-	10% { opacity: 1; }
-	100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+	0% {
+		transform: translateY(-20vh) rotate(0deg);
+		opacity: 0;
+	}
+	10% {
+		opacity: 1;
+	}
+	100% {
+		transform: translateY(110vh) rotate(720deg);
+		opacity: 0;
+	}
 }
 .confetti-piece {
 	position: absolute;
@@ -48,23 +66,43 @@ body {
 	height: 12px;
 	animation: confettiFall 2.8s ease-in forwards;
 }
-.confetti-0 { background: #ef4444; }
-.confetti-1 { background: #10b981; }
-.confetti-2 { background: #3b82f6; }
-.confetti-3 { background: #f59e0b; }
-.confetti-4 { background: #a78bfa; }
+.confetti-0 {
+	background: #ef4444;
+}
+.confetti-1 {
+	background: #10b981;
+}
+.confetti-2 {
+	background: #3b82f6;
+}
+.confetti-3 {
+	background: #f59e0b;
+}
+.confetti-4 {
+	background: #a78bfa;
+}
 
 @keyframes firework {
-	0% { transform: scale(0); opacity: 0.9; }
-	80% { transform: scale(1); opacity: 0.6; }
-	100% { transform: scale(1.1); opacity: 0; }
+	0% {
+		transform: scale(0);
+		opacity: 0.9;
+	}
+	80% {
+		transform: scale(1);
+		opacity: 0.6;
+	}
+	100% {
+		transform: scale(1.1);
+		opacity: 0;
+	}
 }
 .firework-burst {
 	position: absolute;
 	width: 10px;
 	height: 10px;
 	border-radius: 50%;
-	box-shadow: 0 0 0 4px rgba(255,255,255,0.9), 0 0 0 8px rgba(255,255,255,0.5), 0 0 0 12px rgba(255,255,255,0.2);
+	box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.9),
+		0 0 0 8px rgba(255, 255, 255, 0.5), 0 0 0 12px rgba(255, 255, 255, 0.2);
 	animation: firework 1200ms ease-out forwards;
 }
 
