@@ -1,4 +1,4 @@
-// Truly minimal Player rebuild (legacy code removed)
+// Player rebuilt cleanly with balanced JSX and required features
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -6,34 +6,29 @@ import {
 	playCardManual,
 } from '../lib/manualPlayEngine'
 import {
-	rightOf,
-	partnerOf,
-	isDefender,
-	hcpValue,
-	parseTrump,
-	dealToHands,
 	computeDuplicateScore,
-	neededToSet,
-	validateAuction,
+	dealToHands,
+	evaluateTrick,
+	hcpValue,
+	isDefender,
+	isDeclarerSide,
+	isSeatVul,
 	parsePlayMoves,
 	parsePlayScript,
-	isSeatVul,
-	evaluateTrick,
+	parseTrump,
+	partnerOf,
+	rightOf,
+	validateAuction,
+	neededToSet,
 } from '../lib/bridgeCore'
-import { sanitizePBN, parsePBN } from '../lib/pbn'
+import { parsePBN, sanitizePBN } from '../lib/pbn'
 
-// Temporarily disable Declarer Insight until a live coach API is integrated
-const ADVICE_ENABLED = false
-
-// --- Tiny helpers ---
+// small helpers
 const seatName = (s) =>
 	s === 'N' ? 'North' : s === 'E' ? 'East' : s === 'S' ? 'South' : 'West'
 const suitSymbol = (s) =>
 	s === 'Spades' ? '♠' : s === 'Hearts' ? '♥' : s === 'Diamonds' ? '♦' : '♣'
 
-// Note: use shared sanitized PBN parser from lib/pbn
-
-// --- UI Atoms ---
 function SeatPanel({
 	id,
 	remaining,
@@ -47,10 +42,13 @@ function SeatPanel({
 	showHCP,
 	lastAutoSeat,
 	highlight,
+	openingLeader,
+	playStarted,
+	openingLeadPulse,
 }) {
 	const hand = remaining?.[id] || []
 	const hcp = hand.reduce((s, c) => s + hcpValue(c.rank), 0)
-	const suitOrder = ['Spades', 'Hearts', 'Diamonds', 'Clubs'] // reversed order requirement
+	const suitOrder = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
 	const grouped = Object.fromEntries(
 		suitOrder.map((s) => [
 			s,
@@ -83,8 +81,13 @@ function SeatPanel({
 						? 'bg-indigo-50'
 						: 'bg-gray-50'
 				}`}>
-				<span>
+				<span className="flex items-center gap-1">
 					{seatName(id)}
+					{openingLeader && (
+						<span className="text-[8px] px-1 rounded bg-yellow-400 text-black font-bold">
+							LEAD
+						</span>
+					)}
 					{dealer === id && (
 						<span className="ml-1 text-[9px] bg-amber-500 text-white px-1 rounded">
 							D
@@ -118,17 +121,25 @@ function SeatPanel({
 								grouped[s].map((c) => {
 									const legal =
 										!isTurn || !leadSuit || !mustFollow || c.suit === leadSuit
+									const isRedSuit = c.suit === 'Hearts' || c.suit === 'Diamonds'
 									return (
 										<button
 											key={c.id}
-											disabled={!legal || !isTurn}
+											disabled={!playStarted || !legal || !isTurn}
 											onClick={() => onPlay(id, c.id)}
-											className={`px-1 text-sm rounded ${
-												legal && isTurn
-													? 'hover:bg-gray-100'
-													: 'opacity-40 cursor-not-allowed'
-											} ${highlight ? 'bg-white/90' : ''}`}>
-											{c.rank}
+											className={`px-1.5 py-0.5 text-base rounded-md font-bold shadow-sm border bg-white ${
+												isRedSuit
+													? 'text-rose-600 border-rose-300'
+													: 'text-slate-800 border-slate-300'
+											} ${
+												legal && isTurn && playStarted ? 'ring-2 ring-yellow-300' : ''
+											} ${
+												openingLeadPulse && isTurn && playStarted ? 'animate-pulse' : ''
+											} ${!playStarted || !legal || !isTurn ? 'opacity-40' : ''} ${
+												highlight ? 'outline outline-white/70' : ''
+											}`}>
+											<span className="font-extrabold tracking-tight">{c.rank}</span>
+											<span className="ml-0.5">{suitSymbol(c.suit)}</span>
 										</button>
 									)
 								})
@@ -142,212 +153,6 @@ function SeatPanel({
 					</div>
 				))}
 			</div>
-		</div>
-	)
-}
-
-function ScorePanel({
-	tricksDecl,
-	tricksDef,
-	needed,
-	contract,
-	declarer,
-	result,
-}) {
-	return (
-		<div className="rounded border bg-white p-2 text-[11px] space-y-0.5">
-			<div>
-				Declarer: <span className="font-semibold">{declarer || '-'}</span>
-			</div>
-			<div>
-				Contract: <span className="font-semibold">{contract || '-'}</span>
-			</div>
-			<div>
-				Declarer tricks: <span className="font-semibold">{tricksDecl}</span>
-			</div>
-			<div>
-				Defender tricks: <span className="font-semibold">{tricksDef}</span>
-			</div>
-			<div>
-				Defend to set: <span className="font-semibold">{needed || '-'}</span>
-			</div>
-			{result && !result.partial && (
-				<div>
-					Result: <span className="font-semibold">{result.resultText}</span>
-					{typeof result.score === 'number' && (
-						<span className="ml-1 font-semibold">
-							{result.score > 0 ? '+' : ''}
-							{result.score}
-						</span>
-					)}
-				</div>
-			)}
-		</div>
-	)
-}
-
-function MiniTrick({ trick, winner, turnSeat, lastAutoPlay }) {
-	const order = ['N', 'E', 'S', 'W']
-	return (
-		<div className="rounded border bg-white p-2">
-			<div className="text-[11px] text-gray-600 mb-1 flex items-center justify-between">
-				<span>Current Trick</span>
-				{lastAutoPlay && (
-					<span className="text-[9px] text-sky-600 font-medium">
-						AUTO {lastAutoPlay.seat}
-					</span>
-				)}
-			</div>
-			<div className="grid grid-cols-2 gap-2 w-40 mx-auto">
-				{order.map((seat) => {
-					const t = trick.find((x) => x.seat === seat)
-					const win = trick.length === 4 && winner === seat
-					const turn = turnSeat === seat
-					return (
-						<div
-							key={seat}
-							className={`h-14 rounded-md border flex flex-col items-center justify-center text-[11px] font-semibold relative ${
-								win
-									? 'border-emerald-500 ring-1 ring-emerald-400'
-									: 'border-gray-300'
-							} ${turn ? 'bg-yellow-50' : 'bg-white'}`}>
-							{' '}
-							<div className="text-[8px] text-gray-500 absolute top-0 left-0 px-1 py-0.5">
-								{seat}
-							</div>
-							{t ? (
-								<div
-									className={`${
-										t.card.suit === 'Hearts' || t.card.suit === 'Diamonds'
-											? 'text-red-600'
-											: 'text-gray-900'
-									} text-lg`}>
-									{t.card.rank}
-									{suitSymbol(t.card.suit)}
-								</div>
-							) : (
-								<span className="text-gray-300">—</span>
-							)}
-						</div>
-					)
-				})}
-			</div>
-		</div>
-	)
-}
-
-// Cross style current trick display (N at top, S bottom, W left, E right)
-function CrossTrick({ trick = [], winner, turnSeat, lastAutoPlay, highlight }) {
-	const cardFor = (seat) => trick.find((t) => t.seat === seat)
-	const CardBox = ({ seat }) => {
-		const t = cardFor(seat)
-		const win = winner === seat && trick.length === 4
-		const turn = turnSeat === seat
-		return (
-			<div
-				className={`w-16 h-20 rounded-md border flex flex-col items-center justify-center text-[11px] font-semibold shadow-sm ${
-					win ? 'border-emerald-500 ring-2 ring-emerald-400' : 'border-gray-300'
-				} ${turn ? 'bg-yellow-50' : 'bg-white'} ${
-					highlight ? 'shadow-xl ring-1 ring-yellow-300 bg-white/95' : ''
-				}`}>
-				<div className="text-[9px] text-gray-500 mb-0.5">{seat}</div>
-				{t ? (
-					<div
-						className={`text-base ${
-							t.card.suit === 'Hearts' || t.card.suit === 'Diamonds'
-								? 'text-red-600'
-								: 'text-gray-900'
-						}`}>
-						{t.card.rank}
-						{suitSymbol(t.card.suit)}
-					</div>
-				) : (
-					<span className="text-gray-300 text-sm">—</span>
-				)}
-			</div>
-		)
-	}
-	return (
-		<div
-			className={`relative w-64 h-64 mx-auto rounded-xl border bg-white/80 backdrop-blur-sm shadow-inner flex items-center justify-center ${
-				highlight ? 'z-20 ring-2 ring-yellow-300 shadow-xl' : ''
-			}`}>
-			<div className="absolute top-2 left-1/2 -translate-x-1/2">
-				<CardBox seat="N" />
-			</div>
-			<div className="absolute bottom-2 left-1/2 -translate-x-1/2">
-				<CardBox seat="S" />
-			</div>
-			<div className="absolute left-2 top-1/2 -translate-y-1/2">
-				<CardBox seat="W" />
-			</div>
-			<div className="absolute right-2 top-1/2 -translate-y-1/2">
-				<CardBox seat="E" />
-			</div>
-			<div className="text-[10px] absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-sky-600 text-white shadow">
-				{lastAutoPlay ? `AUTO ${lastAutoPlay.seat}` : 'Current Trick'}
-			</div>
-		</div>
-	)
-}
-
-function AdvicePanel({ entries }) {
-	if (!entries || !entries.length)
-		return (
-			<div className="text-xs italic text-gray-400">
-				Declarer advice will appear here as you play.
-			</div>
-		)
-	const latest = entries[entries.length - 1]
-	const face =
-		latest.quality === 'good' ? '😃' : latest.quality === 'bad' ? '😕' : '🙂'
-	return (
-		<div className="text-sm bg-gradient-to-br from-indigo-50 via-white to-violet-50 border border-indigo-200 shadow rounded-lg p-3 space-y-2 w-64">
-			<div className="flex items-center justify-between">
-				<div className="font-semibold text-indigo-700 flex items-center gap-1">
-					Declarer Insight <span>{face}</span>
-				</div>
-				<div
-					className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded ${
-						latest.quality === 'good'
-							? 'bg-green-100 text-green-700'
-							: latest.quality === 'bad'
-							? 'bg-rose-100 text-rose-700'
-							: 'bg-gray-100 text-gray-600'
-					}`}>
-					{latest.quality}
-				</div>
-			</div>
-			<div className="text-gray-700 leading-snug">{latest.why}</div>
-			<div className="text-indigo-800 text-[13px] font-medium">
-				Next Thought
-			</div>
-			<div className="text-indigo-700 leading-snug">{latest.next}</div>
-			{latest.principle && (
-				<div className="text-[11px] text-indigo-900 bg-indigo-100/60 border border-indigo-200 px-2 py-1 rounded">
-					{latest.principle}
-				</div>
-			)}
-			{entries.length > 1 && (
-				<details className="text-[11px] mt-1">
-					<summary className="cursor-pointer text-gray-500 hover:text-gray-700">
-						Previous advice history
-					</summary>
-					<ul className="mt-1 max-h-40 overflow-auto space-y-1 pr-1">
-						{[...entries]
-							.slice(-15, -1)
-							.reverse()
-							.map((e) => (
-								<li
-									key={e.id}
-									className="border-l pl-2 text-[11px] leading-snug">
-									<span className="font-semibold">{e.card}</span> –{' '}
-									<span className="italic">{e.quality}</span>: {e.why}
-								</li>
-							))}
-					</ul>
-				</details>
-			)}
 		</div>
 	)
 }
@@ -402,22 +207,306 @@ function PreUpload({ onChooseFile }) {
 	)
 }
 
-// --- Root Component ---
+function ScorePanel({
+	tricksDecl,
+	tricksDef,
+	needed,
+	contract,
+	declarer,
+	result,
+}) {
+	return (
+		<div className="rounded border bg-white p-2 text-[11px] space-y-1">
+			<div className="font-semibold text-gray-700">Score</div>
+			<div>
+				Contract: <span className="font-semibold">{contract || '-'}</span>
+			</div>
+			<div>
+				Tricks:{' '}
+				<span className="font-semibold">
+					{tricksDecl} for, {tricksDef} against
+				</span>
+			</div>
+			{typeof needed === 'number' && (
+				<div>
+					Needed to set: <span className="font-semibold">{needed}</span>
+				</div>
+			)}
+			{result && (
+				<div>
+					Score: <span className="font-semibold">{result.score}</span>{' '}
+					<span className="text-gray-600">({result.label})</span>
+				</div>
+			)}
+		</div>
+	)
+}
+
+function CardSlot({ seat, trick, size = 'lg', isWinner = false, dim = false, tilt = true }) {
+	const it = trick.find((t) => t.seat === seat)
+	const dims =
+		size === 'lg'
+			? { w: 'w-24', h: 'h-36', text: 'text-4xl', corner: 'text-sm' }
+			: size === 'sm'
+			? { w: 'w-14', h: 'h-20', text: 'text-xl', corner: 'text-[9px]' }
+			: { w: 'w-16', h: 'h-24', text: 'text-2xl', corner: 'text-[10px]' }
+	if (!it)
+		return (
+			<div className={`${dims.w} ${dims.h} rounded-xl border bg-white/90 shadow-inner`} />
+		)
+	const isRed = it.card.suit === 'Hearts' || it.card.suit === 'Diamonds'
+	const suitColor = isRed ? 'text-rose-600' : 'text-slate-800'
+	const isFace = ['J', 'Q', 'K'].includes(it.card.rank)
+	const rotateClass = tilt ? (seat === 'E' ? 'rotate-6' : seat === 'W' ? '-rotate-6' : '') : ''
+	const borderClass = isRed ? 'border-rose-200' : 'border-slate-200'
+	return (
+		<div
+			className={`relative ${dims.w} ${dims.h} rounded-[14px] ${borderClass} bg-white flex items-center justify-center overflow-hidden ${rotateClass} ${isWinner ? 'winner-gold animate-spin-once' : ''} ${dim ? 'animate-fade-dim' : ''}`}
+			style={{
+				boxShadow:
+					'0 8px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -3px 10px rgba(0,0,0,0.10)'
+			}}
+		>
+			{/* faint paper texture */}
+			<div
+				className="absolute inset-0 opacity-[0.04] pointer-events-none"
+				style={{
+					backgroundImage:
+						'repeating-linear-gradient(135deg, #000 0, #000 1px, transparent 1px, transparent 6px)'
+				}}
+			/>
+			{/* gloss highlight */}
+			<div
+				className="absolute inset-0 pointer-events-none"
+				style={{
+					background:
+						'radial-gradient(circle at 20% 0%, rgba(255,255,255,0.55), rgba(255,255,255,0.05) 40%, rgba(255,255,255,0) 60%)'
+				}}
+			/>
+			{/* subtle suit watermark for face cards */}
+			{isFace && (
+				<div className="absolute inset-0 opacity-10 pointer-events-none select-none">
+					<div className={`absolute -rotate-12 ${dims.text} ${suitColor} right-2 bottom-2`}>{suitSymbol(it.card.suit)}</div>
+					<div className={`absolute rotate-12 ${dims.text} ${suitColor} left-2 top-2`}>{suitSymbol(it.card.suit)}</div>
+				</div>
+			)}
+			{/* face-card icon overlays */}
+			{isFace && (
+				<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+					{it.card.rank === 'K' || it.card.rank === 'Q' ? (
+						<svg width="72" height="72" viewBox="0 0 64 64" className="opacity-15" aria-hidden>
+							<path d="M8 40 L20 12 L32 28 L44 12 L56 40 L8 40 Z" fill={isRed ? '#dc2626' : '#1f2937'} />
+							<circle cx="32" cy="36" r="6" fill="white" opacity="0.5" />
+						</svg>
+					) : (
+						<svg width="72" height="72" viewBox="0 0 64 64" className="opacity-15" aria-hidden>
+							<path d="M10 44 C20 28, 44 28, 54 44 L48 46 C42 36, 22 36, 16 46 Z" fill={isRed ? '#dc2626' : '#1f2937'} />
+							<circle cx="24" cy="30" r="5" fill="white" opacity="0.45" />
+							<circle cx="40" cy="30" r="5" fill="white" opacity="0.45" />
+						</svg>
+					)}
+				</div>
+			)}
+			{/* top-left small suit */}
+			<div className={`absolute top-1 left-1 ${dims.corner} ${suitColor}`}>
+				{suitSymbol(it.card.suit)}
+			</div>
+			{/* bottom-right small suit (rotated) */}
+			<div className={`absolute bottom-1 right-1 ${dims.corner} ${suitColor} rotate-180`}>
+				{suitSymbol(it.card.suit)}
+			</div>
+			{/* center rank + suit */}
+			<div className={`${dims.text} font-extrabold ${suitColor} drop-shadow-sm`}>
+				{it.card.rank}
+				<span className="ml-0.5">{suitSymbol(it.card.suit)}</span>
+			</div>
+		</div>
+	)
+}
+
+function CrossTrick({ trick, winner, turnSeat, lastAutoPlay, highlight, openingLeader }) {
+	return (
+		<div
+			className={`relative rounded-3xl border-2 w-[560px] h-[340px] shadow-inner overflow-hidden ${
+				highlight ? 'ring-2 ring-yellow-300' : ''
+			}`}
+			style={{ background: '#0b5d27' }}
+		>
+			{/* felt texture overlays */}
+			<div className="absolute inset-0 pointer-events-none" style={{
+				background:
+					'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.12), rgba(255,255,255,0) 40%), radial-gradient(circle at 70% 80%, rgba(0,0,0,0.10), rgba(0,0,0,0) 55%)'
+			}} />
+			<div className="absolute inset-0 opacity-[0.06] pointer-events-none" style={{
+				backgroundImage: 'repeating-linear-gradient(145deg, rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 1px, transparent 1px, transparent 7px)'
+			}} />
+			<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+				<div className="text-[11px] text-gray-500">
+					{winner ? (
+						<span className="text-green-700 font-semibold">
+							Trick to {winner}
+						</span>
+					) : turnSeat ? (
+						<span>Turn: {turnSeat}</span>
+					) : (
+						<span>&nbsp;</span>
+					)}
+				</div>
+			</div>
+			{openingLeader && (
+				<div className="absolute top-2 right-2 text-[10px] bg-yellow-300 text-black px-2 py-0.5 rounded shadow">
+					Opening lead: {openingLeader}
+				</div>
+			)}
+			<div className="absolute left-1/2 -translate-x-1/2 top-3">
+				<CardSlot seat="N" trick={trick} size="lg" isWinner={winner==='N'} dim={!!winner && winner!=='N'} />
+			</div>
+			<div className="absolute right-4 top-1/2 -translate-y-1/2">
+				<CardSlot seat="E" trick={trick} size="lg" isWinner={winner==='E'} dim={!!winner && winner!=='E'} />
+			</div>
+			<div className="absolute left-4 top-1/2 -translate-y-1/2">
+				<CardSlot seat="W" trick={trick} size="lg" isWinner={winner==='W'} dim={!!winner && winner!=='W'} />
+			</div>
+			<div className="absolute left-1/2 -translate-x-1/2 bottom-3">
+				<CardSlot seat="S" trick={trick} size="lg" isWinner={winner==='S'} dim={!!winner && winner!=='S'} />
+			</div>
+			{/* Auto-play details hidden from central panel to keep visuals clean */}
+		</div>
+	)
+}
+
+function ContractBadge({ contract, declarer }) {
+	if (!contract) return null
+	const m = contract.match(/^(\d)([CDHSN]{1,2})(X{0,2})$/i)
+	if (!m)
+		return (
+			<div className="rounded-xl border-2 border-indigo-300 bg-gradient-to-br from-sky-50 to-indigo-50 px-5 py-3 text-xl font-bold tracking-wide">
+				{contract}
+			</div>
+		)
+	const level = m[1]
+	let strain = m[2].toUpperCase()
+	const dbl = m[3]
+	const suitMap = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT', N: 'NT' }
+	if (strain === 'N') strain = 'NT'
+	const sym = suitMap[strain] || strain
+	const isRed = strain === 'H' || strain === 'D'
+	const colorClass = isRed
+		? 'text-rose-600 drop-shadow-sm'
+		: 'text-slate-800 drop-shadow-sm'
+	const bgGrad = isRed
+		? 'from-rose-100 via-amber-50 to-rose-50'
+		: 'from-emerald-100 via-sky-50 to-indigo-100'
+	return (
+		<div
+			className={`relative rounded-2xl border-4 border-indigo-300/70 bg-gradient-to-br ${bgGrad} shadow-lg px-6 py-4 flex flex-col items-center justify-center min-w-[120px]`}>
+			<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-1">
+				FINAL CONTRACT
+			</div>
+			<div className={`text-5xl font-extrabold leading-none ${colorClass}`}>
+				{level}
+				{sym}
+				{dbl && <span className="text-indigo-700 text-3xl ml-1">{dbl}</span>}
+			</div>
+			{declarer && (
+				<div className="mt-2 text-[12px] font-semibold text-indigo-700 bg-white/60 px-2 py-0.5 rounded-full shadow-inner">
+					Declarer {declarer}
+				</div>
+			)}
+		</div>
+	)
+}
+
+function AuctionGraphic({ auction = [], dealer = 'N', contract, declarer }) {
+	if (!auction.length && !contract) return null
+	const seats = ['N', 'E', 'S', 'W']
+	const startIdx = seats.indexOf(dealer || 'N')
+	const orderedSeats = [0, 1, 2, 3].map((i) => seats[(startIdx + i) % 4])
+	const rounds = []
+	for (let i = 0; i < auction.length; i += 4)
+		rounds.push(auction.slice(i, i + 4))
+	while (rounds.length && rounds[rounds.length - 1].length < 4)
+		rounds[rounds.length - 1].push('')
+	const callClass = (c) =>
+		c === ''
+			? 'text-gray-300'
+			: /^(P|Pass)$/i.test(c)
+			? 'text-gray-500'
+			: /^(X|XX)$/.test(c)
+			? 'text-indigo-700 font-semibold'
+			: 'font-semibold'
+	return (
+		<div className="flex items-center gap-6">
+			<div className="rounded-2xl border-2 border-indigo-200 bg-white/80 backdrop-blur px-4 py-3 shadow-inner">
+				<div className="text-[11px] font-semibold tracking-wide text-indigo-600 mb-1">
+					AUCTION (Dealer {dealer})
+				</div>
+				<table className="text-sm font-medium">
+					<thead>
+						<tr>
+							{orderedSeats.map((s) => (
+								<th key={s} className="px-2 py-1 text-indigo-700 font-semibold">
+									{s}
+								</th>
+							))}
+						</tr>
+					</thead>
+					<tbody>
+						{rounds.map((r, i) => (
+							<tr key={i}>
+								{orderedSeats.map((seat, idx) => {
+									const call = r[idx] || ''
+									const final = call && i * 4 + idx === auction.length - 1
+									const base = `px-2 py-0.5 text-center rounded transition-colors ${callClass(
+										call
+									)}`
+									return (
+										<td key={seat} className="p-0">
+											<span
+												className={`${base} ${
+													final
+														? 'bg-yellow-200/70 ring-2 ring-yellow-400 shadow font-bold'
+														: ''
+												}`}>
+												{call || '—'}
+											</span>
+										</td>
+									)
+								})}
+							</tr>
+						))}
+					</tbody>
+				</table>
+				{!auction.length && (
+					<div className="text-[11px] italic text-gray-500">
+						No auction provided (manual contract)
+					</div>
+				)}
+			</div>
+			<ContractBadge contract={contract} declarer={declarer} />
+		</div>
+	)
+}
+
 export default function Player() {
 	const [deals, setDeals] = useState([])
 	const [index, setIndex] = useState(0)
 	const [selectedName, setSelectedName] = useState('')
 	const current = deals[index]
+
 	const [manualDeclarer, setManualDeclarer] = useState('')
 	const [manualLevel, setManualLevel] = useState('')
 	const [manualStrain, setManualStrain] = useState('')
 	const [manualDbl, setManualDbl] = useState('')
-	const [hideDefenders, setHideDefenders] = useState(false)
+
+	const [visibilityMode, setVisibilityMode] = useState('hidden')
+	const [hideDefenders, setHideDefenders] = useState(true)
 	const [fastAutoDef, setFastAutoDef] = useState(false)
 	const [aiDifficulty, setAiDifficulty] = useState('Intermediate')
 	const [signalMode, setSignalMode] = useState('Standard')
 	const [showAiLog, setShowAiLog] = useState(true)
 	const [pauseAtTrickEnd, setPauseAtTrickEnd] = useState(false)
+
 	const [remaining, setRemaining] = useState(null)
 	const [trick, setTrick] = useState([])
 	const [turnSeat, setTurnSeat] = useState(null)
@@ -430,28 +519,111 @@ export default function Player() {
 	const [playIdx, setPlayIdx] = useState(0)
 	const [flashWinner, setFlashWinner] = useState(null)
 	const [completedTrickList, setCompletedTrickList] = useState([])
+	const [lastTrickPreview, setLastTrickPreview] = useState(null)
 	const [lastAutoSeat, setLastAutoSeat] = useState(null)
 	const [lastAutoPlay, setLastAutoPlay] = useState(null)
 	const [aiLogs, setAiLogs] = useState([])
-	const [adviceEntries, setAdviceEntries] = useState([]) // learning feedback entries
-	const [showAdvice, setShowAdvice] = useState(false)
 	const [showCompletedTricks, setShowCompletedTricks] = useState(true)
-	// Teacher focus mode (collapses sidebar, darkens background, highlights seats & trick area)
 	const [teacherFocus, setTeacherFocus] = useState(false)
-	// Planning state
-	const [planWinners, setPlanWinners] = useState('')
-	const [planLosers, setPlanLosers] = useState('')
 	const [actualWinners, setActualWinners] = useState(null)
 	const [actualLosers, setActualLosers] = useState(null)
-	const [planSubmitted, setPlanSubmitted] = useState(false)
-	const [planEvaluated, setPlanEvaluated] = useState(false)
-	const [preAnalysis, setPreAnalysis] = useState(null) // snapshot info for planning panel
+	const [preAnalysis, setPreAnalysis] = useState(null)
 	const [showAuctionModal, setShowAuctionModal] = useState(false)
-	const [planningOpen, setPlanningOpen] = useState(true)
+	const [handInfoOpen, setHandInfoOpen] = useState(false)
+	const [playStarted, setPlayStarted] = useState(false)
+    const [soundOn, setSoundOn] = useState(true)
+    const [showCelebration, setShowCelebration] = useState(false)
+
 	const playIdxRef = useRef(0)
 	const pauseRef = useRef(false)
 	const fileRef = useRef(null)
-	const initialTrumpRef = useRef(null) // {decl,dummy,defenders,total}
+	const initialTrumpRef = useRef(null)
+	const audioCtxRef = useRef(null)
+
+	// --- Audio helpers ---
+	const ensureAudio = useCallback(() => {
+		if (!soundOn) return null
+		try {
+			if (!audioCtxRef.current) {
+				const Ctx = window.AudioContext || window.webkitAudioContext
+				audioCtxRef.current = new Ctx()
+			}
+			if (audioCtxRef.current.state === 'suspended') {
+				audioCtxRef.current.resume()
+			}
+			return audioCtxRef.current
+		} catch {
+			return null
+		}
+	}, [soundOn])
+
+	const playSwish = useCallback(() => {
+		const ctx = ensureAudio()
+		if (!ctx) return
+		const dur = 0.18
+		const sampleRate = ctx.sampleRate
+		const length = Math.floor(sampleRate * dur)
+		const buffer = ctx.createBuffer(1, length, sampleRate)
+		const data = buffer.getChannelData(0)
+		for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * 0.6
+		const src = ctx.createBufferSource()
+		src.buffer = buffer
+		const filter = ctx.createBiquadFilter()
+		filter.type = 'lowpass'
+		filter.frequency.setValueAtTime(900, ctx.currentTime)
+		filter.frequency.exponentialRampToValueAtTime(240, ctx.currentTime + dur)
+		const gain = ctx.createGain()
+		gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+		gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.04)
+		gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur)
+		src.connect(filter)
+		filter.connect(gain)
+		gain.connect(ctx.destination)
+		src.start()
+	}, [ensureAudio])
+
+	const playTing = useCallback(() => {
+		const ctx = ensureAudio()
+		if (!ctx) return
+		const now = ctx.currentTime
+		const osc = ctx.createOscillator()
+		osc.type = 'triangle'
+		osc.frequency.setValueAtTime(880, now)
+		osc.frequency.exponentialRampToValueAtTime(1320, now + 0.05)
+		const gain = ctx.createGain()
+		gain.gain.setValueAtTime(0.0001, now)
+		gain.gain.exponentialRampToValueAtTime(0.4, now + 0.02)
+		gain.gain.exponentialRampToValueAtTime(0.002, now + 0.35)
+		osc.connect(gain)
+		gain.connect(ctx.destination)
+		osc.start(now)
+		osc.stop(now + 0.4)
+	}, [ensureAudio])
+
+	const playKlaxon = useCallback(() => {
+		const ctx = ensureAudio()
+		if (!ctx) return
+		const now = ctx.currentTime
+		const osc = ctx.createOscillator()
+		osc.type = 'sawtooth'
+		osc.frequency.setValueAtTime(220, now)
+		const lfo = ctx.createOscillator()
+		lfo.frequency.setValueAtTime(6, now)
+		const lfoGain = ctx.createGain()
+		lfoGain.gain.setValueAtTime(20, now)
+		lfo.connect(lfoGain)
+		lfoGain.connect(osc.frequency)
+		const gain = ctx.createGain()
+		gain.gain.setValueAtTime(0.0001, now)
+		gain.gain.exponentialRampToValueAtTime(0.5, now + 0.03)
+		gain.gain.exponentialRampToValueAtTime(0.005, now + 0.5)
+		osc.connect(gain)
+		gain.connect(ctx.destination)
+		osc.start(now)
+		lfo.start(now)
+		osc.stop(now + 0.5)
+		lfo.stop(now + 0.5)
+	}, [ensureAudio])
 
 	const validatedAuction = useMemo(() => {
 		if (!current) return { legal: false }
@@ -462,21 +634,25 @@ export default function Player() {
 			calls
 		)
 	}, [current])
-	// modal trigger if no auction / contract present
+
 	useEffect(() => {
-		if (current) {
-			if (
-				!(current.auction && current.auction.length) &&
-				!current.contract &&
-				!manualLevel &&
-				!manualStrain
-			) {
-				setShowAuctionModal(true)
-			} else {
-				setShowAuctionModal(false)
+		if (!current) return
+		const hasManual = !!(manualLevel && manualStrain)
+		const hasAuction = current.auction && current.auction.length
+		if (hasAuction && validatedAuction.legal && !hasManual) {
+			// Auto-adopt validated auction's contract/declarer into derived state by ensuring current has these fields
+			if (!current.contract || !current.declarer) {
+				current.contract = validatedAuction.contract
+				current.declarer = validatedAuction.declarer
 			}
+			setShowAuctionModal(false)
+			return
 		}
-	}, [current, manualLevel, manualStrain])
+		// otherwise, show modal only if nothing to derive and no manual
+		if (!hasAuction && !current.contract && !hasManual) setShowAuctionModal(true)
+		else setShowAuctionModal(false)
+	}, [current, manualLevel, manualStrain, validatedAuction])
+
 	const effDeclarer =
 		manualDeclarer ||
 		current?.declarer ||
@@ -497,7 +673,9 @@ export default function Player() {
 		current?.contract,
 		validatedAuction,
 	])
+
 	const effTrump = parseTrump(effContract)
+
 	const hands = useMemo(() => {
 		if (!current?.deal) return null
 		try {
@@ -506,6 +684,7 @@ export default function Player() {
 			return null
 		}
 	}, [current?.deal])
+
 	const playMoves = useMemo(() => {
 		if (current?.play?.length) {
 			try {
@@ -523,7 +702,17 @@ export default function Player() {
 		}
 		return []
 	}, [current?.play, current?.playLeader, current?.playScript, effContract])
+
 	const usingManual = playMoves.length === 0
+
+	// Opening leader is right of declarer if contract is set; otherwise dealer
+	const openingLeader = useMemo(() => {
+		if (effDeclarer) return rightOf(effDeclarer)
+		return current?.dealer || 'N'
+	}, [effDeclarer, current?.dealer])
+
+	// Pulse the opening leader's playable cards before the very first lead
+	const openingLeadPulse = useMemo(() => history.length === 0, [history.length])
 
 	useEffect(() => {
 		if (!hands) {
@@ -537,12 +726,13 @@ export default function Player() {
 			setManualMoves([])
 			setCompletedTrickList([])
 			setPlayIdx(0)
+			setPlayStarted(false)
 			return
 		}
-		const leader = effDeclarer ? rightOf(effDeclarer) : current?.dealer || 'N'
+		const leader = openingLeader
 		const init = createInitialManualState(
 			hands,
-			current?.playLeader || leader,
+			leader,
 			effTrump,
 			effDeclarer
 		)
@@ -558,9 +748,11 @@ export default function Player() {
 		setCompletedTrickList([])
 		setPlayIdx(0)
 		setFlashWinner(null)
-	}, [hands, effTrump, effDeclarer, current?.playLeader, current?.dealer])
+		setVisibilityMode('hidden')
+		setHideDefenders(true)
+		setPlayStarted(false)
+	}, [hands, effTrump, effDeclarer, current?.playLeader, current?.dealer, openingLeader])
 
-	// Capture initial trump distribution for advice heuristics
 	useEffect(() => {
 		if (!hands || !effTrump || !effDeclarer) {
 			initialTrumpRef.current = null
@@ -590,51 +782,30 @@ export default function Player() {
 			initialTrumpRef.current = null
 		}
 	}, [hands, effTrump, effDeclarer])
-	// Planning approximations + snapshot analysis
+
 	useEffect(() => {
 		if (!hands || !effDeclarer) {
 			setActualWinners(null)
 			setActualLosers(null)
 			setPreAnalysis(null)
-			setPlanSubmitted(false)
-			setPlanEvaluated(false)
-			setPlanWinners('')
-			setPlanLosers('')
-			setPlanningOpen(true)
 			return
 		}
 		try {
+			const seats = ['N', 'E', 'S', 'W']
 			const p = partnerOf(effDeclarer)
-			const seats = [effDeclarer, p]
 			const suitList = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
-			const hi = [
-				'A',
-				'K',
-				'Q',
-				'J',
-				'10',
-				'9',
-				'8',
-				'7',
-				'6',
-				'5',
-				'4',
-				'3',
-				'2',
-			]
-			const gather = (s) =>
-				seats
-					.flatMap((seat) => hands[seat].filter((c) => c.suit === s))
-					.sort((a, b) => hi.indexOf(a.rank) - hi.indexOf(b.rank))
+			const perSuit = { Spades: {}, Hearts: {}, Diamonds: {}, Clubs: {} }
 			let winners = 0,
 				losers = 0
-			const perSuit = {}
 			for (const suit of suitList) {
-				const cards = gather(suit)
-				if (!cards.length) {
-					perSuit[suit] = { winners: 0, losers: 0, length: 0 }
-					continue
-				}
+				const cards = [...hands[effDeclarer], ...hands[p]]
+					.filter((c) => c.suit === suit)
+					.sort(
+						(a, b) =>
+							'AKQJ1098765432'.indexOf(a.rank) -
+							'AKQJ1098765432'.indexOf(b.rank)
+					)
+					.reverse()
 				let w = 0
 				if (cards.find((c) => c.rank === 'A')) w++
 				if (cards.length >= 2 && cards.find((c) => c.rank === 'K')) w++
@@ -728,201 +899,13 @@ export default function Player() {
 		}
 	}, [hands, effDeclarer, effTrump])
 
-	// Advice phrase banks & rotation
-	const phraseMemoryRef = useRef({})
-	const pickVariant = (category, arr) => {
-		if (!arr.length) return ''
-		const mem = phraseMemoryRef.current
-		const last = mem[category] ?? -1
-		const idx = (last + 1) % arr.length
-		mem[category] = idx
-		return arr[idx]
-	}
-	const whyPhrases = {
-		ruffGood: [
-			'Nice ruff — free extra trick!',
-			'Great ruff — you turned a loser into a winner.',
-			'Sweet ruff — that builds extra tricks.',
-		],
-		drawGood: [
-			'Good — pulling their trumps protects your winners.',
-			'Nice – stripping out their trumps first.',
-			'Solid: clearing trumps keeps you safe.',
-		],
-		drawNeutral: [
-			'They have almost no trumps left; side suits coming up soon.',
-			'Nearly done with trumps — you can switch soon.',
-			'Trumps are nearly gone; think about building others.',
-		],
-		prematureSide: [
-			'You started another suit before finishing their trumps.',
-			'Side suit too early — clear their trumps first.',
-			'Risky: you let their trumps stay while you change suits.',
-		],
-		wastedDiscard: [
-			'You just tossed a card; could a ruff or trump play be better?',
-			'That discard didn’t help; maybe ruff or draw trumps.',
-			'Throwing a random card — look for a ruff or plan move.',
-		],
-		genericNeutral: [
-			'Fine — nothing big gained or lost.',
-			'Okay — perfectly safe play.',
-			'Neutral — you haven’t helped or hurt your plan.',
-		],
-	}
-	const nextPhrases = {
-		continueDraw: [
-			'Keep counting trumps; finish the job.',
-			'Continue: one more trump round.',
-			'Stay on trumps until they’re gone.',
-		],
-		buildLong: [
-			'Time to work on a long suit or ruff losers.',
-			'Shift to growing side-suit tricks.',
-			'Start building extra tricks from length.',
-		],
-		needDrawFirst: [
-			'Clear their trumps before switching (unless you need fast ruffs).',
-			'Finish pulling trumps then build winners.',
-			'Try removing their trumps first.',
-		],
-		refocusCount: [
-			'Refocus: how many sure tricks vs target?',
-			'Pause: count sure tricks you actually have.',
-			'Re-count winners vs what you need.',
-		],
-		decideNext: [
-			'Decide: another trump or start a side suit.',
-			'Choose: draw one more or begin building.',
-			'Pick your lane: trumps or side suit now.',
-		],
-		entryPlan: [
-			'Think about entries to reach new winners.',
-			'Map entries so you can enjoy established tricks.',
-			'Plan entries before building more tricks.',
-		],
-	}
-	// Heuristic evaluation with categories -> phrase selection
-	const evaluateDeclarerPlay = useCallback(
-		(params) => {
-			const {
-				seat,
-				suit,
-				rank,
-				preRemaining,
-				postState,
-				effTrump,
-				trickBefore,
-			} = params
-			if (!effTrump)
-				return {
-					quality: 'neutral',
-					why: 'No-trump: build long suits and keep entries.',
-					next: 'Set up long suits and keep your entries.',
-				}
-			if (!effDeclarer)
-				return {
-					quality: 'neutral',
-					why: 'Declarer not set yet.',
-					next: 'Once you know declarer, think about trumps.',
-				}
-			const partner = partnerOf(effDeclarer)
-			const remainingAfter = postState.remaining
-			const declTrumpsAfter = remainingAfter[effDeclarer].filter(
-				(c) => c.suit === effTrump
-			).length
-			const dummyTrumpsAfter = remainingAfter[partner].filter(
-				(c) => c.suit === effTrump
-			).length
-			const defendersSeats = ['N', 'E', 'S', 'W'].filter(
-				(s) => s !== effDeclarer && s !== partner
-			)
-			const defendersTrumpsAfter = defendersSeats.reduce(
-				(n, s) =>
-					n + remainingAfter[s].filter((c) => c.suit === effTrump).length,
-				0
-			)
-			const leadSuit =
-				trickBefore.length > 0 && trickBefore.length < 4
-					? trickBefore[0].card.suit
-					: null
-			const followedLead = leadSuit ? suit === leadSuit : null
-			const wasRuff =
-				leadSuit &&
-				suit === effTrump &&
-				leadSuit !== effTrump &&
-				!preRemaining[seat].some((c) => c.suit === leadSuit)
-			let quality = 'neutral',
-				whyCat = 'genericNeutral',
-				nextCat = 'decideNext'
-			const totalOur = declTrumpsAfter + dummyTrumpsAfter
-			if (wasRuff) {
-				quality = 'good'
-				whyCat = 'ruffGood'
-				nextCat = defendersTrumpsAfter > 0 ? 'continueDraw' : 'buildLong'
-			} else if (suit === effTrump) {
-				if (defendersTrumpsAfter > 0) {
-					quality = 'good'
-					whyCat = 'drawGood'
-					nextCat = 'continueDraw'
-				} else {
-					quality = 'neutral'
-					whyCat = 'drawNeutral'
-					nextCat = 'buildLong'
-				}
-			} else if (
-				effTrump &&
-				defendersTrumpsAfter > 0 &&
-				totalOur > defendersTrumpsAfter &&
-				!leadSuit
-			) {
-				quality = 'bad'
-				whyCat = 'prematureSide'
-				nextCat = 'needDrawFirst'
-			} else if (!followedLead && leadSuit && suit !== effTrump) {
-				quality = 'bad'
-				whyCat = 'wastedDiscard'
-				nextCat = 'refocusCount'
-			} else {
-				quality = 'neutral'
-				whyCat = 'genericNeutral'
-				nextCat = defendersTrumpsAfter > 0 ? 'decideNext' : 'entryPlan'
-			}
-			const why = pickVariant(whyCat, whyPhrases[whyCat])
-			const next = pickVariant(nextCat, nextPhrases[nextCat])
-			let principle = ''
-			if (suit === effTrump)
-				principle = `Trumps left: us ${
-					declTrumpsAfter + dummyTrumpsAfter
-				} / them ${defendersTrumpsAfter}`
-			else if (wasRuff) principle = 'Short-hand ruff = extra trick.'
-			else if (defendersTrumpsAfter > 0)
-				principle = `Opp trumps left: ${defendersTrumpsAfter}`
-			return { quality, why, next, seat, card: `${rank}${suit[0]}`, principle }
-		},
-		[effDeclarer, whyPhrases, nextPhrases]
-	)
-
+	// --- UI ---
 	const onPlayCard = useCallback(
 		(seat, cardId) => {
-			if (usingManual && history.length === 0 && !planSubmitted) {
-				if (ADVICE_ENABLED) {
-					setAdviceEntries((list) => [
-						...list,
-						{
-							id: Date.now() + Math.random().toString(36).slice(2, 7),
-							quality: 'neutral',
-							why: 'First, fill in your plan (sure winners + likely losers).',
-							next: 'Planning helps you decide whether to draw trumps now.',
-							seat,
-							card: '',
-							principle: 'Plan first.',
-						},
-					])
-				}
-				return
-			}
-			if (!usingManual || !turnSeat) return
+			// Must have started, be manual mode, and be that seat's turn
+			if (!usingManual || !turnSeat || !playStarted) return
+			// Enforce opening lead must be the computed openingLeader
+			if (history.length === 0 && seat !== openingLeader) return
 			const preRemaining = remaining
 			const trickBefore = trick
 			const engine = {
@@ -938,6 +921,7 @@ export default function Player() {
 			}
 			const r = playCardManual(engine, seat, cardId)
 			if (!r.ok) return
+            playSwish()
 			const next = r.state
 			setRemaining(next.remaining)
 			setTrick(next.trick)
@@ -949,41 +933,27 @@ export default function Player() {
 			const [_, suit, rank] = cardId.split('-')
 			setHistory((h) => [...h, { seat, cardId, suit, rank }])
 			setManualMoves((m) => [...m, { seat, suit, rank }])
-			setPlayIdx((k) => k + 1)
-			if (
-				effDeclarer &&
-				(seat === effDeclarer || partnerOf(effDeclarer) === seat)
-			) {
-				try {
-					const evalRes = evaluateDeclarerPlay({
-						seat,
-						suit,
-						rank,
-						preRemaining,
-						postState: next,
-						effTrump,
-						trickBefore,
-					})
-					if (ADVICE_ENABLED) {
-						setAdviceEntries((list) =>
-							[
-								...list,
-								{
-									id: Date.now() + Math.random().toString(36).slice(2, 7),
-									...evalRes,
-								},
-							].slice(-70)
-						)
-					}
-				} catch {}
-			}
+			setPlayIdx((k) => {
+				const v = k + 1
+				playIdxRef.current = v
+				return v
+			})
 			if (r.winner) {
-				if (pauseRef.current) setFlashWinner(r.winner)
-				else setFlashWinner(null)
-				setCompletedTrickList((lst) => [
-					...lst,
-					{ no: lst.length + 1, winner: r.winner, cards: next.trick },
-				])
+				// Always trigger a brief winner flash for animation; if pause is enabled, keep it until user proceeds
+				setFlashWinner(r.winner)
+				if (!pauseRef.current) {
+					setTimeout(() => setFlashWinner(null), 800)
+				}
+                if (effDeclarer) {
+                    if (isDeclarerSide(r.winner, effDeclarer)) playTing()
+                    else playKlaxon()
+                }
+				setCompletedTrickList((lst) => {
+					const entry = { no: lst.length + 1, winner: r.winner, cards: next.trick }
+					// update last trick preview
+					setLastTrickPreview(entry)
+					return [...lst, entry]
+				})
 			}
 			if (hideDefenders && isDefender(seat, effDeclarer)) {
 				setLastAutoSeat(seat)
@@ -992,8 +962,6 @@ export default function Player() {
 		},
 		[
 			usingManual,
-			history.length,
-			planSubmitted,
 			turnSeat,
 			remaining,
 			trick,
@@ -1004,7 +972,8 @@ export default function Player() {
 			completedTricks,
 			trickComplete,
 			hideDefenders,
-			evaluateDeclarerPlay,
+			playStarted,
+			openingLeader,
 		]
 	)
 
@@ -1037,12 +1006,6 @@ export default function Player() {
 				const follow = hand.filter((c) => c.suit === leadSuit)
 				if (follow.length) playable = follow
 			}
-			if (aiDifficulty === 'Basic') {
-				const low = playable
-					.slice()
-					.sort((a, b) => rankWeight(a.rank) - rankWeight(b.rank))[0]
-				return { card: low, reason: leadSuit ? 'Lowest follow' : 'Lowest lead' }
-			}
 			if (!leadSuit) {
 				const groups = {}
 				hand.forEach((c) => {
@@ -1067,11 +1030,8 @@ export default function Player() {
 				const asc = playable
 					.slice()
 					.sort((a, b) => rankWeight(a.rank) - rankWeight(b.rank))
-				if (currentWinner === partner) {
-					let reason = 'Partner winning'
-					if (signalMode === 'LowEnc') reason += ' (low=enc)'
-					return { card: asc[0], reason }
-				}
+				if (currentWinner === partner)
+					return { card: asc[0], reason: 'Partner winning' }
 				for (const c of asc) {
 					const w = evaluateTrick([...cur, { seat, card: c }], effTrump)
 					if (w === seat) return { card: c, reason: 'Win cheaply' }
@@ -1080,14 +1040,19 @@ export default function Player() {
 			}
 			return { card: playable[0], reason: 'Random' }
 		},
-		[remaining, trick, effTrump, aiDifficulty, signalMode]
+		[remaining, trick, effTrump]
 	)
 
 	const autoPlayRef = useRef(false)
 	useEffect(() => {
+		const defendersHidden =
+			visibilityMode === 'mimic' ||
+			visibilityMode === 'hidden' ||
+			(visibilityMode === 'all' && hideDefenders)
 		if (
 			!usingManual ||
-			!hideDefenders ||
+			!playStarted ||
+			!defendersHidden ||
 			!turnSeat ||
 			!isDefender(turnSeat, effDeclarer) ||
 			autoPlayRef.current
@@ -1127,11 +1092,13 @@ export default function Player() {
 	}, [
 		usingManual,
 		hideDefenders,
+		visibilityMode,
 		turnSeat,
 		effDeclarer,
 		fastAutoDef,
 		selectDefenderCard,
 		onPlayCard,
+		playStarted,
 	])
 
 	const result = useMemo(() => {
@@ -1143,6 +1110,49 @@ export default function Player() {
 			tricksDecl
 		)
 	}, [effContract, effDeclarer, tricksDecl, current?.vul])
+
+	// Reset Start button (playStarted) once 13 tricks are completed
+	useEffect(() => {
+		if (completedTricks >= 13) setPlayStarted(false)
+	}, [completedTricks])
+
+	// Celebration when contract is made at end of hand
+	useEffect(() => {
+		if (completedTricks < 13 || !effContract) return
+		const m = String(effContract).toUpperCase().match(/^(\d)(C|D|H|S|NT)/)
+		if (!m) return
+		const target = 6 + parseInt(m[1], 10)
+		if (tricksDecl >= target) {
+			setShowCelebration(true)
+			const t = setTimeout(() => setShowCelebration(false), 5000)
+			return () => clearTimeout(t)
+		}
+	}, [completedTricks, effContract, tricksDecl])
+
+	const needed = useMemo(() => neededToSet(effContract), [effContract])
+
+	// Visibility resolution helper per seat
+	const seatVisible = useCallback(
+		(seat) => {
+			if (!effDeclarer) return visibilityMode === 'all'
+			if (visibilityMode === 'hidden') return false
+			if (visibilityMode === 'all') {
+				// Show all, but allow independent defenders toggle to hide defenders only
+				const isDef = isDefender(seat, effDeclarer)
+				return isDef ? !hideDefenders : true
+			}
+			// mimic: before opening lead, controller can see declarer's hand; after first card, dummy becomes visible; defenders stay hidden
+			if (visibilityMode === 'mimic') {
+				const dummy = partnerOf(effDeclarer)
+				const openingLeadPlayed = history.length > 0
+				if (seat === effDeclarer) return true
+				if (seat === dummy) return openingLeadPlayed
+				return false // defenders hidden in mimic mode
+			}
+			return false
+		},
+		[visibilityMode, effDeclarer, history.length, hideDefenders]
+	)
 
 	const onFile = (e) => {
 		const f = e.target.files?.[0]
@@ -1186,10 +1196,10 @@ export default function Player() {
 	const rebuildFromHistory = useCallback(
 		(to) => {
 			if (!hands) return
-			const leader = effDeclarer ? rightOf(effDeclarer) : current?.dealer || 'N'
+			const leader = openingLeader
 			let st = createInitialManualState(
 				hands,
-				current?.playLeader || leader,
+				leader,
 				effTrump,
 				effDeclarer
 			)
@@ -1215,6 +1225,7 @@ export default function Player() {
 			effTrump,
 			current?.playLeader,
 			current?.dealer,
+			openingLeader,
 		]
 	)
 	const onPrevStep = () =>
@@ -1227,6 +1238,8 @@ export default function Player() {
 		setDeals([])
 		setIndex(0)
 		setSelectedName('')
+		setVisibilityMode('hidden')
+		setHideDefenders(true)
 	}
 
 	// Escape key exits teacher focus mode
@@ -1261,6 +1274,7 @@ export default function Player() {
 					</div>
 				</div>
 			)}
+
 			{teacherFocus && (
 				<>
 					<div className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-10 pointer-events-none" />
@@ -1271,7 +1285,7 @@ export default function Player() {
 					</button>
 				</>
 			)}
-			{/* Sidebar */}
+
 			<div
 				className={`w-72 p-3 border-r bg-gray-50 flex flex-col gap-3 text-[11px] transition-all duration-300 ${
 					teacherFocus ? 'opacity-0 -translate-x-full pointer-events-none' : ''
@@ -1340,7 +1354,33 @@ export default function Player() {
 						</button>
 					</div>
 				</div>
+
 				<div className="space-y-1 border-t pt-2">
+					<div className="font-semibold text-[11px] text-gray-700">
+						Visibility
+					</div>
+					<label className="flex items-center gap-1">
+						<input
+							type="checkbox"
+							checked={visibilityMode === 'mimic'}
+							onChange={(e) => {
+								if (e.target.checked) setVisibilityMode('mimic')
+								else if (visibilityMode === 'mimic') setVisibilityMode('hidden')
+							}}
+						/>{' '}
+						<span>Mimic table</span>
+					</label>
+					<label className="flex items-center gap-1">
+						<input
+							type="checkbox"
+							checked={visibilityMode === 'all'}
+							onChange={(e) => {
+								if (e.target.checked) setVisibilityMode('all')
+								else if (visibilityMode === 'all') setVisibilityMode('hidden')
+							}}
+						/>{' '}
+						<span>Show all hands</span>
+					</label>
 					<label className="flex items-center gap-1">
 						<input
 							type="checkbox"
@@ -1401,7 +1441,6 @@ export default function Player() {
 						/>{' '}
 						<span>Pause at trick end</span>
 					</label>
-					{/* Advice panel temporarily disabled */}
 					<label className="flex items-center gap-1">
 						<input
 							type="checkbox"
@@ -1410,6 +1449,17 @@ export default function Player() {
 						/>{' '}
 						<span>Show completed tricks</span>
 					</label>
+					<div className="mt-1 border-t pt-2">
+						<div className="font-semibold text-[11px] text-gray-700 mb-1">Audio</div>
+						<label className="flex items-center gap-1">
+							<input
+								type="checkbox"
+								checked={soundOn}
+								onChange={(e) => setSoundOn(e.target.checked)}
+							/>{' '}
+							<span>Enable sounds</span>
+						</label>
+					</div>
 					{!teacherFocus && (
 						<button
 							onClick={() => setTeacherFocus(true)}
@@ -1418,6 +1468,7 @@ export default function Player() {
 						</button>
 					)}
 				</div>
+
 				{!current?.contract && (
 					<div className="space-y-1 border-t pt-2">
 						<div className="font-semibold">Set contract</div>
@@ -1473,40 +1524,53 @@ export default function Player() {
 						</label>
 					</div>
 				)}
+
 				<ScorePanel
 					tricksDecl={tricksDecl}
 					tricksDef={tricksDef}
-					needed={neededToSet(effContract)}
+					needed={needed}
 					contract={effContract}
 					declarer={effDeclarer}
 					result={result}
 				/>
+
 				<div className="flex flex-wrap gap-1 text-[11px]">
 					<button
 						onClick={() => rebuildFromHistory(0)}
-						disabled={!history.length}
+						disabled={history.length === 0}
 						className="px-2 py-0.5 border rounded disabled:opacity-40">
 						⏮
 					</button>
 					<button
 						onClick={onPrevStep}
-						disabled={playIdxRef.current <= 0}
+						disabled={playIdx <= 0}
 						className="px-2 py-0.5 border rounded disabled:opacity-40">
 						◀
 					</button>
 					<button
 						onClick={onNextStep}
-						disabled={playIdxRef.current >= history.length}
+						disabled={playIdx >= history.length}
 						className="px-2 py-0.5 border rounded disabled:opacity-40">
 						▶
 					</button>
 					<button
-						onClick={() => rebuildFromHistory(history.length)}
-						disabled={playIdxRef.current >= history.length}
+						onClick={() => {
+							const mod = playIdx % 4
+							const back = mod === 0 ? 4 : mod
+							const target = Math.max(0, playIdx - back)
+							rebuildFromHistory(target)
+						}}
+						disabled={playIdx <= 0}
 						className="px-2 py-0.5 border rounded disabled:opacity-40">
-						⏭
+						Undo Trick
 					</button>
 				</div>
+
+				{showCompletedTricks && (
+					<div className="rounded border bg-white p-1 text-[10px] max-h-60 overflow-auto">
+						<CompletedTricks tricks={completedTrickList} />
+					</div>
+				)}
 				{showAiLog && hideDefenders && (
 					<div className="flex-1 overflow-auto rounded border bg-white p-1 text-[10px]">
 						<div className="font-semibold mb-1">AI Log</div>
@@ -1525,318 +1589,114 @@ export default function Player() {
 						</div>
 					</div>
 				)}
-				{showCompletedTricks && (
-					<div className="rounded border bg-white p-1 text-[10px] max-h-60 overflow-auto">
-						<CompletedTricks tricks={completedTrickList} />
+			</div>
+
+			<div className="flex-1 p-4 flex flex-col gap-4 relative">
+				{/* Last trick mini preview - pinned to main area */}
+				{lastTrickPreview && (
+					<div className="absolute top-2 left-2 z-10">
+						<div className="text-[10px] text-gray-600 mb-1">Last trick</div>
+						<div className="relative rounded-2xl border bg-emerald-900/30 backdrop-blur-sm p-2">
+							<div className="relative w-[320px] h-[200px] bg-[#0b5d27] rounded-xl border overflow-hidden">
+								<div className="absolute inset-0 opacity-[0.06]" style={{backgroundImage:'repeating-linear-gradient(145deg, rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 1px, transparent 1px, transparent 7px)'}} />
+								<div className="absolute left-1/2 -translate-x-1/2 top-3">
+									<CardSlot seat="N" trick={lastTrickPreview.cards} size="md" tilt={false} />
+									<div className="text-[10px] text-white/80 text-center mt-0.5">N</div>
+								</div>
+								<div className="absolute right-3 top-1/2 -translate-y-1/2">
+									<CardSlot seat="E" trick={lastTrickPreview.cards} size="md" tilt={false} />
+									<div className="text-[10px] text-white/80 text-center mt-0.5">E</div>
+								</div>
+								<div className="absolute left-3 top-1/2 -translate-y-1/2">
+									<CardSlot seat="W" trick={lastTrickPreview.cards} size="md" tilt={false} />
+									<div className="text-[10px] text-white/80 text-center mt-0.5">W</div>
+								</div>
+								<div className="absolute left-1/2 -translate-x-1/2 bottom-3">
+									<CardSlot seat="S" trick={lastTrickPreview.cards} size="md" tilt={false} />
+									<div className="text-[10px] text-white/80 text-center mt-0.5">S</div>
+								</div>
+								<div className="absolute bottom-2 right-2 text-[11px] bg-yellow-300/90 text-black px-1.5 py-0.5 rounded">
+									Winner: {lastTrickPreview.winner}
+								</div>
+							</div>
+						</div>
 					</div>
 				)}
-			</div>
-			{/* Main content */}
-			<div className="flex-1 p-4 flex flex-col gap-4 relative">
 				{!current && deals.length === 0 && (
 					<PreUpload onChooseFile={() => fileRef.current?.click()} />
 				)}
 				{current && hands && (
 					<div className="flex flex-col gap-6 items-center">
-						{/* Planning Panel */}
-						{effDeclarer && history.length === 0 && planningOpen && (
-							<div className="w-full max-w-xl rounded-lg border bg-white/70 backdrop-blur p-4 text-[12px] shadow-sm">
-								<div className="flex items-center justify-between mb-2">
-									<h3 className="font-semibold text-indigo-700">
-										Pre-Play Planning
-									</h3>
-									{planSubmitted && (
-										<span className="text-[10px] text-emerald-600 font-medium">
-											Submitted
-										</span>
-									)}
-								</div>
-								{(current?.theme ||
-									current?.system ||
-									(current?.notes || []).length > 0) && (
-									<div className="mb-3 text-[11px] space-y-1">
-										{current?.theme && (
-											<div>
-												<span className="font-semibold text-indigo-600">
-													Theme:
-												</span>{' '}
-												{current.theme}
-											</div>
-										)}
-										{current?.system && (
-											<div>
-												<span className="font-semibold text-indigo-600">
-													System:
-												</span>{' '}
-												{current.system}
-											</div>
-										)}
-										{(current?.notes || []).length > 0 && (
-											<div className="border rounded bg-white/60 px-2 py-1">
-												<span className="font-semibold text-indigo-600">
-													Notes:
-												</span>{' '}
-												{current.notes.slice(0, 3).map((n, i) => (
-													<span
-														key={i}
-														className='ml-1 after:content-["·"] last:after:content-[""]'>
-														{n}
-													</span>
-												))}
-											</div>
-										)}
-									</div>
-								)}
-								<p className="mb-2 text-gray-700">
-									Estimate your sure winners and likely losers in the combined
-									Declarer + Dummy hands (before any development). This frames
-									your line of play.
-								</p>
-								<div className="grid grid-cols-2 gap-3 mb-3">
-									<label className="flex flex-col gap-1">
-										<span className="text-[11px] font-medium">
-											Sure Winners
-										</span>
-										<select
-											disabled={planSubmitted}
-											value={planWinners}
-											onChange={(e) => setPlanWinners(e.target.value)}
-											className="border rounded px-1 py-0.5">
-											<option value="">—</option>
-											{Array.from({ length: 14 }, (_, i) => i).map((n) => (
-												<option key={n} value={n}>
-													{n}
-												</option>
-											))}
-										</select>
-									</label>
-									<label className="flex flex-col gap-1">
-										<span className="text-[11px] font-medium">
-											Likely Losers
-										</span>
-										<select
-											disabled={planSubmitted}
-											value={planLosers}
-											onChange={(e) => setPlanLosers(e.target.value)}
-											className="border rounded px-1 py-0.5">
-											<option value="">—</option>
-											{Array.from({ length: 14 }, (_, i) => i).map((n) => (
-												<option key={n} value={n}>
-													{n}
-												</option>
-											))}
-										</select>
-									</label>
-								</div>
-								<div className="flex gap-2">
-									<button
-										disabled={
-											planSubmitted || planWinners === '' || planLosers === ''
-										}
-										onClick={() => {
-											setPlanSubmitted(true) // evaluate plan
-											const w = parseInt(planWinners, 10),
-												l = parseInt(planLosers, 10)
-											if (actualWinners != null && actualLosers != null) {
-												const wDiff = w - actualWinners
-												const lDiff = l - actualLosers
-												let quality = 'neutral'
-												let whyCat = 'planNeutral'
-												if (Math.abs(wDiff) <= 1 && Math.abs(lDiff) <= 1) {
-													quality = 'good'
-													whyCat = 'planGood'
-												} else if (
-													Math.abs(wDiff) <= 2 &&
-													Math.abs(lDiff) <= 2
-												) {
-													quality = 'neutral'
-													whyCat = 'planNeutral'
-												} else {
-													quality = 'bad'
-													whyCat = 'planBad'
-												}
-												const planBanks = {
-													planGood: [
-														'Great — your numbers are almost spot on.',
-														'Nice! You read the hand really well.',
-														'Awesome — very close to the reference count.',
-													],
-													planNeutral: [
-														'Pretty good first guess; you can tweak later.',
-														'Not bad; small adjustments later.',
-														'Decent start — refine after a trick or two.',
-													],
-													planBad: [
-														'Numbers look off; re-count your top cards and losers.',
-														'Try again: re-check each suit for winners/losers.',
-														'Off target — slow down and re-count carefully.',
-													],
-												}
-												const why = pickVariant(whyCat, planBanks[whyCat])
-												const next = pickVariant('planNext', [
-													'Turn losers into winners (ruff, finesse, discard).',
-													'Figure how to fix losers while keeping entries.',
-													'Plan how each loser might disappear.',
-												])
-												const principle = `Reference: winners ${actualWinners} / losers ${actualLosers}`
-												if (ADVICE_ENABLED) {
-													setAdviceEntries((list) => [
-														...list,
-														{
-															id:
-																Date.now() +
-																Math.random().toString(36).slice(2, 7),
-															quality,
-															why,
-															next,
-															seat: effDeclarer,
-															card: '',
-															principle,
-														},
-													])
-												}
-												setPlanEvaluated(true)
-											}
-										}}
-										className="px-2 py-1 text-[11px] rounded bg-indigo-600 disabled:opacity-40 text-white">
-										Submit Plan
-									</button>
-									<button
-										onClick={() => {
-											// skip / start immediately
-											if (!planSubmitted) {
-												setPlanSubmitted(true)
-												if (ADVICE_ENABLED) {
-													setAdviceEntries((list) => [
-														...list,
-														{
-															id:
-																Date.now() +
-																Math.random().toString(36).slice(2, 7),
-															quality: 'neutral',
-															why: 'You skipped detailed planning. Try still counting winners/losers as you play.',
-															next: 'Track remaining trumps & spot ways to turn losers into winners.',
-															seat: effDeclarer,
-															card: '',
-															principle: 'Started without plan',
-														},
-													])
-												}
-											}
-											setPlanningOpen(false)
-											setHideDefenders(true) // auto-hide defenders when starting immediately
-										}}
-										className="px-2 py-1 text-[11px] rounded border bg-white">
-										Start Play
-									</button>
-									{planSubmitted && (
-										<button
-											onClick={() => {
-												setPlanSubmitted(false)
-												setPlanEvaluated(false)
-												setPlanWinners('')
-												setPlanLosers('')
-											}}
-											className="px-2 py-1 text-[11px] rounded border">
-											Adjust
-										</button>
-									)}
-								</div>
-								{actualWinners != null && planSubmitted && (
-									<div className="mt-2 text-[11px] text-gray-600">
-										Reference count:{' '}
-										<span className="font-semibold">{actualWinners}</span>{' '}
-										winners /{' '}
-										<span className="font-semibold">{actualLosers}</span> losers
-									</div>
-								)}
-								{preAnalysis && !planSubmitted && (
-									<div className="mt-4 text-[11px] bg-indigo-50/60 border border-indigo-200 rounded p-2 space-y-1">
-										<div className="font-semibold text-indigo-700 text-[11px]">
-											Partnership Snapshot
-										</div>
-										<div>
-											HCP: {preAnalysis.hcpDecl}+{preAnalysis.hcpDummy} ={' '}
+						<div className="w-full max-w-3xl mx-auto -mt-2">
+							<div className="flex items-center justify-end gap-2 mb-1">
+								<button
+									disabled={!effContract || !effDeclarer}
+									onClick={() => setPlayStarted((v) => !v)}
+									className={`px-2 py-1 rounded text-white text-[12px] disabled:opacity-50 ${
+										playStarted ? 'bg-rose-600' : 'bg-emerald-600'
+									}`}
+								>
+									{playStarted ? 'Stop' : 'Start Play'}
+								</button>
+								<button
+									onClick={() => setHandInfoOpen((v) => !v)}
+									className="px-2 py-1 rounded border bg-white text-[12px]">
+									{handInfoOpen ? 'Hide Hand Info' : 'Show Hand Info'}
+								</button>
+							</div>
+							{handInfoOpen && (
+								<div className="rounded-lg border bg-white/80 backdrop-blur p-3 text-[12px] shadow-sm">
+									<div className="flex items-center justify-between mb-2">
+										<h3 className="font-semibold text-indigo-700">
+											Hand Information
+										</h3>
+										<div className="text-[10px] text-gray-500">
+											Declarer:{' '}
 											<span className="font-semibold">
-												{preAnalysis.partnershipHcp}
+												{effDeclarer || '—'}
+											</span>{' '}
+											· Contract:{' '}
+											<span className="font-semibold">
+												{effContract || '—'}
 											</span>
 										</div>
-										<div>
-											Shapes: Declarer {preAnalysis.shapeDecl} / Dummy{' '}
-											{preAnalysis.shapeDummy}
-										</div>
-										<div>
-											{preAnalysis.trumpSuit === 'NT'
-												? 'No trumps (NT)'
-												: `Trump ${suitSymbol(preAnalysis.trumpSuit)} fit: ${
-														preAnalysis.trumpLens.decl
-												  }+${preAnalysis.trumpLens.dummy} = ${
-														preAnalysis.trumpLens.total
-												  }`}
-										</div>
-										{preAnalysis.longestSides.length > 0 && (
-											<div>
-												Longest side suit(s):{' '}
-												{preAnalysis.longestSides.join(', ')}
-											</div>
-										)}
-										{preAnalysis.sureWinnerSuits.length > 0 && (
-											<div>
-												Sure winner suits:{' '}
-												{preAnalysis.sureWinnerSuits.join(' ')}{' '}
-											</div>
-										)}
-										{preAnalysis.problemSuits.length > 0 && (
-											<div>
-												Problem suits: {preAnalysis.problemSuits.join(', ')}
-											</div>
-										)}
-										<div>
-											Entry hints (A/K outside trump): {preAnalysis.entryCount}
-										</div>
-										<details className="pt-1">
-											<summary className="cursor-pointer text-indigo-700">
-												Suit detail
-											</summary>
-											<div className="grid grid-cols-4 gap-1 mt-1">
-												{['Spades', 'Hearts', 'Diamonds', 'Clubs'].map((s) => (
-													<div
-														key={s}
-														className="text-[10px] bg-white/70 border rounded p-1 flex flex-col items-center">
-														<span
-															className={`${
-																s === 'Hearts' || s === 'Diamonds'
-																	? 'text-red-600'
-																	: 'text-gray-700'
-															} font-semibold`}>
-															{suitSymbol(s)}
-														</span>
-														<span className="opacity-70">
-															L{preAnalysis.perSuit[s].losers} W
-															{preAnalysis.perSuit[s].winners}
-														</span>
-														<span className="opacity-60">
-															{preAnalysis.perSuit[s].length} cards
-														</span>
-													</div>
-												))}
-											</div>
-										</details>
 									</div>
-								)}
-							</div>
-						)}
-						{/* Cross layout with advice panel to left of North */}
-						<div className="flex items-start gap-6">
-							{ADVICE_ENABLED && showAdvice && !teacherFocus && (
-								<div className="pt-1">
-									<AdvicePanel entries={adviceEntries} />
+									<div className="mb-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+										<div className="border rounded bg-white/70 p-2">
+											<div className="font-semibold text-indigo-700 mb-1">Declarer snapshot</div>
+											{preAnalysis ? (
+												<ul className="list-disc ml-4 space-y-0.5">
+													<li>Partnership HCP: <span className="font-semibold">{preAnalysis.partnershipHcp}</span> (You: {preAnalysis.hcpDecl}, Dummy: {preAnalysis.hcpDummy})</li>
+													<li>Shapes: <span className="font-semibold">{preAnalysis.shapeDecl}</span> (You), <span className="font-semibold">{preAnalysis.shapeDummy}</span> (Dummy)</li>
+													<li>Trump: <span className="font-semibold">{preAnalysis.trumpSuit || 'NT'}</span> — length You/Dummy: <span className="font-semibold">{preAnalysis.trumpLens.decl}/{preAnalysis.trumpLens.dummy}</span> (Total {preAnalysis.trumpLens.total})</li>
+													<li>Sure winners: <span className="font-semibold">{preAnalysis.sureWinnerSuits.join(', ') || '—'}</span></li>
+													<li>Problem suits: <span className="font-semibold">{preAnalysis.problemSuits.join(', ') || '—'}</span></li>
+													<li>Likely entries (A/K outside trump): <span className="font-semibold">{preAnalysis.entryCount}</span></li>
+												</ul>
+											) : (
+												<div className="text-gray-500 italic">Load a deal and set the contract to see planning hints.</div>
+											)}
+										</div>
+										<div className="border rounded bg-white/70 p-2">
+											<div className="font-semibold text-indigo-700 mb-1">Teacher prompts</div>
+											<ul className="list-disc ml-4 space-y-0.5">
+												<li>What are the sure tricks? Where will extra tricks come from?</li>
+												<li>Which suit(s) to develop? Where are the entries?</li>
+												<li>What could defenders hold in long suits? Who guards trumps?</li>
+												<li>If dummy is short in trump, plan ruffs; if long, consider drawing trumps early.</li>
+												<li>Consider the lead: does it suggest a specific holding or sequence?</li>
+											</ul>
+										</div>
+									</div>
 								</div>
 							)}
+						</div>
+
+						<div className="flex items-start gap-6">
 							<div
 								className={`grid grid-cols-3 grid-rows-3 relative ${
-									showAdvice && !teacherFocus ? 'gap-3 -ml-6' : 'gap-4 -ml-4'
-								} ${teacherFocus ? 'z-20' : ''}`}>
+									teacherFocus ? 'z-20' : ''
+								} gap-4 -ml-4`}>
 								<div className="col-start-2 row-start-1 flex justify-center">
 									<SeatPanel
 										id="N"
@@ -1845,11 +1705,7 @@ export default function Player() {
 										turnSeat={turnSeat}
 										trick={trick}
 										onPlay={onPlayCard}
-										visible={
-											!hideDefenders ||
-											effDeclarer === 'N' ||
-											partnerOf(effDeclarer) === 'N'
-										}
+										visible={seatVisible('N')}
 										dealer={current?.dealer}
 										vul={current?.vul}
 										declarer={effDeclarer}
@@ -1858,9 +1714,11 @@ export default function Player() {
 											(effDeclarer === 'N' || partnerOf(effDeclarer) === 'N')
 										}
 										lastAutoSeat={lastAutoSeat}
+										openingLeader={history.length === 0 && openingLeader === 'N'}
+										playStarted={playStarted}
+										openingLeadPulse={openingLeadPulse && openingLeader === 'N'}
 									/>
 								</div>
-								{/* Contract badge to right of North (col 3, row 1) */}
 								{(effContract || current?.auction?.length) && (
 									<div className="col-start-3 row-start-1 flex justify-start items-start">
 										<AuctionGraphic
@@ -1879,11 +1737,7 @@ export default function Player() {
 										turnSeat={turnSeat}
 										trick={trick}
 										onPlay={onPlayCard}
-										visible={
-											!hideDefenders ||
-											effDeclarer === 'W' ||
-											partnerOf(effDeclarer) === 'W'
-										}
+										visible={seatVisible('W')}
 										dealer={current?.dealer}
 										vul={current?.vul}
 										declarer={effDeclarer}
@@ -1892,6 +1746,9 @@ export default function Player() {
 											(effDeclarer === 'W' || partnerOf(effDeclarer) === 'W')
 										}
 										lastAutoSeat={lastAutoSeat}
+										openingLeader={history.length === 0 && openingLeader === 'W'}
+										playStarted={playStarted}
+										openingLeadPulse={openingLeadPulse && openingLeader === 'W'}
 									/>
 								</div>
 								<div className="col-start-3 row-start-2 flex justify-center items-center">
@@ -1902,11 +1759,7 @@ export default function Player() {
 										turnSeat={turnSeat}
 										trick={trick}
 										onPlay={onPlayCard}
-										visible={
-											!hideDefenders ||
-											effDeclarer === 'E' ||
-											partnerOf(effDeclarer) === 'E'
-										}
+										visible={seatVisible('E')}
 										dealer={current?.dealer}
 										vul={current?.vul}
 										declarer={effDeclarer}
@@ -1915,6 +1768,9 @@ export default function Player() {
 											(effDeclarer === 'E' || partnerOf(effDeclarer) === 'E')
 										}
 										lastAutoSeat={lastAutoSeat}
+										openingLeader={history.length === 0 && openingLeader === 'E'}
+										playStarted={playStarted}
+										openingLeadPulse={openingLeadPulse && openingLeader === 'E'}
 									/>
 								</div>
 								<div className="col-start-2 row-start-3 flex justify-center">
@@ -1925,11 +1781,7 @@ export default function Player() {
 										turnSeat={turnSeat}
 										trick={trick}
 										onPlay={onPlayCard}
-										visible={
-											!hideDefenders ||
-											effDeclarer === 'S' ||
-											partnerOf(effDeclarer) === 'S'
-										}
+										visible={seatVisible('S')}
 										dealer={current?.dealer}
 										vul={current?.vul}
 										declarer={effDeclarer}
@@ -1938,6 +1790,9 @@ export default function Player() {
 											(effDeclarer === 'S' || partnerOf(effDeclarer) === 'S')
 										}
 										lastAutoSeat={lastAutoSeat}
+										openingLeader={history.length === 0 && openingLeader === 'S'}
+										playStarted={playStarted}
+										openingLeadPulse={openingLeadPulse && openingLeader === 'S'}
 									/>
 								</div>
 								<div className="col-start-2 row-start-2 flex items-center justify-center">
@@ -1947,6 +1802,7 @@ export default function Player() {
 										turnSeat={turnSeat}
 										lastAutoPlay={lastAutoPlay}
 										highlight={teacherFocus}
+										openingLeader={history.length === 0 ? openingLeader : null}
 									/>
 								</div>
 							</div>
@@ -1954,125 +1810,6 @@ export default function Player() {
 					</div>
 				)}
 			</div>
-		</div>
-	)
-}
-
-// Contract badge component
-function ContractBadge({ contract, declarer }) {
-	if (!contract) return null
-	// parse contract like 4S, 3NT, 2HX, 5DXX
-	const m = contract.match(/^(\d)([CDHSN]{1,2})(X{0,2})$/i)
-	if (!m)
-		return (
-			<div className="rounded-xl border-2 border-indigo-300 bg-gradient-to-br from-sky-50 to-indigo-50 px-5 py-3 text-xl font-bold tracking-wide">
-				{contract}
-			</div>
-		)
-	const level = m[1]
-	let strain = m[2].toUpperCase()
-	const dbl = m[3]
-	const suitMap = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT', N: 'NT' }
-	if (strain === 'N') strain = 'NT'
-	const sym = suitMap[strain] || strain
-	const isRed = strain === 'H' || strain === 'D'
-	const colorClass = isRed
-		? 'text-rose-600 drop-shadow-sm'
-		: 'text-slate-800 drop-shadow-sm'
-	const bgGrad = isRed
-		? 'from-rose-100 via-amber-50 to-rose-50'
-		: 'from-emerald-100 via-sky-50 to-indigo-100'
-	return (
-		<div
-			className={`relative rounded-2xl border-4 border-indigo-300/70 bg-gradient-to-br ${bgGrad} shadow-lg px-6 py-4 flex flex-col items-center justify-center min-w-[120px]`}>
-			<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-1">
-				FINAL CONTRACT
-			</div>
-			<div className={`text-5xl font-extrabold leading-none ${colorClass}`}>
-				{level}
-				{sym}
-				{dbl && <span className="text-indigo-700 text-3xl ml-1">{dbl}</span>}
-			</div>
-			{declarer && (
-				<div className="mt-2 text-[12px] font-semibold text-indigo-700 bg-white/60 px-2 py-0.5 rounded-full shadow-inner">
-					Declarer {declarer}
-				</div>
-			)}
-		</div>
-	)
-}
-
-// Auction graphic (bigger, color-coded) including final contract
-function AuctionGraphic({ auction = [], dealer = 'N', contract, declarer }) {
-	if (!auction.length && !contract) return null
-	// Build seats order per round
-	const seats = ['N', 'E', 'S', 'W']
-	const startIdx = seats.indexOf(dealer || 'N')
-	const orderedSeats = [0, 1, 2, 3].map((i) => seats[(startIdx + i) % 4])
-	// chunk auction into rounds of 4 (pad with blanks)
-	const rounds = []
-	for (let i = 0; i < auction.length; i += 4) {
-		rounds.push(auction.slice(i, i + 4))
-	}
-	while (rounds.length && rounds[rounds.length - 1].length < 4)
-		rounds[rounds.length - 1].push('')
-	const callClass = (c) =>
-		c === ''
-			? 'text-gray-300'
-			: /^(P|Pass)$/i.test(c)
-			? 'text-gray-500'
-			: /^(X|XX)$/.test(c)
-			? 'text-indigo-700 font-semibold'
-			: 'font-semibold'
-	return (
-		<div className="flex items-center gap-6">
-			<div className="rounded-2xl border-2 border-indigo-200 bg-white/80 backdrop-blur px-4 py-3 shadow-inner">
-				<div className="text-[11px] font-semibold tracking-wide text-indigo-600 mb-1">
-					AUCTION (Dealer {dealer})
-				</div>
-				<table className="text-sm font-medium">
-					<thead>
-						<tr>
-							{orderedSeats.map((s) => (
-								<th key={s} className="px-2 py-1 text-indigo-700 font-semibold">
-									{s}
-								</th>
-							))}
-						</tr>
-					</thead>
-					<tbody>
-						{rounds.map((r, i) => (
-							<tr key={i}>
-								{orderedSeats.map((seat, idx) => {
-									const call = r[idx] || ''
-									const final = call && i * 4 + idx === auction.length - 1
-									const base = `px-2 py-0.5 text-center rounded transition-colors ${callClass(
-										call
-									)}`
-									return (
-										<td key={seat} className="p-0">
-											<span
-												className={`${base} ${
-													final
-														? 'bg-yellow-200/70 ring-2 ring-yellow-400 shadow font-bold'
-														: ''
-												}`}>
-												{call || '—'}
-											</span>
-										</td>
-									)
-								})}
-							</tr>
-						))}
-					</tbody>
-				</table>
-				{!auction.length && (
-					<div className="text-[11px] italic text-gray-500">
-						No auction provided (manual contract)
-					</div>
-				)}
-			</div>
-			<ContractBadge contract={contract} declarer={declarer} />
 		</div>
 	)
 }

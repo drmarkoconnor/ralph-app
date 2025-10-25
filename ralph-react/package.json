@@ -8,7 +8,8 @@
 		"build": "vite build",
 		"lint": "eslint .",
 		"preview": "vite preview",
-		"build:auctions": "node --loader ts-node/esm scripts/build-auctions.ts"
+		"build:auctions": "node --loader ts-node/esm scripts/build-auctions.ts",
+		"smoke:pbn": "node scripts/smoke-pbn.js"
 	},
 	"dependencies": {
 		"bridge-dds": "^1.4.0",

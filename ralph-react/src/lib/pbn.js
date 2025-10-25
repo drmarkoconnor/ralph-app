@@ -21,6 +21,24 @@ export function parsePBN(text) {
 	let current = null
 	let inAuction = false
 	let inPlay = false
+	const normDealer = (val) => {
+		const v = String(val || '').trim()
+		const up = v.toUpperCase()
+		// Support numeric dealer (1..4) and spelled-out dealers
+		if (/^[1-4]$/.test(up)) return ['N', 'E', 'S', 'W'][parseInt(up, 10) - 1]
+		if (/^(NORTH|EAST|SOUTH|WEST)$/.test(up)) return up[0]
+		if (/^[NESW]$/.test(up)) return up
+		return 'N'
+	}
+	const normVul = (val) => {
+		const up = String(val || '').trim().toUpperCase()
+		if (up === 'BOTH') return 'All'
+		if (up === 'NEITHER') return 'None'
+		if (up === 'LOVE' || up === 'NONE') return 'None'
+		if (up === 'ALL') return 'All'
+		if (up === 'NS' || up === 'EW') return up
+		return up || 'None'
+	}
 	for (const raw of lines) {
 		const line = String(raw || '').trim()
 		if (!line && inAuction) inAuction = false
@@ -43,10 +61,10 @@ export function parsePBN(text) {
 					current.board = val
 					break
 				case 'Dealer':
-					current.dealer = val.toUpperCase()
+					current.dealer = normDealer(val)
 					break
 				case 'Vulnerable':
-					current.vul = val
+					current.vul = normVul(val)
 					break
 				case 'Deal':
 					current.deal = val
@@ -55,16 +73,16 @@ export function parsePBN(text) {
 					current.contract = val
 					break
 				case 'Declarer':
-					current.declarer = val.toUpperCase()
+					current.declarer = normDealer(val)
 					break
 				case 'Auction':
 					current.auction = []
-					current.auctionDealer = val.toUpperCase()
+					current.auctionDealer = normDealer(val)
 					inAuction = true
 					break
 				case 'Play':
 					current.play = []
-					current.playLeader = val.toUpperCase()
+					current.playLeader = normDealer(val)
 					inPlay = true
 					break
 				case 'Event':
@@ -134,6 +152,32 @@ export function parsePBN(text) {
 		}
 	}
 	if (current) deals.push(current)
+	// Normalize auctions: if the final bid is not followed by three passes, append passes
+	const bidRe = /^([1-7])(C|D|H|S|NT)$/i
+	const isPass = (c) => /^P(ASS)?$/i.test(String(c))
+	for (const d of deals) {
+		if (Array.isArray(d.auction) && d.auction.length) {
+			let calls = d.auction.slice()
+			const lastBidIdx = calls
+				.map((c, i) => (bidRe.test(String(c)) ? i : -1))
+				.filter((i) => i >= 0)
+				.pop()
+			if (lastBidIdx != null) {
+				// Ensure the last three calls are passes after the last bid
+				let up = calls.map((c) => String(c).toUpperCase())
+				while (
+					up.length < lastBidIdx + 4 ||
+					!(isPass(up[up.length - 1]) && isPass(up[up.length - 2]) && isPass(up[up.length - 3]))
+				) {
+					calls.push('P')
+					up = calls.map((c) => String(c).toUpperCase())
+					// safety guard to avoid infinite loops in malformed data
+					if (calls.length > 200) break
+				}
+			}
+			d.auction = calls
+		}
+	}
 	return deals
 }
 

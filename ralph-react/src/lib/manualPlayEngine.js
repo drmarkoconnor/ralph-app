@@ -2,7 +2,7 @@
 // Focus: deterministic trick building, follow-suit enforcement, winner determination
 // All functions are pure (no side effects) so UI can drive them safely.
 
-import { rightOf, isDeclarerSide, evaluateTrick } from './bridgeCore'
+import { rightOf, isDeclarerSide, evaluateTrick } from './bridgeCore.js'
 
 // Create initial manual play state from dealt hands.
 // hands: {N: Card[], E: Card[], S: Card[], W: Card[]}

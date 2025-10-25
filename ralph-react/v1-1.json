@@ -1,0 +1,228 @@
+{
+	"project": "Ralph PBN Player",
+	"version": "1.1",
+	"flags": {
+		"teachingModeDefault": false,
+		"doubleDummyExternal": false
+	},
+	"milestones": [
+		{
+			"id": "M1-foundation",
+			"title": "Contract & Auction Foundation",
+			"tasks": [
+				{
+					"id": "T1-parse-pbn",
+					"desc": "Parse Dealer, Vul, Deal, Auction, Contract, Declarer into state",
+					"accept": [
+						"Valid PBN populates state fields",
+						"Invalid tags -> dismissible banner with guidance"
+					]
+				},
+				{
+					"id": "T2-infer-declarer",
+					"desc": "From Auction infer contract and declarer if Contract missing",
+					"accept": [
+						"Declarer = first seat to bid strain for declaring side",
+						"Level/strain from final contract prior to three passes"
+					],
+					"deps": ["T1-parse-pbn"]
+				},
+				{
+					"id": "T3-contract-editor",
+					"desc": "Contract review/override UI (level/strain/declarer)",
+					"accept": [
+						"Manual overrides persist until page reload",
+						"State moves to AUCTION_CONFIRMED on confirm"
+					],
+					"deps": ["T1-parse-pbn", "T2-infer-declarer"]
+				}
+			]
+		},
+		{
+			"id": "M2-visibility",
+			"title": "Visibility Modes & Toggles",
+			"tasks": [
+				{
+					"id": "T4-default-hidden",
+					"desc": "Default board with all hands hidden",
+					"accept": ["On load, no pips visible; just backs/placeholders"]
+				},
+				{
+					"id": "T5-mimic-table",
+					"desc": "Checkbox 'Mimic table': reveal only dummy after opening lead; defenders stay hidden",
+					"accept": [
+						"Before opening lead: only declarer's hand visible to controller",
+						"After opening lead: dummy auto-revealed",
+						"Toggle mid-hand does not break turn order"
+					],
+					"deps": ["T8-start-play", "T9-opening-lead"]
+				},
+				{
+					"id": "T6-show-all",
+					"desc": "Checkbox 'Show all hands': show all four hands immediately",
+					"accept": ["Mutually exclusive with Mimic table; last selection wins"]
+				},
+				{
+					"id": "T7-hide-defenders",
+					"desc": "Independent toggle to hide/show defenders consistent with current mode",
+					"accept": ["Does not affect declarer/dummy visibility rules"]
+				}
+			]
+		},
+		{
+			"id": "M3-start-and-turns",
+			"title": "Authentic Start & Turn Engine",
+			"tasks": [
+				{
+					"id": "T8-start-play",
+					"desc": "Enable Start Play only once AUCTION_CONFIRMED",
+					"accept": ["Disabled until contract/declarer known"]
+				},
+				{
+					"id": "T9-opening-lead",
+					"desc": "Enforce opening lead by LHO of declarer",
+					"accept": [
+						"Leader computed correctly for all declarer seats",
+						"Lead slot highlights leader seat"
+					],
+					"deps": ["T8-start-play"]
+				},
+				{
+					"id": "T10-turn-engine",
+					"desc": "Seat order, follow-suit enforcement, trick winner, next leader",
+					"accept": [
+						"Illegal off-suit plays blocked unless void",
+						"Trump beats led suit; else highest led suit wins",
+						"Next leader = trick winner"
+					],
+					"deps": ["T9-opening-lead"]
+				},
+				{
+					"id": "T11-undo-card",
+					"desc": "Undo a single played card safely",
+					"accept": [
+						"Restores card to hand, updates current player and trick panel",
+						"Multiple undos supported"
+					],
+					"deps": ["T10-turn-engine"]
+				},
+				{
+					"id": "T12-undo-trick",
+					"desc": "Undo entire trick from any partial/complete state",
+					"accept": [
+						"If 1–3 cards played: revert to trick start",
+						"If 4 cards played: return all four, restore leader"
+					],
+					"deps": ["T11-undo-card"]
+				}
+			]
+		},
+		{
+			"id": "M4-ui-polish",
+			"title": "Layout & Controls Polish",
+			"tasks": [
+				{
+					"id": "T13-remove-stray-O",
+					"desc": "Eliminate stray 'O' at top-left",
+					"accept": ["Empty canvas shows no extraneous glyphs"]
+				},
+				{
+					"id": "T14-seat-layout",
+					"desc": "N/S vertically centered; W right-aligned; E left-aligned; larger pips",
+					"accept": [
+						"Readable at 150% zoom on 1024x768",
+						"No overflow or overlaps"
+					]
+				},
+				{
+					"id": "T15-header-and-controls",
+					"desc": "Header + controls row incl. visibility checkboxes and shortcuts",
+					"accept": [
+						"Header shows Board/Dealer/Vul/Contract/Declarer/Tricks",
+						"Shortcuts: Z, Shift+Z, A, M, L, H, R, Space"
+					]
+				},
+				{
+					"id": "T16-trick-diary",
+					"desc": "Collapsible sidebar listing tricks and winners",
+					"accept": ["Updates live; clicking a trick highlights the four cards"]
+				}
+			]
+		},
+		{
+			"id": "M5-auction-and-conventions",
+			"title": "Auction Viewer/Editor with ACOL Conventions",
+			"tasks": [
+				{
+					"id": "T17-auction-render",
+					"desc": "4-column transcript; dealer aligned",
+					"accept": ["PASS/X/XX rendered correctly; spacing consistent"]
+				},
+				{
+					"id": "T18-auction-editor",
+					"desc": "Minimal input for calls; validation; confirm recomputes contract",
+					"accept": ["Blocks illegal level/strain; supports PASS/X/XX"],
+					"deps": ["T17-auction-render", "T2-infer-declarer"]
+				},
+				{
+					"id": "T19-convention-annotations",
+					"desc": "Hover/badge tips for Stayman, Transfers, 4SF, cue-bids (ACOL)",
+					"accept": [
+						"Shows concise ACOL ranges/promises",
+						"Does not obstruct click targets"
+					],
+					"deps": ["T17-auction-render"]
+				}
+			]
+		},
+		{
+			"id": "M6-analysis",
+			"title": "On-Demand Heuristic Analysis",
+			"tasks": [
+				{
+					"id": "T20-analysis-panel",
+					"desc": "Analyse button opens a modal/panel; ESC closes",
+					"accept": ["Never auto-opens; respects keyboard focus"]
+				},
+				{
+					"id": "T21-heuristics",
+					"desc": "Compute sure winners (NT vs trump) and likely losers for declarer",
+					"accept": [
+						"Displays counts per suit and totals",
+						"Handles trivial voids/singletons cleanly"
+					],
+					"deps": ["T20-analysis-panel"]
+				},
+				{
+					"id": "T22-teaching-prompts",
+					"desc": "ACOL prompts: winners/losers plan, draw trumps?, entries, finesses, dangerous opponent, suit establishment",
+					"accept": ["Prompts adapt to NT vs suit contract"],
+					"deps": ["T21-heuristics"]
+				}
+			]
+		},
+		{
+			"id": "M7-quality",
+			"title": "Stability & Tests",
+			"tasks": [
+				{
+					"id": "T23-e2e-tests",
+					"desc": "Automated tests for visibility modes, opening lead, undo, analysis",
+					"accept": ["All pass locally and CI"]
+				},
+				{
+					"id": "T24-seat-lock-watchdog",
+					"desc": "Detect stalled seat/turn and show toast; never hang silently",
+					"accept": ["No unresponsive states without feedback"]
+				}
+			]
+		}
+	],
+	"agent_notes": [
+		"Visibility modes must be independent of the underlying legality engine.",
+		"State machine guards: no Start Play before AUCTION_CONFIRMED.",
+		"Prefer pure functions for trick resolution; add unit tests.",
+		"Convention tooltips: short ACOL-first phrasing; keep under 140 chars each."
+	]
+}
+

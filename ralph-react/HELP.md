@@ -262,3 +262,27 @@ If something breaks:
 Enjoy streamlined prep and clearer auctions—spend class time on judgement and
 play, not admin.
 
+---
+
+## Appendix: PBN Auction Input Formats
+
+To load a deal and start play quickly from a PBN, the app accepts standard PBN Auction blocks with flexible tokens:
+
+- Calls: use P or Pass; X (Double); XX (Redouble); bids like 1C, 1D, 1H, 1S, 1NT … up to 7NT (case‑insensitive).
+- AP expands to Pass Pass Pass automatically.
+- Dealer can be N/E/S/W or 1/2/3/4 or spelled (North/East/…); vulnerability accepts Both/All, Neither/Love/None, NS/EW.
+- The parser ignores non‑call noise characters that sometimes appear in exports (e.g. $1, =1=).
+
+Quality‑of‑life normalization for fast start:
+
+- If your auction ends in a final bid but is missing the trailing passes (e.g. “P P P 1NT”), the app will auto‑append the three final Pass calls so it validates and the contract/declarer can be adopted immediately.
+- If an Auction is provided and validates, the Player automatically adopts its final contract and declarer—no manual entry required.
+
+Examples that work:
+
+- Auction "N": 1NT AP → Final contract 1NT, declarer inferred.
+- Auction with minimal passes: P P P 1NT → auto‑completed to P P P 1NT P P P.
+- Mixed case and synonyms: Pass pass 2h X P 4H P P P.
+
+If an Auction is entirely absent, you can set Declarer/Level/Strain manually in the sidebar before starting play.
+

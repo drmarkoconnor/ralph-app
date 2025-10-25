@@ -277,14 +277,15 @@ export function validateAuction(dealer, calls) {
 		.filter((i) => i >= 0)
 		.pop()
 	if (lastBidIdx == null) return { legal: false }
-	if (
-		!(
-			callsUp[lastBidIdx + 1] === 'PASS' &&
-			callsUp[lastBidIdx + 2] === 'PASS' &&
-			callsUp[lastBidIdx + 3] === 'PASS'
-		)
-	)
+	// Require three trailing passes after the last bid; accept both P and PASS tokens
+	const passToken = (tok) => /^P(ASS)?$/i.test(tok || '')
+	if (![
+		callsUp[lastBidIdx + 1],
+		callsUp[lastBidIdx + 2],
+		callsUp[lastBidIdx + 3],
+	].every(passToken)) {
 		return { legal: false }
+	}
 	const mm = calls[lastBidIdx].toUpperCase().match(bidRe)
 	const level = parseInt(mm[1], 10)
 	const strain = mm[2]
