@@ -589,7 +589,7 @@ export default function Player() {
 	const [fastAutoDef, setFastAutoDef] = useState(false)
 	const [aiDifficulty, setAiDifficulty] = useState('Intermediate')
 	const [signalMode, setSignalMode] = useState('Standard')
-	const [showAiLog, setShowAiLog] = useState(true)
+	const [showAiLog, setShowAiLog] = useState(false)
 	const [pauseAtTrickEnd, setPauseAtTrickEnd] = useState(false)
 
 	const [remaining, setRemaining] = useState(null)
@@ -624,6 +624,24 @@ export default function Player() {
 	const fileRef = useRef(null)
 	const initialTrumpRef = useRef(null)
 	const audioCtxRef = useRef(null)
+
+	// Ensure AI log is off by default on first mount (in case state is retained across HMR or navigation)
+	useEffect(() => {
+		setShowAiLog(false)
+	}, [])
+
+	// Also turn AI log off when a new file is loaded or the deals set changes
+	useEffect(() => {
+		setShowAiLog(false)
+	}, [selectedName])
+
+	useEffect(() => {
+		setShowAiLog(false)
+	}, [deals?.length])
+
+	useEffect(() => {
+		setShowAiLog(false)
+	}, [index])
 
 	// --- Audio helpers ---
 	const ensureAudio = useCallback(() => {
@@ -1329,6 +1347,7 @@ export default function Player() {
 		setSelectedName('')
 		setVisibilityMode('hidden')
 		setHideDefenders(true)
+		setShowAiLog(false)
 	}
 
 	// Escape key exits teacher focus mode
