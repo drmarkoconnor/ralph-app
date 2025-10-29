@@ -479,6 +479,46 @@ function CrossTrick({
 	)
 }
 
+function TrickCounter({ tricksDecl, tricksDef, contract }) {
+	const m = String(contract || '')
+		.toUpperCase()
+		.match(/^(\d)(C|D|H|S|NT)/)
+	const target = m ? 6 + parseInt(m[1], 10) : null
+	const strain = m ? m[2] : ''
+	const isRed = strain === 'H' || strain === 'D'
+	const bgGrad = isRed
+		? 'from-rose-100 via-amber-50 to-rose-50'
+		: 'from-emerald-100 via-sky-50 to-indigo-100'
+	return (
+		<div
+			className={`relative rounded-2xl border-4 border-indigo-300/70 bg-gradient-to-br ${bgGrad} shadow-lg px-6 py-4 flex flex-col items-center justify-center min-w-[120px]`}
+			style={{ backdropFilter: 'blur(2px)' }}
+		>
+			<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-1">
+				TRICK COUNT
+			</div>
+			<div className="flex items-end gap-3">
+				<div className="text-5xl font-extrabold text-slate-800 drop-shadow-sm leading-none">
+					{tricksDecl}
+					<div className="text-[11px] text-indigo-700 font-semibold -mt-0.5">Decl</div>
+				</div>
+				<div className="text-3xl font-bold text-slate-500 mb-1">·</div>
+				<div className="text-5xl font-extrabold text-slate-800 drop-shadow-sm leading-none">
+					{tricksDef}
+					<div className="text-[11px] text-indigo-700 font-semibold -mt-0.5">Def</div>
+				</div>
+			</div>
+			{typeof target === 'number' && (
+				<div className="mt-2 text-[12px] font-semibold text-indigo-700 bg-white/60 px-2 py-0.5 rounded-full shadow-inner">
+					Target {target}
+				</div>
+			)}
+		</div>
+	)
+}
+
+// SouthTrickPile removed per design update (keeping only TrickCounter)
+
 function ContractBadge({ contract, declarer }) {
 	if (!contract) return null
 	const m = contract.match(/^(\d)([CDHSN]{1,2})(X{0,2})$/i)
@@ -540,16 +580,16 @@ function AuctionGraphic({ auction = [], dealer = 'N', contract, declarer }) {
 			? 'text-indigo-700 font-semibold'
 			: 'font-semibold'
 	return (
-		<div className="flex items-center gap-6">
-			<div className="rounded-2xl border-2 border-indigo-200 bg-white/80 backdrop-blur px-4 py-3 shadow-inner">
-				<div className="text-[11px] font-semibold tracking-wide text-indigo-600 mb-1">
+		<div className="flex items-start gap-4">
+			<div className="relative rounded-2xl border-4 border-indigo-300/70 bg-gradient-to-br from-emerald-100 via-sky-50 to-indigo-100 px-5 py-4 shadow-lg">
+				<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-2">
 					AUCTION (Dealer {dealer})
 				</div>
-				<table className="text-sm font-medium">
+				<table className="text-sm font-semibold bg-white/50 rounded-xl overflow-hidden shadow-inner">
 					<thead>
 						<tr>
 							{orderedSeats.map((s) => (
-								<th key={s} className="px-2 py-1 text-indigo-700 font-semibold">
+								<th key={s} className="px-2 py-1 text-indigo-700">
 									{s}
 								</th>
 							))}
@@ -569,7 +609,7 @@ function AuctionGraphic({ auction = [], dealer = 'N', contract, declarer }) {
 											<span
 												className={`${base} ${
 													final
-														? 'bg-yellow-200/70 ring-2 ring-yellow-400 shadow font-bold'
+														? 'bg-yellow-200/80 ring-2 ring-yellow-400 shadow font-bold'
 														: ''
 												}`}>
 												{call || '—'}
@@ -582,7 +622,7 @@ function AuctionGraphic({ auction = [], dealer = 'N', contract, declarer }) {
 					</tbody>
 				</table>
 				{!auction.length && (
-					<div className="text-[11px] italic text-gray-500">
+					<div className="mt-1 text-[11px] italic text-indigo-700/80">
 						No auction provided (manual contract)
 					</div>
 				)}
@@ -1094,9 +1134,10 @@ export default function Player() {
 				setCompletedTrickList((lst) => {
 					// Build the just-completed trick from the pre-state plus the played card
 					// using parsed id pieces to avoid any object identity issues.
+					const playedRankNorm = playedRank === 'T' ? '10' : playedRank
 					const completedTrick = [
 						...trickBefore,
-						{ seat, card: { id: cardId, suit: playedSuit, rank: playedRank } },
+						{ seat, card: { id: cardId, suit: playedSuit, rank: playedRankNorm } },
 					]
 					// Re-evaluate winner from the completed trick for the preview.
 					// Prefer engine's winner; only compute locally if missing
@@ -1442,6 +1483,14 @@ export default function Player() {
 						className="fixed top-2 left-2 z-30 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-semibold px-3 py-1 rounded shadow">
 						Exit Focus (Esc)
 					</button>
+					<button
+						onClick={() => setPlayStarted((v) => !v)}
+						disabled={!playStarted && (!effContract || !effDeclarer)}
+						className={`fixed top-2 right-2 z-30 px-3 py-1 rounded text-white text-xs font-semibold shadow ${
+							playStarted ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
+						} ${!playStarted && (!effContract || !effDeclarer) ? 'opacity-50 cursor-not-allowed' : ''}`}>
+						{playStarted ? 'Stop' : 'Start Play'}
+					</button>
 				</>
 			)}
 
@@ -1764,7 +1813,7 @@ export default function Player() {
 				{collapseSidebar ? '›' : '‹'}
 			</button>
 
-			<div className="flex-1 p-4 flex flex-col gap-4 relative">
+			<div className="flex-1 p-3 md:p-4 flex flex-col gap-3 md:gap-4 relative">
 				{/* Last trick mini preview - pinned to main area */}
 				{current && hands && lastTrickPreview && (
 					<div className="absolute top-2 left-2 z-0 pointer-events-none">
@@ -1789,16 +1838,14 @@ export default function Player() {
 				)}
 				{current && hands && (
 					<div
-						className={`flex flex-col ${
-							compactPlay ? 'gap-4' : 'gap-6'
-						} items-center`}>
+						className={`flex flex-col ${compactPlay ? 'gap-3' : 'gap-4'} items-center`}>
 						<div
 							className={`w-full max-w-3xl mx-auto ${
 								compactPlay ? '-mt-4' : '-mt-2'
 							}`}>
 							<div className="flex items-center justify-end gap-2 mb-1">
 								<button
-									disabled={!effContract || !effDeclarer}
+									disabled={!playStarted && (!effContract || !effDeclarer)}
 									onClick={() => setPlayStarted((v) => !v)}
 									className={`px-2 py-1 rounded text-white text-[12px] disabled:opacity-50 ${
 										playStarted ? 'bg-rose-600' : 'bg-emerald-600'
@@ -1925,15 +1972,15 @@ export default function Player() {
 							)}
 						</div>
 
-						<div className="flex items-start gap-6">
+						<div className="flex items-start gap-4">
 							<div
 								className={`grid grid-cols-3 grid-rows-3 relative ${
 									teacherFocus ? 'z-20' : ''
-								} ${compactPlay ? 'gap-3' : 'gap-4'} ${
-									collapseSidebar ? '' : '-ml-4'
+								} ${compactPlay ? 'gap-2.5' : 'gap-3'} ${
+									collapseSidebar ? '' : '-ml-2'
 								}`}>
 								<div className="col-start-2 row-start-1 flex justify-center">
-									<div className="w-[260px] h-[260px]">
+									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
 										<SeatPanel
 											id="N"
 											highlight={teacherFocus}
@@ -1961,9 +2008,9 @@ export default function Player() {
 										/>
 									</div>
 								</div>
-								{(effContract || current?.auction?.length) && (
-									<div className="col-start-3 row-start-1 flex justify-start items-start">
-										{compactPlay ? (
+								<div className="col-start-3 row-start-1 flex flex-col items-start gap-2">
+									{effContract || current?.auction?.length ? (
+										compactPlay ? (
 											<ContractBadge
 												contract={effContract}
 												declarer={effDeclarer}
@@ -1975,11 +2022,17 @@ export default function Player() {
 												contract={effContract}
 												declarer={effDeclarer}
 											/>
-										)}
-									</div>
-								)}
+										)
+									) : (
+										<div className="rounded-2xl border-2 border-indigo-200 bg-white/70 px-4 py-3 text-[12px] text-gray-600">
+											No auction provided
+										</div>
+									)}
+									{/* Trick badge placed just below auction/contract and visible immediately */}
+									<TrickCounter tricksDecl={tricksDecl} tricksDef={tricksDef} contract={effContract} />
+								</div>
 								<div className="col-start-1 row-start-2 flex justify-center items-center">
-									<div className="w-[260px] h-[260px]">
+									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
 										<SeatPanel
 											id="W"
 											highlight={teacherFocus}
@@ -2007,7 +2060,7 @@ export default function Player() {
 									</div>
 								</div>
 								<div className="col-start-3 row-start-2 flex justify-center items-center">
-									<div className="w-[260px] h-[260px]">
+									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
 										<SeatPanel
 											id="E"
 											highlight={teacherFocus}
@@ -2034,8 +2087,8 @@ export default function Player() {
 										/>
 									</div>
 								</div>
-								<div className="col-start-2 row-start-3 flex justify-center">
-									<div className="w-[260px] h-[260px]">
+								<div className="col-start-2 row-start-3 flex flex-col items-center justify-start gap-2">
+									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
 										<SeatPanel
 											id="S"
 											highlight={teacherFocus}
@@ -2064,7 +2117,7 @@ export default function Player() {
 									</div>
 								</div>
 								<div className="col-start-2 row-start-2 flex items-center justify-center">
-									<div className="w-[260px] h-[260px]">
+									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
 										<CrossTrick
 											trick={trick}
 											winner={flashWinner}
@@ -2079,6 +2132,7 @@ export default function Player() {
 								</div>
 							</div>
 						</div>
+						{/* South trick pile removed */}
 					</div>
 				)}
 			</div>
