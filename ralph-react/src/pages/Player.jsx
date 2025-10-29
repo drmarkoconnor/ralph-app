@@ -134,37 +134,37 @@ function SeatPanel({
 							}`}>
 							{suitSymbol(s)}
 						</div>
-												<div className="flex flex-wrap gap-1 flex-1">
+						<div className="flex flex-wrap gap-1 flex-1">
 							{visible ? (
 								grouped[s].map((c) => {
 									const legal =
 										!isTurn || !leadSuit || !mustFollow || c.suit === leadSuit
 									const isRedSuit = c.suit === 'Hearts' || c.suit === 'Diamonds'
 									return (
-																								<button
+										<button
 											key={c.id}
 											disabled={!playStarted || !legal || !isTurn}
 											onClick={() => onPlay(id, c.id)}
-																									className={`px-1.5 py-0.5 text-base rounded-md font-bold shadow-sm border bg-white ${
-																										isRedSuit
-																											? 'text-rose-600 border-rose-300'
-																											: 'text-slate-800 border-slate-300'
-																									} ${
-																										legal && isTurn && playStarted
-																											? 'ring-2 ring-yellow-300'
-																											: ''
-																									} ${
-																										openingLeadPulse && isTurn && playStarted
-																											? 'animate-pulse'
-																											: ''
-																									} ${
-																										!playStarted || !legal || !isTurn ? 'opacity-40' : ''
-																									} ${highlight ? 'outline outline-white/70' : ''}`}>
-																									<span className="font-extrabold tracking-tight">
-																										{c.rank}
-																									</span>
-																									<span className="ml-0.5">{suitSymbol(c.suit)}</span>
-																								</button>
+											className={`px-1.5 py-0.5 text-base rounded-md font-bold shadow-sm border bg-white ${
+												isRedSuit
+													? 'text-rose-600 border-rose-300'
+													: 'text-slate-800 border-slate-300'
+											} ${
+												legal && isTurn && playStarted
+													? 'ring-2 ring-yellow-300'
+													: ''
+											} ${
+												openingLeadPulse && isTurn && playStarted
+													? 'animate-pulse'
+													: ''
+											} ${
+												!playStarted || !legal || !isTurn ? 'opacity-40' : ''
+											} ${highlight ? 'outline outline-white/70' : ''}`}>
+											<span className="font-extrabold tracking-tight">
+												{c.rank}
+											</span>
+											<span className="ml-0.5">{suitSymbol(c.suit)}</span>
+										</button>
 									)
 								})
 							) : (
@@ -274,13 +274,13 @@ function CardSlot({
 	dim = false,
 	tilt = true,
 }) {
-		const it = trick.find((t) => t.seat === seat)
+	const it = trick.find((t) => t.seat === seat)
 	const dims =
 		size === 'lg'
-				? { w: 'w-24', h: 'h-36', text: 'text-4xl', corner: 'text-sm' }
+			? { w: 'w-24', h: 'h-36', text: 'text-4xl', corner: 'text-sm' }
 			: size === 'sm'
-				? { w: 'w-14', h: 'h-20', text: 'text-xl', corner: 'text-[9px]' }
-				: { w: 'w-16', h: 'h-24', text: 'text-2xl', corner: 'text-[10px]' }
+			? { w: 'w-14', h: 'h-20', text: 'text-xl', corner: 'text-[9px]' }
+			: { w: 'w-16', h: 'h-24', text: 'text-2xl', corner: 'text-[10px]' }
 	if (!it)
 		return (
 			<div
@@ -294,100 +294,100 @@ function CardSlot({
 			? '-rotate-6'
 			: ''
 		: ''
-		const isRed = it.card.suit === 'Hearts' || it.card.suit === 'Diamonds'
-		const suitColor = isRed ? 'text-rose-600' : 'text-slate-800'
-		const isFace = ['J', 'Q', 'K'].includes(it.card.rank)
-		const borderClass = isRed ? 'border-rose-200' : 'border-slate-200'
-		return (
+	const isRed = it.card.suit === 'Hearts' || it.card.suit === 'Diamonds'
+	const suitColor = isRed ? 'text-rose-600' : 'text-slate-800'
+	const isFace = ['J', 'Q', 'K'].includes(it.card.rank)
+	const borderClass = isRed ? 'border-rose-200' : 'border-slate-200'
+	return (
+		<div
+			className={`relative ${dims.w} ${
+				dims.h
+			} rounded-[14px] ${borderClass} bg-white flex items-center justify-center overflow-hidden ${rotateClass} ${
+				isWinner ? 'winner-gold animate-spin-once' : ''
+			} ${dim ? 'animate-fade-dim' : ''}`}
+			style={{
+				boxShadow:
+					'0 8px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -3px 10px rgba(0,0,0,0.10)',
+			}}>
+			{/* faint paper texture */}
 			<div
-				className={`relative ${dims.w} ${
-					dims.h
-				} rounded-[14px] ${borderClass} bg-white flex items-center justify-center overflow-hidden ${rotateClass} ${
-					isWinner ? 'winner-gold animate-spin-once' : ''
-				} ${dim ? 'animate-fade-dim' : ''}`}
+				className="absolute inset-0 opacity-[0.04] pointer-events-none"
 				style={{
-					boxShadow:
-						'0 8px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -3px 10px rgba(0,0,0,0.10)',
-				}}>
-				{/* faint paper texture */}
-				<div
-					className="absolute inset-0 opacity-[0.04] pointer-events-none"
-					style={{
-						backgroundImage:
-							'repeating-linear-gradient(135deg, #000 0, #000 1px, transparent 1px, transparent 6px)',
-					}}
-				/>
-				{/* gloss highlight */}
-				<div
-					className="absolute inset-0 pointer-events-none"
-					style={{
-						background:
-							'radial-gradient(circle at 20% 0%, rgba(255,255,255,0.55), rgba(255,255,255,0.05) 40%, rgba(255,255,255,0) 60%)',
-					}}
-				/>
-				{/* subtle suit watermark for face cards */}
-				{isFace && (
-					<div className="absolute inset-0 opacity-10 pointer-events-none select-none">
-						<div
-							className={`absolute -rotate-12 ${dims.text} ${suitColor} right-2 bottom-2`}>
-							{suitSymbol(it.card.suit)}
-						</div>
-						<div
-							className={`absolute rotate-12 ${dims.text} ${suitColor} left-2 top-2`}>
-							{suitSymbol(it.card.suit)}
-						</div>
+					backgroundImage:
+						'repeating-linear-gradient(135deg, #000 0, #000 1px, transparent 1px, transparent 6px)',
+				}}
+			/>
+			{/* gloss highlight */}
+			<div
+				className="absolute inset-0 pointer-events-none"
+				style={{
+					background:
+						'radial-gradient(circle at 20% 0%, rgba(255,255,255,0.55), rgba(255,255,255,0.05) 40%, rgba(255,255,255,0) 60%)',
+				}}
+			/>
+			{/* subtle suit watermark for face cards */}
+			{isFace && (
+				<div className="absolute inset-0 opacity-10 pointer-events-none select-none">
+					<div
+						className={`absolute -rotate-12 ${dims.text} ${suitColor} right-2 bottom-2`}>
+						{suitSymbol(it.card.suit)}
 					</div>
-				)}
-				{/* face-card icon overlays */}
-				{isFace && (
-					<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-						{it.card.rank === 'K' || it.card.rank === 'Q' ? (
-							<svg
-								width="72"
-								height="72"
-								viewBox="0 0 64 64"
-								className="opacity-15"
-								aria-hidden>
-								<path
-									d="M8 40 L20 12 L32 28 L44 12 L56 40 L8 40 Z"
-									fill={isRed ? '#dc2626' : '#1f2937'}
-								/>
-								<circle cx="32" cy="36" r="6" fill="white" opacity="0.5" />
-							</svg>
-						) : (
-							<svg
-								width="72"
-								height="72"
-								viewBox="0 0 64 64"
-								className="opacity-15"
-								aria-hidden>
-								<path
-									d="M10 44 C20 28, 44 28, 54 44 L48 46 C42 36, 22 36, 16 46 Z"
-									fill={isRed ? '#dc2626' : '#1f2937'}
-								/>
-								<circle cx="24" cy="30" r="5" fill="white" opacity="0.45" />
-								<circle cx="40" cy="30" r="5" fill="white" opacity="0.45" />
-							</svg>
-						)}
+					<div
+						className={`absolute rotate-12 ${dims.text} ${suitColor} left-2 top-2`}>
+						{suitSymbol(it.card.suit)}
 					</div>
-				)}
-				{/* top-left small suit */}
-				<div className={`absolute top-1 left-1 ${dims.corner} ${suitColor}`}>
-					{suitSymbol(it.card.suit)}
 				</div>
-				{/* bottom-right small suit (rotated) */}
-				<div
-					className={`absolute bottom-1 right-1 ${dims.corner} ${suitColor} rotate-180`}>
-					{suitSymbol(it.card.suit)}
+			)}
+			{/* face-card icon overlays */}
+			{isFace && (
+				<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+					{it.card.rank === 'K' || it.card.rank === 'Q' ? (
+						<svg
+							width="72"
+							height="72"
+							viewBox="0 0 64 64"
+							className="opacity-15"
+							aria-hidden>
+							<path
+								d="M8 40 L20 12 L32 28 L44 12 L56 40 L8 40 Z"
+								fill={isRed ? '#dc2626' : '#1f2937'}
+							/>
+							<circle cx="32" cy="36" r="6" fill="white" opacity="0.5" />
+						</svg>
+					) : (
+						<svg
+							width="72"
+							height="72"
+							viewBox="0 0 64 64"
+							className="opacity-15"
+							aria-hidden>
+							<path
+								d="M10 44 C20 28, 44 28, 54 44 L48 46 C42 36, 22 36, 16 46 Z"
+								fill={isRed ? '#dc2626' : '#1f2937'}
+							/>
+							<circle cx="24" cy="30" r="5" fill="white" opacity="0.45" />
+							<circle cx="40" cy="30" r="5" fill="white" opacity="0.45" />
+						</svg>
+					)}
 				</div>
-				{/* center rank + suit */}
-				<div
-					className={`${dims.text} font-extrabold ${suitColor} drop-shadow-sm`}>
-					{it.card.rank}
-					<span className="ml-0.5">{suitSymbol(it.card.suit)}</span>
-				</div>
+			)}
+			{/* top-left small suit */}
+			<div className={`absolute top-1 left-1 ${dims.corner} ${suitColor}`}>
+				{suitSymbol(it.card.suit)}
 			</div>
-		)
+			{/* bottom-right small suit (rotated) */}
+			<div
+				className={`absolute bottom-1 right-1 ${dims.corner} ${suitColor} rotate-180`}>
+				{suitSymbol(it.card.suit)}
+			</div>
+			{/* center rank + suit */}
+			<div
+				className={`${dims.text} font-extrabold ${suitColor} drop-shadow-sm`}>
+				{it.card.rank}
+				<span className="ml-0.5">{suitSymbol(it.card.suit)}</span>
+			</div>
+		</div>
+	)
 }
 
 function CrossTrick({
@@ -894,10 +894,10 @@ export default function Player() {
 		setCompletedTrickList([])
 		setPlayIdx(0)
 		setFlashWinner(null)
-	setVisibilityMode('mimic')
-	setHideDefenders(true)
-	setShowCompletedTricks(true)
-	setPlayStarted(false)
+		setVisibilityMode('mimic')
+		setHideDefenders(true)
+		setShowCompletedTricks(true)
+		setPlayStarted(false)
 	}, [
 		hands,
 		effTrump,
@@ -1244,22 +1244,19 @@ export default function Player() {
 		)
 			return
 		autoPlayRef.current = true
-		const timer = setTimeout(
-			() => {
-				const sel = selectDefenderCard(turnSeat)
-				if (sel?.card) {
-					onPlayCard(turnSeat, sel.card.id)
-					setLastAutoPlay({
-						seat: turnSeat,
-						cardId: sel.card.id,
-						reason: sel.reason,
-						ts: Date.now(),
-					})
-				}
-				autoPlayRef.current = false
-			},
-			420
-		)
+		const timer = setTimeout(() => {
+			const sel = selectDefenderCard(turnSeat)
+			if (sel?.card) {
+				onPlayCard(turnSeat, sel.card.id)
+				setLastAutoPlay({
+					seat: turnSeat,
+					cardId: sel.card.id,
+					reason: sel.reason,
+					ts: Date.now(),
+				})
+			}
+			autoPlayRef.current = false
+		}, 420)
 		return () => {
 			clearTimeout(timer)
 			autoPlayRef.current = false
