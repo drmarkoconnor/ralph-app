@@ -82,7 +82,8 @@ function ranksFor(cards, suitName) {
 	const sorted = [...inSuit].sort(
 		(a, b) => (order[b.rank] || 0) - (order[a.rank] || 0)
 	)
-	return sorted.map((c) => (c.rank === '10' ? 'T' : c.rank)).join('') || '—'
+	// Display Ten as "10" for consistency in documents
+	return sorted.map((c) => String(c.rank)).join('') || '—'
 }
 
 function seatBlock(id, d) {

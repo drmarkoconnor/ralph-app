@@ -30,7 +30,6 @@ async function ensureDds() {
 function toDdTableDealPbn(deal) {
 	// remainCards PBN format expects like: "N:SPADES.HEARTS.DIAMONDS.CLUBS E:... S:... W:..."
 	const suitOrder = ['S', 'H', 'D', 'C']
-	const ranksMap = { 10: 'T' }
 	const segFor = (seat) => {
 		const hand = deal?.hands?.[seat] || []
 		const bySuit = { S: [], H: [], D: [], C: [] }

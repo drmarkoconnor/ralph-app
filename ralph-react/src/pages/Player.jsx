@@ -45,6 +45,7 @@ function SeatPanel({
 	openingLeader,
 	playStarted,
 	openingLeadPulse,
+	compact = false,
 }) {
 	const hand = remaining?.[id] || []
 	const hcp = hand.reduce((s, c) => s + hcpValue(c.rank), 0)
@@ -66,20 +67,20 @@ function SeatPanel({
 	const isTurn = turnSeat === id
 	return (
 		<div
-			className={`rounded-xl border w-60 overflow-hidden bg-white flex flex-col ${
-				isTurn ? 'border-red-500' : 'border-gray-300'
+			className={`relative z-10 rounded-2xl border w-full h-full overflow-hidden flex flex-col ${
+				isTurn ? 'border-rose-500' : id === 'N' || id === 'S' ? 'border-sky-300' : 'border-teal-300'
 			} ${lastAutoSeat === id ? 'ring-2 ring-sky-300 animate-pulse' : ''} ${
 				highlight
 					? 'relative z-20 shadow-xl shadow-yellow-200/30 ring-2 ring-yellow-300'
 					: ''
-			}`}>
+			} ${id === 'N' || id === 'S' ? 'bg-gradient-to-br from-sky-50 to-sky-100' : 'bg-gradient-to-br from-teal-50 to-teal-100'}`}>
 			<div
-				className={`px-2 py-1 text-[11px] font-semibold flex items-center justify-between ${
+				className={`px-2 ${compact ? 'py-0.5' : 'py-1'} text-[11px] font-semibold flex items-center justify-between ${
 					isTurn
-						? 'bg-red-50'
+						? 'bg-rose-100'
 						: id === 'N' || id === 'S'
-						? 'bg-indigo-50'
-						: 'bg-gray-50'
+						? 'bg-sky-200'
+						: 'bg-teal-200'
 				}`}>
 				<span className="flex items-center gap-1">
 					{seatName(id)}
@@ -105,11 +106,11 @@ function SeatPanel({
 					)}
 				</span>
 			</div>
-			<div className="p-2 flex flex-col gap-2">
+			<div className={`${compact ? 'p-1' : 'p-2'} flex flex-col ${compact ? 'gap-1' : 'gap-2'} flex-1 min-h-0 overflow-auto`}>
 				{suitOrder.map((s) => (
-					<div key={s} className="flex items-center gap-2">
+					<div key={s} className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`}>
 						<div
-							className={`w-6 text-center text-xl ${
+							className={`${compact ? 'w-5 text-lg' : 'w-6 text-xl'} text-center ${
 								s === 'Hearts' || s === 'Diamonds'
 									? 'text-red-600'
 									: 'text-black'
@@ -379,13 +380,17 @@ function CrossTrick({
 	lastAutoPlay,
 	highlight,
 	openingLeader,
+	showStatus = true,
 }) {
 	return (
 		<div
-			className={`relative rounded-3xl border-2 w-[560px] h-[340px] shadow-inner overflow-hidden ${
+			className={`relative rounded-3xl border-2 w-full h-full shadow-inner overflow-hidden ${
 				highlight ? 'ring-2 ring-yellow-300' : ''
 			}`}
-			style={{ background: '#0b5d27' }}>
+			style={{
+				background:
+					'radial-gradient(circle at 30% 20%, rgba(16,185,129,0.45), rgba(5,46,22,0.85) 60%), radial-gradient(circle at 70% 80%, rgba(6,78,59,0.55), rgba(2,44,34,0.9) 55%)',
+			}}>
 			{/* felt texture overlays */}
 			<div
 				className="absolute inset-0 pointer-events-none"
@@ -401,56 +406,53 @@ function CrossTrick({
 						'repeating-linear-gradient(145deg, rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 1px, transparent 1px, transparent 7px)',
 				}}
 			/>
-			<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-				<div className="text-[11px] text-gray-500">
-					{winner ? (
-						<span className="text-green-700 font-semibold">
-							Trick to {winner}
-						</span>
-					) : turnSeat ? (
-						<span>Turn: {turnSeat}</span>
-					) : (
-						<span>&nbsp;</span>
-					)}
-				</div>
-			</div>
-			{openingLeader && (
-				<div className="absolute top-2 right-2 text-[10px] bg-yellow-300 text-black px-2 py-0.5 rounded shadow">
-					Opening lead: {openingLeader}
+			{showStatus && (
+				<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+					<div className="text-[11px] text-gray-500">
+						{winner ? (
+							<span className="text-green-700 font-semibold">
+								Trick to {winner}
+							</span>
+						) : turnSeat ? (
+							<span>Turn: {turnSeat}</span>
+						) : (
+							<span>&nbsp;</span>
+						)}
+					</div>
 				</div>
 			)}
-			<div className="absolute left-1/2 -translate-x-1/2 top-3">
+			<div className="absolute left-1/2 -translate-x-1/2 top-6">
 				<CardSlot
 					seat="N"
 					trick={trick}
-					size="lg"
+					size="md"
 					isWinner={winner === 'N'}
 					dim={!!winner && winner !== 'N'}
 				/>
 			</div>
-			<div className="absolute right-4 top-1/2 -translate-y-1/2">
+			<div className="absolute right-6 top-1/2 -translate-y-1/2">
 				<CardSlot
 					seat="E"
 					trick={trick}
-					size="lg"
+					size="md"
 					isWinner={winner === 'E'}
 					dim={!!winner && winner !== 'E'}
 				/>
 			</div>
-			<div className="absolute left-4 top-1/2 -translate-y-1/2">
+			<div className="absolute left-6 top-1/2 -translate-y-1/2">
 				<CardSlot
 					seat="W"
 					trick={trick}
-					size="lg"
+					size="md"
 					isWinner={winner === 'W'}
 					dim={!!winner && winner !== 'W'}
 				/>
 			</div>
-			<div className="absolute left-1/2 -translate-x-1/2 bottom-3">
+			<div className="absolute left-1/2 -translate-x-1/2 bottom-6">
 				<CardSlot
 					seat="S"
 					trick={trick}
-					size="lg"
+					size="md"
 					isWinner={winner === 'S'}
 					dim={!!winner && winner !== 'S'}
 				/>
@@ -618,6 +620,11 @@ export default function Player() {
 	const [playStarted, setPlayStarted] = useState(false)
 	const [soundOn, setSoundOn] = useState(true)
 	const [showCelebration, setShowCelebration] = useState(false)
+
+	// Compact layout when in teacher focus or while play is started
+	const compactPlay = teacherFocus || playStarted
+	const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+	const collapseSidebar = teacherFocus || playStarted || sidebarCollapsed
 
 	const playIdxRef = useRef(0)
 	const pauseRef = useRef(false)
@@ -829,6 +836,7 @@ export default function Player() {
 			setHistory([])
 			setManualMoves([])
 			setCompletedTrickList([])
+			setLastTrickPreview(null)
 			setPlayIdx(0)
 			setPlayStarted(false)
 			return
@@ -858,6 +866,11 @@ export default function Player() {
 		current?.dealer,
 		openingLeader,
 	])
+
+	// Close hand info in compact mode to reduce clutter
+	useEffect(() => {
+		if (compactPlay && handInfoOpen) setHandInfoOpen(false)
+	}, [compactPlay])
 
 	useEffect(() => {
 		if (!hands || !effTrump || !effDeclarer) {
@@ -1014,6 +1027,8 @@ export default function Player() {
 			if (history.length === 0 && seat !== openingLeader) return
 			const preRemaining = remaining
 			const trickBefore = trick
+			// parse played id for deterministic preview construction
+			const [__ignored, playedSuit, playedRank] = String(cardId).split('-')
 			const engine = {
 				remaining,
 				trick,
@@ -1036,9 +1051,8 @@ export default function Player() {
 			setTricksDef(next.tricksDef)
 			setCompletedTricks(next.completed)
 			setTrickComplete(next.trickComplete || false)
-			const [_, suit, rank] = cardId.split('-')
-			setHistory((h) => [...h, { seat, cardId, suit, rank }])
-			setManualMoves((m) => [...m, { seat, suit, rank }])
+			setHistory((h) => [...h, { seat, cardId, suit: playedSuit, rank: playedRank }])
+			setManualMoves((m) => [...m, { seat, suit: playedSuit, rank: playedRank }])
 			setPlayIdx((k) => {
 				const v = k + 1
 				playIdxRef.current = v
@@ -1055,12 +1069,25 @@ export default function Player() {
 					else playKlaxon()
 				}
 				setCompletedTrickList((lst) => {
+					// Build the just-completed trick from the pre-state plus the played card
+					// using parsed id pieces to avoid any object identity issues.
+					const completedTrick = [
+						...trickBefore,
+						{ seat, card: { id: cardId, suit: playedSuit, rank: playedRank } },
+					]
+					// Re-evaluate winner from the completed trick for the preview.
+					// Prefer engine's winner; only compute locally if missing
+					let previewWinner = r.winner
+					if (!previewWinner) {
+						try {
+							previewWinner = evaluateTrick(completedTrick, effTrump)
+						} catch {}
+					}
 					const entry = {
 						no: lst.length + 1,
-						winner: r.winner,
-						cards: next.trick,
+						winner: previewWinner,
+						cards: completedTrick,
 					}
-					// update last trick preview
 					setLastTrickPreview(entry)
 					return [...lst, entry]
 				})
@@ -1348,6 +1375,7 @@ export default function Player() {
 		setVisibilityMode('hidden')
 		setHideDefenders(true)
 		setShowAiLog(false)
+		setLastTrickPreview(null)
 	}
 
 	// Escape key exits teacher focus mode
@@ -1361,7 +1389,7 @@ export default function Player() {
 	}, [teacherFocus])
 
 	return (
-		<div className="min-h-screen bg-gray-100 flex relative">
+		<div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 flex relative">
 			{showAuctionModal && (
 				<div className="fixed inset-0 z-50 flex items-center justify-center">
 					<div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
@@ -1395,8 +1423,10 @@ export default function Player() {
 			)}
 
 			<div
-				className={`w-72 p-3 border-r bg-gray-50 flex flex-col gap-3 text-[11px] transition-all duration-300 ${
-					teacherFocus ? 'opacity-0 -translate-x-full pointer-events-none' : ''
+				className={`border-r bg-gray-50 flex flex-col gap-3 text-[11px] transition-all duration-300 ${
+					collapseSidebar
+						? 'w-0 p-0 opacity-0 -translate-x-full pointer-events-none'
+						: 'w-72 p-3'
 				}`}>
 				<div className="flex items-center justify-between">
 					<Link to="/" className="text-sky-600 hover:underline text-[12px]">
@@ -1701,67 +1731,33 @@ export default function Player() {
 				)}
 			</div>
 
+			{/* Sidebar chevron toggle */}
+			<button
+				onClick={() => setSidebarCollapsed((v) => !v)}
+				aria-label={collapseSidebar ? 'Expand sidebar' : 'Collapse sidebar'}
+				className={`fixed top-1/2 -translate-y-1/2 z-40 bg-white/90 backdrop-blur border rounded-full shadow px-2 py-1 text-sm hover:bg-white transition ${
+					collapseSidebar ? 'left-1' : 'left-[18rem]'
+				}`}
+			>
+				{collapseSidebar ? '›' : '‹'}
+			</button>
+
 			<div className="flex-1 p-4 flex flex-col gap-4 relative">
 				{/* Last trick mini preview - pinned to main area */}
-				{lastTrickPreview && (
-					<div className="absolute top-2 left-2 z-10">
+				{current && hands && lastTrickPreview && (
+					<div className="absolute top-2 left-2 z-0 pointer-events-none">
 						<div className="text-[10px] text-gray-600 mb-1">Last trick</div>
-						<div className="relative rounded-2xl border bg-emerald-900/30 backdrop-blur-sm p-2">
-							<div className="relative w-[320px] h-[200px] bg-[#0b5d27] rounded-xl border overflow-hidden">
-								<div
-									className="absolute inset-0 opacity-[0.06]"
-									style={{
-										backgroundImage:
-											'repeating-linear-gradient(145deg, rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 1px, transparent 1px, transparent 7px)',
-									}}
+						<div className="relative rounded-2xl border bg-white/40 backdrop-blur-sm p-2">
+							<div className="w-[260px] h-[260px]">
+								<CrossTrick
+									trick={lastTrickPreview.cards}
+									winner={lastTrickPreview.winner}
+									turnSeat={null}
+									lastAutoPlay={null}
+									highlight={false}
+									openingLeader={null}
+									showStatus={false}
 								/>
-								<div className="absolute left-1/2 -translate-x-1/2 top-3">
-									<CardSlot
-										seat="N"
-										trick={lastTrickPreview.cards}
-										size="md"
-										tilt={false}
-									/>
-									<div className="text-[10px] text-white/80 text-center mt-0.5">
-										N
-									</div>
-								</div>
-								<div className="absolute right-3 top-1/2 -translate-y-1/2">
-									<CardSlot
-										seat="E"
-										trick={lastTrickPreview.cards}
-										size="md"
-										tilt={false}
-									/>
-									<div className="text-[10px] text-white/80 text-center mt-0.5">
-										E
-									</div>
-								</div>
-								<div className="absolute left-3 top-1/2 -translate-y-1/2">
-									<CardSlot
-										seat="W"
-										trick={lastTrickPreview.cards}
-										size="md"
-										tilt={false}
-									/>
-									<div className="text-[10px] text-white/80 text-center mt-0.5">
-										W
-									</div>
-								</div>
-								<div className="absolute left-1/2 -translate-x-1/2 bottom-3">
-									<CardSlot
-										seat="S"
-										trick={lastTrickPreview.cards}
-										size="md"
-										tilt={false}
-									/>
-									<div className="text-[10px] text-white/80 text-center mt-0.5">
-										S
-									</div>
-								</div>
-								<div className="absolute bottom-2 right-2 text-[11px] bg-yellow-300/90 text-black px-1.5 py-0.5 rounded">
-									Winner: {lastTrickPreview.winner}
-								</div>
 							</div>
 						</div>
 					</div>
@@ -1770,8 +1766,8 @@ export default function Player() {
 					<PreUpload onChooseFile={() => fileRef.current?.click()} />
 				)}
 				{current && hands && (
-					<div className="flex flex-col gap-6 items-center">
-						<div className="w-full max-w-3xl mx-auto -mt-2">
+					<div className={`flex flex-col ${compactPlay ? 'gap-4' : 'gap-6'} items-center`}>
+						<div className={`w-full max-w-3xl mx-auto ${compactPlay ? '-mt-4' : '-mt-2'}`}>
 							<div className="flex items-center justify-end gap-2 mb-1">
 								<button
 									disabled={!effContract || !effDeclarer}
@@ -1781,11 +1777,13 @@ export default function Player() {
 									}`}>
 									{playStarted ? 'Stop' : 'Start Play'}
 								</button>
-								<button
-									onClick={() => setHandInfoOpen((v) => !v)}
-									className="px-2 py-1 rounded border bg-white text-[12px]">
-									{handInfoOpen ? 'Hide Hand Info' : 'Show Hand Info'}
-								</button>
+								{!compactPlay && (
+									<button
+										onClick={() => setHandInfoOpen((v) => !v)}
+										className="px-2 py-1 rounded border bg-white text-[12px]">
+										{handInfoOpen ? 'Hide Hand Info' : 'Show Hand Info'}
+									</button>
+								)}
 							</div>
 							{handInfoOpen && (
 								<div className="rounded-lg border bg-white/80 backdrop-blur p-3 text-[12px] shadow-sm">
@@ -1903,9 +1901,10 @@ export default function Player() {
 							<div
 								className={`grid grid-cols-3 grid-rows-3 relative ${
 									teacherFocus ? 'z-20' : ''
-								} gap-4 -ml-4`}>
+								} ${compactPlay ? 'gap-3' : 'gap-4'} ${collapseSidebar ? '' : '-ml-4'}`}>
 								<div className="col-start-2 row-start-1 flex justify-center">
-									<SeatPanel
+									<div className="w-[260px] h-[260px]">
+										<SeatPanel
 										id="N"
 										highlight={teacherFocus}
 										remaining={remaining}
@@ -1926,20 +1925,27 @@ export default function Player() {
 										}
 										playStarted={playStarted}
 										openingLeadPulse={openingLeadPulse && openingLeader === 'N'}
+										compact={compactPlay}
 									/>
+									</div>
 								</div>
 								{(effContract || current?.auction?.length) && (
 									<div className="col-start-3 row-start-1 flex justify-start items-start">
-										<AuctionGraphic
-											auction={current?.auction || []}
-											dealer={current?.auctionDealer || current?.dealer}
-											contract={effContract}
-											declarer={effDeclarer}
-										/>
+										{compactPlay ? (
+											<ContractBadge contract={effContract} declarer={effDeclarer} />
+										) : (
+											<AuctionGraphic
+												auction={current?.auction || []}
+												dealer={current?.auctionDealer || current?.dealer}
+												contract={effContract}
+												declarer={effDeclarer}
+											/>
+										)}
 									</div>
 								)}
 								<div className="col-start-1 row-start-2 flex justify-center items-center">
-									<SeatPanel
+									<div className="w-[260px] h-[260px]">
+										<SeatPanel
 										id="W"
 										highlight={teacherFocus}
 										remaining={remaining}
@@ -1961,9 +1967,11 @@ export default function Player() {
 										playStarted={playStarted}
 										openingLeadPulse={openingLeadPulse && openingLeader === 'W'}
 									/>
+									</div>
 								</div>
 								<div className="col-start-3 row-start-2 flex justify-center items-center">
-									<SeatPanel
+									<div className="w-[260px] h-[260px]">
+										<SeatPanel
 										id="E"
 										highlight={teacherFocus}
 										remaining={remaining}
@@ -1985,9 +1993,11 @@ export default function Player() {
 										playStarted={playStarted}
 										openingLeadPulse={openingLeadPulse && openingLeader === 'E'}
 									/>
+									</div>
 								</div>
 								<div className="col-start-2 row-start-3 flex justify-center">
-									<SeatPanel
+									<div className="w-[260px] h-[260px]">
+										<SeatPanel
 										id="S"
 										highlight={teacherFocus}
 										remaining={remaining}
@@ -2008,10 +2018,13 @@ export default function Player() {
 										}
 										playStarted={playStarted}
 										openingLeadPulse={openingLeadPulse && openingLeader === 'S'}
+										compact={compactPlay}
 									/>
+									</div>
 								</div>
 								<div className="col-start-2 row-start-2 flex items-center justify-center">
-									<CrossTrick
+									<div className="w-[260px] h-[260px]">
+										<CrossTrick
 										trick={trick}
 										winner={flashWinner}
 										turnSeat={turnSeat}
@@ -2019,6 +2032,7 @@ export default function Player() {
 										highlight={teacherFocus}
 										openingLeader={history.length === 0 ? openingLeader : null}
 									/>
+									</div>
 								</div>
 							</div>
 						</div>

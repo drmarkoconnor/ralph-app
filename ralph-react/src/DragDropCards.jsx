@@ -197,6 +197,9 @@ function hcpOfCards(cards) {
 	return cards.reduce((sum, c) => sum + (pts[c.rank] || 0), 0)
 }
 
+const HCP_MAP = { A: 4, K: 3, Q: 2, J: 1 }
+const hcpOfCard = (card) => HCP_MAP[card.rank] || 0
+
 function sortByPbnRank(cards) {
 	const order = {
 		A: 13,
@@ -259,6 +262,30 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [gridData, setGridData] = useState(null)
 	const gridAbortRef = useRef({ token: 0 })
 
+	// --- HCP Allocator state ---
+	const [hcpEnabled, setHcpEnabled] = useState({
+		N: false,
+		E: false,
+		S: false,
+		W: false,
+	})
+	const [hcpTargets, setHcpTargets] = useState({ N: 10, E: 10, S: 10, W: 10 })
+	const [hcpError, setHcpError] = useState('')
+	// Optional shape constraints per seat (min combined lengths)
+	const [shapeMajorsMin, setShapeMajorsMin] = useState({
+		N: 0,
+		E: 0,
+		S: 0,
+		W: 0,
+	})
+	const [shapeMinorsMin, setShapeMinorsMin] = useState({
+		N: 0,
+		E: 0,
+		S: 0,
+		W: 0,
+	})
+	const [shapeModal, setShapeModal] = useState({ open: false, message: '' })
+
 	// Track if user has manually interacted with Theme select to avoid auto-clearing after selection
 	const themeTouchedRef = useRef(false)
 	useEffect(() => {
@@ -287,6 +314,17 @@ export default function DragDropCards({ meta, setMeta }) {
 	const inFlightRef = useRef(false)
 	// Deduplication for operations (seat+suit+rank) within a short window
 	const lastOpRef = useRef({ op: null, t: 0 })
+	// Seat lock state: prevents edits/randomization for locked seats
+	const [lockedSeats, setLockedSeats] = useState({
+		N: false,
+		E: false,
+		S: false,
+		W: false,
+	})
+	const lockedRef = useRef(lockedSeats)
+	useEffect(() => {
+		lockedRef.current = lockedSeats
+	}, [lockedSeats])
 	const KB_SEATS = SEATS
 	const KB_SUITS = ['Clubs', 'Diamonds', 'Hearts', 'Spades']
 
@@ -370,6 +408,11 @@ export default function DragDropCards({ meta, setMeta }) {
 				queueMicrotask(() => {
 					const seatAtKey = KB_SEATS[kbSeatRef.current]
 					const suitAtKey = KB_SUITS[kbSuitRef.current]
+					// Do not remove from locked seats via keyboard
+					if (lockedRef.current[seatAtKey]) {
+						inFlightRef.current = false
+						return
+					}
 					const buf = kbRanksRef.current
 					const last = buf[buf.length - 1]
 					// Always trim buffer if present
@@ -476,6 +519,7 @@ export default function DragDropCards({ meta, setMeta }) {
 	// Immediately move a typed rank from deck to the current seat/suit
 	const addRankToCurrentSeat = (rank, seatOverride, suitOverride) => {
 		const seat = seatOverride || currentKbSeat
+		if (lockedRef.current[seat]) return
 		const suit = suitOverride || currentKbSuit
 		// prevent duplicate rank entries in the status buffer
 		setKbRanks((prev) => (prev.includes(rank) ? prev : [...prev, rank]))
@@ -580,6 +624,8 @@ export default function DragDropCards({ meta, setMeta }) {
 		setSelected(new Set())
 		setGridState({ status: 'incomplete' })
 		setGridData(null)
+		setHcpError('')
+		setLockedSeats({ N: false, E: false, S: false, W: false })
 	}
 	useEffect(() => {
 		if (!complete) {
@@ -666,6 +712,9 @@ export default function DragDropCards({ meta, setMeta }) {
 		if (e && e.preventDefault) e.preventDefault()
 		setActiveBucket(null)
 		if (!draggedCard) return
+		// Respect seat locks: cannot drop into a locked seat or move cards out of a locked seat
+		if (SEATS.includes(bucket) && lockedSeats[bucket]) return
+		if (SEATS.includes(dragSource) && lockedSeats[dragSource]) return
 		if (dragSource === 'deck') {
 			setDeal((prev) => {
 				const capOk = prev.buckets[bucket].length < 13
@@ -705,6 +754,8 @@ export default function DragDropCards({ meta, setMeta }) {
 	const onDropToDeck = (e) => {
 		if (e && e.preventDefault) e.preventDefault()
 		if (!draggedCard || !SEATS.includes(dragSource)) return
+		// Cannot move out of a locked seat
+		if (lockedSeats[dragSource]) return
 		setDeal((prev) => {
 			const fromArr = prev.buckets[dragSource]
 			const exists = fromArr.some((c) => c.id === draggedCard.id)
@@ -722,8 +773,358 @@ export default function DragDropCards({ meta, setMeta }) {
 		setDragSource(null)
 	}
 
+	// --- HCP allocation logic ---
+	// Find a subset of honors (by original index) whose HCP sums exactly to target.
+	// Returns an array of indices into the "honors" array (not a shuffled copy!)
+	const findHonorSubset = (honors, target) => {
+		// honors: array of { card, hcp }
+		const items = honors.map((h, idx) => ({ idx, hcp: h.hcp }))
+		// Randomize search order but keep original indices for correct removal
+		const order = items.slice().sort(() => Math.random() - 0.5)
+		const n = order.length
+		const memo = new Map()
+		const dfs = (i, sum, count) => {
+			const key = `${i}|${sum}|${count}`
+			if (memo.has(key)) return null
+			if (sum === target && count <= 13) return []
+			if (sum > target || count > 13) return null
+			if (i >= n) return null
+			// Bound: sum of remaining max points
+			let maxRemain = 0
+			for (let k = i; k < n; k++) maxRemain += order[k].hcp
+			if (sum + maxRemain < target) {
+				memo.set(key, null)
+				return null
+			}
+			// Try include
+			const withRes = dfs(i + 1, sum + order[i].hcp, count + 1)
+			if (withRes) return [order[i].idx, ...withRes]
+			// Try skip
+			const withoutRes = dfs(i + 1, sum, count)
+			if (withoutRes) return withoutRes
+			memo.set(key, null)
+			return null
+		}
+		return dfs(0, 0, 0)
+	}
+
+	const allocateHcpHands = () => {
+		setHcpError('')
+		// collect seats to allocate
+		const seatsToAlloc = SEATS.filter((s) => hcpEnabled[s])
+		if (seatsToAlloc.length === 0) {
+			setHcpError('Select at least one seat to allocate HCP to.')
+			return
+		}
+		// sanitize targets 0..29 and ints
+		const targets = {}
+		for (const s of seatsToAlloc) {
+			let v = Number(hcpTargets[s])
+			if (!Number.isFinite(v)) v = 0
+			v = Math.max(0, Math.min(29, Math.round(v)))
+			targets[s] = v
+		}
+		const totalWanted = Object.values(targets).reduce((a, b) => a + b, 0)
+		if (totalWanted > 40) {
+			setHcpError('Total HCP across selected seats exceeds 40.')
+			return
+		}
+		// Build a working deck: start from current deal, but return selected seats' cards to deck first
+		let workBuckets = {
+			N: [...deal.buckets.N],
+			E: [...deal.buckets.E],
+			S: [...deal.buckets.S],
+			W: [...deal.buckets.W],
+		}
+		let workDeck = [...deal.deck]
+		for (const s of seatsToAlloc) {
+			if (workBuckets[s].length) {
+				workDeck = sortDeck([...workDeck, ...workBuckets[s]])
+				workBuckets[s] = []
+			}
+		}
+		// Split honors and zeros
+		let honors = []
+		let zeros = []
+		for (const c of workDeck) {
+			const h = hcpOfCard(c)
+			if (h > 0) honors.push({ card: c, hcp: h })
+			else zeros.push(c)
+		}
+		// Fisher–Yates shuffle zeros so filler is random
+		for (let i = zeros.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1))
+			;[zeros[i], zeros[j]] = [zeros[j], zeros[i]]
+		}
+		const availHonorPoints = honors.reduce((s, it) => s + it.hcp, 0)
+		if (totalWanted > availHonorPoints) {
+			setHcpError(
+				'Not enough honor points available in the deck for the requested totals.'
+			)
+			return
+		}
+		// Allocate seats with highest targets first for better chance of success
+		const orderSeats = seatsToAlloc
+			.slice()
+			.sort((a, b) => targets[b] - targets[a] || Math.random() - 0.5)
+
+		const countSuits = (arr) => {
+			const counts = { Clubs: 0, Diamonds: 0, Hearts: 0, Spades: 0 }
+			for (const c of arr) counts[c.suit] = (counts[c.suit] || 0) + 1
+			return counts
+		}
+		const pickFiller = (poolZeros, need, currentCounts) => {
+			// Try thresholds progressively to avoid extreme long suits while staying random
+			const thresholds = [8, 9, 13]
+			let pool = poolZeros.slice()
+			const picked = []
+			for (const maxSuit of thresholds) {
+				const nextPool = []
+				for (let i = 0; i < pool.length && picked.length < need; i++) {
+					const c = pool[i]
+					if ((currentCounts[c.suit] || 0) < maxSuit) {
+						picked.push(c)
+						currentCounts[c.suit] = (currentCounts[c.suit] || 0) + 1
+					} else {
+						nextPool.push(c)
+					}
+				}
+				// Add the rest back for potential next threshold
+				pool = [...nextPool, ...pool.slice(Math.min(pool.length, pool.length))]
+				if (picked.length >= need) {
+					// Remove picked from original zeros
+					const used = new Set(picked.map((c) => c.id))
+					const remainingZeros = poolZeros.filter((c) => !used.has(c.id))
+					return { picked, remainingZeros }
+				}
+			}
+			// If still not enough (shouldn't happen), just take first available
+			const extra = pool.slice(0, need - picked.length)
+			const used = new Set([...picked, ...extra].map((c) => c.id))
+			const remainingZeros = poolZeros.filter((c) => !used.has(c.id))
+			return { picked: [...picked, ...extra], remainingZeros }
+		}
+		const built = {}
+		const warnings = []
+		for (const s of orderSeats) {
+			const target = targets[s]
+			if (target === 0) {
+				// pick 13 zero-point cards if possible, with suit balance
+				if (zeros.length < 13) {
+					setHcpError(`Insufficient low cards to allocate 0 HCP for ${s}.`)
+					return
+				}
+				// Apply optional shape preferences first, then fill the rest
+				let seatCounts0 = { Clubs: 0, Diamonds: 0, Hearts: 0, Spades: 0 }
+				const prefer = {
+					majors: Math.max(0, Number(shapeMajorsMin[s] || 0)),
+					minors: Math.max(0, Number(shapeMinorsMin[s] || 0)),
+				}
+				let picked0 = []
+				// Shuffle zeros lightly
+				zeros = zeros.sort(() => Math.random() - 0.5)
+				const pickFromSuits = (pool, need, suitsSet) => {
+					if (need <= 0) return { picked: [], rest: pool }
+					const res = []
+					const rest = []
+					for (const c of pool) {
+						if (res.length < need && suitsSet.has(c.suit)) res.push(c)
+						else rest.push(c)
+					}
+					return { picked: res, rest }
+				}
+				// Majors then minors
+				let majorsHave0 = seatCounts0.Hearts + seatCounts0.Spades
+				let minorsHave0 = seatCounts0.Clubs + seatCounts0.Diamonds
+				if (prefer.majors > 0) {
+					const needMaj0 = Math.max(0, prefer.majors - majorsHave0)
+					const { picked, rest } = pickFromSuits(
+						zeros,
+						needMaj0,
+						new Set(['Hearts', 'Spades'])
+					)
+					picked0.push(...picked)
+					zeros = rest
+					for (const c of picked)
+						seatCounts0[c.suit] = (seatCounts0[c.suit] || 0) + 1
+					majorsHave0 = seatCounts0.Hearts + seatCounts0.Spades
+				}
+				if (prefer.minors > 0) {
+					const needMin0 = Math.max(0, prefer.minors - minorsHave0)
+					const { picked, rest } = pickFromSuits(
+						zeros,
+						needMin0,
+						new Set(['Clubs', 'Diamonds'])
+					)
+					picked0.push(...picked)
+					zeros = rest
+					for (const c of picked)
+						seatCounts0[c.suit] = (seatCounts0[c.suit] || 0) + 1
+					minorsHave0 = seatCounts0.Clubs + seatCounts0.Diamonds
+				}
+				// Fill remaining to 13 with any zeros
+				const need0 = 13 - picked0.length
+				if (zeros.length < need0) {
+					setHcpError(`Insufficient low cards to complete ${s}'s hand.`)
+					return
+				}
+				picked0.push(...zeros.slice(0, need0))
+				zeros = zeros.slice(need0)
+				built[s] = picked0
+				// Shape warning if unmet
+				const majAch0 = built[s].filter(
+					(c) => c.suit === 'Hearts' || c.suit === 'Spades'
+				).length
+				const minAch0 = built[s].filter(
+					(c) => c.suit === 'Clubs' || c.suit === 'Diamonds'
+				).length
+				if (prefer.majors > 0 && majAch0 < prefer.majors)
+					warnings.push(
+						`${s}: requested Majors≥${prefer.majors}, achieved ${majAch0}. Proceeded.`
+					)
+				if (prefer.minors > 0 && minAch0 < prefer.minors)
+					warnings.push(
+						`${s}: requested Minors≥${prefer.minors}, achieved ${minAch0}. Proceeded.`
+					)
+				continue
+			}
+			// Re-shuffle honors before each seat to add randomness
+			honors = honors.sort(() => Math.random() - 0.5)
+			const idxs = findHonorSubset(honors, target)
+			if (!idxs) {
+				setHcpError(
+					`Could not find an exact ${target} HCP honor combination for ${s}. Try slightly different totals or fewer selected seats.`
+				)
+				return
+			}
+			// Collect chosen honors (take in descending idx order to splice safely)
+			const chosen = []
+			const idxSorted = idxs.slice().sort((a, b) => b - a)
+			for (const i of idxSorted) {
+				const it = honors.splice(i, 1)[0]
+				chosen.push(it.card)
+			}
+			// Fill to 13 with zeros, honoring optional shape constraints first
+			const need = 13 - chosen.length
+			if (need < 0) {
+				setHcpError('Internal error: selected more than 13 honors.')
+				return
+			}
+			if (zeros.length < need) {
+				setHcpError(`Insufficient low cards to complete ${s}'s hand.`)
+				return
+			}
+			const suitCounts = countSuits(chosen)
+			const prefer = {
+				majors: Math.max(0, Number(shapeMajorsMin[s] || 0)),
+				minors: Math.max(0, Number(shapeMinorsMin[s] || 0)),
+			}
+			// Shuffle zeros lightly
+			zeros = zeros.sort(() => Math.random() - 0.5)
+			const pickFromSuits = (pool, needCount, suitsSet) => {
+				if (needCount <= 0) return { picked: [], rest: pool }
+				const res = []
+				const rest = []
+				for (const c of pool) {
+					if (res.length < needCount && suitsSet.has(c.suit)) res.push(c)
+					else rest.push(c)
+				}
+				return { picked: res, rest }
+			}
+			let filler = []
+			let poolZ = zeros
+			// Try to satisfy majors then minors preferences first
+			if (prefer.majors > 0) {
+				const haveMaj = (suitCounts.Hearts || 0) + (suitCounts.Spades || 0)
+				const needMaj = Math.max(0, prefer.majors - haveMaj)
+				if (needMaj > 0) {
+					const { picked, rest } = pickFromSuits(
+						poolZ,
+						needMaj,
+						new Set(['Hearts', 'Spades'])
+					)
+					filler.push(...picked)
+					for (const c of picked)
+						suitCounts[c.suit] = (suitCounts[c.suit] || 0) + 1
+					poolZ = rest
+				}
+			}
+			if (prefer.minors > 0) {
+				const haveMin = (suitCounts.Clubs || 0) + (suitCounts.Diamonds || 0)
+				const needMin = Math.max(0, prefer.minors - haveMin)
+				if (needMin > 0) {
+					const { picked, rest } = pickFromSuits(
+						poolZ,
+						needMin,
+						new Set(['Clubs', 'Diamonds'])
+					)
+					filler.push(...picked)
+					for (const c of picked)
+						suitCounts[c.suit] = (suitCounts[c.suit] || 0) + 1
+					poolZ = rest
+				}
+			}
+			// Fill remaining slots with any zeros
+			const stillNeed = need - filler.length
+			if (stillNeed > 0) {
+				if (poolZ.length < stillNeed) {
+					setHcpError(`Insufficient low cards to complete ${s}'s hand.`)
+					return
+				}
+				filler.push(...poolZ.slice(0, stillNeed))
+				poolZ = poolZ.slice(stillNeed)
+			}
+			zeros = poolZ
+			built[s] = [...chosen, ...filler]
+			// Shape warning if unmet
+			const majAch = built[s].filter(
+				(c) => c.suit === 'Hearts' || c.suit === 'Spades'
+			).length
+			const minAch = built[s].filter(
+				(c) => c.suit === 'Clubs' || c.suit === 'Diamonds'
+			).length
+			if (prefer.majors > 0 && majAch < prefer.majors)
+				warnings.push(
+					`${s}: requested Majors≥${prefer.majors}, achieved ${majAch}. Proceeded.`
+				)
+			if (prefer.minors > 0 && minAch < prefer.minors)
+				warnings.push(
+					`${s}: requested Minors≥${prefer.minors}, achieved ${minAch}. Proceeded.`
+				)
+			// Verification: ensure exact HCP match for this seat before continuing
+			const seatHcp = hcpOfCards(built[s])
+			if (seatHcp !== target) {
+				setHcpError(
+					`Internal allocation error for ${s}: expected ${target} HCP, got ${seatHcp}. Please try again.`
+				)
+				return
+			}
+		}
+		// Commit: update buckets and deck (remaining honors/zeros + untouched seat cards)
+		const usedIds = new Set()
+		Object.values(built).forEach((arr) => arr.forEach((c) => usedIds.add(c.id)))
+		const nextDeck = sortDeck(
+			[...honors.map((h) => h.card), ...zeros].filter((c) => !usedIds.has(c.id))
+		)
+		const nextBuckets = { ...workBuckets }
+		for (const s of orderSeats) nextBuckets[s] = built[s]
+		setDeal({ deck: nextDeck, buckets: nextBuckets })
+		setSelected(new Set())
+		setHcpError('')
+		if (warnings.length) {
+			setShapeModal({ open: true, message: warnings.join('\n') })
+		}
+		// Auto-lock allocated seats
+		setLockedSeats((prev) => {
+			const next = { ...prev }
+			for (const s of Object.keys(built)) next[s] = true
+			return next
+		})
+	}
+
 	// Simple click-to-remove: clicking a card in a seat moves it back to the deck
 	const removeCardFromSeat = (cardId, seat) => {
+		if (lockedSeats[seat]) return
 		setDeal((prev) => {
 			const fromArr = prev.buckets[seat]
 			const idx = fromArr.findIndex((c) => c.id === cardId)
@@ -765,6 +1166,7 @@ export default function DragDropCards({ meta, setMeta }) {
 
 	const sendSelectedTo = (bucket) => {
 		if (selected.size === 0) return
+		if (SEATS.includes(bucket) && lockedSeats[bucket]) return
 		// compute using current deal snapshot
 		const capacity = 13 - deal.buckets[bucket].length
 		if (capacity <= 0) return
@@ -793,18 +1195,16 @@ export default function DragDropCards({ meta, setMeta }) {
 			let pool = [...prev.deck]
 			const nextBuckets = { ...prev.buckets }
 			while (pool.length) {
+				const candidates = SEATS.filter(
+					(s) => !lockedSeats[s] && nextBuckets[s].length < 13
+				)
+				if (candidates.length === 0) break
 				const idx = Math.floor(Math.random() * pool.length)
 				const [card] = pool.splice(idx, 1)
-				const order = ['N', 'E', 'S', 'W']
-				for (let i = 0; i < 20; i++) {
-					const b = order[Math.floor(Math.random() * 4)]
-					if (nextBuckets[b].length < 13) {
-						nextBuckets[b] = [...nextBuckets[b], card]
-						break
-					}
-				}
+				const b = candidates[Math.floor(Math.random() * candidates.length)]
+				nextBuckets[b] = [...nextBuckets[b], card]
 			}
-			return { deck: [], buckets: nextBuckets }
+			return { deck: pool, buckets: nextBuckets }
 		})
 		setSelected(new Set())
 	}
@@ -1164,6 +1564,13 @@ export default function DragDropCards({ meta, setMeta }) {
 								D
 							</span>
 						)}
+						{lockedSeats[id] && (
+							<span
+								title="Locked"
+								className="ml-1 inline-flex items-center justify-center px-1 h-4 text-[9px] rounded bg-gray-800 text-white">
+								LOCK
+							</span>
+						)}
 					</span>
 					<span className="flex items-center gap-1">
 						{seatIsVul && (
@@ -1249,7 +1656,7 @@ export default function DragDropCards({ meta, setMeta }) {
 			{/* Left controls panel: move entire top toolbar here */}
 			<div
 				className={`${
-					leftOpen ? 'w-72' : 'w-10'
+					leftOpen ? 'w-80' : 'w-10'
 				} transition-all duration-200 border-r bg-white relative`}>
 				<div className="h-10 flex items-center justify-between px-2 border-b">
 					<span className="text-xs font-semibold text-gray-700">Generator</span>
@@ -1587,6 +1994,171 @@ export default function DragDropCards({ meta, setMeta }) {
 								<div className="text-[11px] text-gray-700">
 									Selected: {selectedCount} • Remaining: {remaining}
 								</div>
+								{/* HCP Allocator */}
+								<div className="mt-1 border rounded p-2 bg-gray-50 space-y-1">
+									<div className="text-[11px] font-semibold text-gray-800">
+										Allocate HCP
+									</div>
+									<div className="grid grid-cols-2 gap-1">
+										{SEATS.map((s) => (
+											<div
+												key={`hcp-${s}`}
+												className="flex items-center justify-between gap-2">
+												<label className="flex items-center gap-1">
+													<input
+														type="checkbox"
+														checked={hcpEnabled[s]}
+														onChange={(e) =>
+															setHcpEnabled((prev) => ({
+																...prev,
+																[s]: e.target.checked,
+															}))
+														}
+													/>
+													<span className="w-5 text-center font-semibold">
+														{s}
+													</span>
+												</label>
+												<input
+													type="number"
+													min={0}
+													max={29}
+													value={hcpTargets[s]}
+													disabled={!hcpEnabled[s]}
+													onChange={(e) => {
+														const v = Math.max(
+															0,
+															Math.min(
+																29,
+																Math.round(Number(e.target.value) || 0)
+															)
+														)
+														setHcpTargets((prev) => ({ ...prev, [s]: v }))
+													}}
+													className="w-12 border rounded px-1 py-0.5 text-[11px]"
+												/>
+												<div className="flex items-center gap-1">
+													<label className="flex items-center gap-1 text-[10px]">
+														<input
+															type="checkbox"
+															checked={!!lockedSeats[s]}
+															onChange={(e) =>
+																setLockedSeats((prev) => ({
+																	...prev,
+																	[s]: e.target.checked,
+																}))
+															}
+														/>
+														<span title="Lock seat">🔒</span>
+													</label>
+												</div>
+											</div>
+										))}
+									</div>
+									{/* Shape constraints (optional) */}
+									<div className="grid grid-cols-1 gap-1 mt-1">
+										{SEATS.map((s) => (
+											<div
+												key={`shape-${s}`}
+												className="flex items-center justify-between gap-1">
+												<label className="flex items-center gap-1 text-[11px]">
+													<span className="w-5 text-center font-semibold opacity-70">
+														{s}
+													</span>
+													<span className="opacity-70">Maj≥</span>
+													<input
+														type="number"
+														min={0}
+														max={13}
+														value={shapeMajorsMin[s]}
+														disabled={!hcpEnabled[s]}
+														onChange={(e) =>
+															setShapeMajorsMin((prev) => ({
+																...prev,
+																[s]: Math.max(
+																	0,
+																	Math.min(13, Number(e.target.value) || 0)
+																),
+															}))
+														}
+														className="w-11 border rounded px-1 py-0.5 text-[11px]"
+													/>
+												</label>
+												<label className="flex items-center gap-1 text-[11px]">
+													<span className="opacity-70">Min≥</span>
+													<input
+														type="number"
+														min={0}
+														max={13}
+														value={shapeMinorsMin[s]}
+														disabled={!hcpEnabled[s]}
+														onChange={(e) =>
+															setShapeMinorsMin((prev) => ({
+																...prev,
+																[s]: Math.max(
+																	0,
+																	Math.min(13, Number(e.target.value) || 0)
+																),
+															}))
+														}
+														className="w-11 border rounded px-1 py-0.5 text-[11px]"
+													/>
+												</label>
+											</div>
+										))}
+									</div>
+									{hcpError && (
+										<div className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">
+											{hcpError}
+										</div>
+									)}
+									<div className="flex items-center gap-2">
+										<button
+											className="px-2 py-1 rounded bg-emerald-600 text-white text-[11px] hover:bg-emerald-700"
+											onClick={allocateHcpHands}
+											title="Allocate exact HCP hands for selected seats; remaining cards stay in the deck for Randomize.">
+											Allocate points
+										</button>
+										<button
+											className="px-2 py-1 rounded border text-[11px]"
+											onClick={() => {
+												setHcpEnabled({
+													N: false,
+													E: false,
+													S: false,
+													W: false,
+												})
+												setHcpTargets({ N: 10, E: 10, S: 10, W: 10 })
+												setShapeMajorsMin({ N: 0, E: 0, S: 0, W: 0 })
+												setShapeMinorsMin({ N: 0, E: 0, S: 0, W: 0 })
+												setHcpError('')
+											}}>
+											Reset HCP
+										</button>
+									</div>
+								</div>
+								{/* Shape relaxation modal */}
+								{shapeModal.open && (
+									<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+										<div className="bg-white rounded shadow-xl p-4 max-w-sm w-[90%]">
+											<div className="text-sm font-semibold mb-2">
+												Shape relaxed
+											</div>
+											<div className="text-[12px] whitespace-pre-wrap text-gray-700">
+												{shapeModal.message}
+											</div>
+											<div className="mt-3 text-right">
+												<button
+													className="px-3 py-1 rounded bg-gray-800 text-white text-[12px]"
+													onClick={() =>
+														setShapeModal({ open: false, message: '' })
+													}>
+													OK
+												</button>
+											</div>
+										</div>
+									</div>
+								)}
 								<div className="grid grid-cols-1 gap-1">
 									<button
 										className="px-3 py-2 rounded bg-purple-600 text-white text-xs hover:opacity-90 disabled:opacity-40"

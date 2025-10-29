@@ -22,18 +22,8 @@ export async function generateHandoutPDF(deals, options = {}) {
 	// Register a small embedded monospaced font for reliable rank alignment.
 	// Using jsPDF's built-in Courier can still vary across viewers; embedding avoids that.
 	try {
-		// Minimal base64 font (subset of DejaVu Sans Mono) generated offline.
-		// For licensing and size, we only need ASCII digits and AKQJT.
-		// If addFileToVFS/addFont throws, we'll silently fall back to courier.
-		const monoName = 'MonoEmbed'
-		const fileName = 'MonoEmbed.ttf'
-		// NOTE: This is a lightweight placeholder; if absent, code falls back gracefully.
-		// To keep the repo slim, we avoid bundling large TTF; ranks are ASCII, so fallback works.
-		if (doc.addFileToVFS && doc.addFont) {
-			// In case we don't ship a TTF, skip embedding (no base64 provided here)
-			// doc.addFileToVFS(fileName, '<base64-ttf>')
-			// doc.addFont(fileName, monoName, 'normal')
-		}
+		// Font embedding intentionally skipped to keep bundle slim.
+		// If needed in future, add TTF via addFileToVFS/addFont here.
 	} catch {
 		/* ignore embedding errors; fallback to built-in */
 	}
@@ -68,7 +58,8 @@ export async function generateHandoutPDF(deals, options = {}) {
 	const rankString = (cards, suit) => {
 		const arr = sortDisplay(cards.filter((c) => c.suit === suit))
 		if (!arr.length) return '—'
-		return arr.map((c) => (c.rank === '10' ? 'T' : c.rank)).join('')
+		// Always display Ten as "10" (not "T") for readability consistency
+		return arr.map((c) => String(c.rank)).join('')
 	}
 	const drawSuitIcon = (docRef, suit, x, y, size = 3.6) => {
 		const half = size / 2

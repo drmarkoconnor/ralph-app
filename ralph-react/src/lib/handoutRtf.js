@@ -27,9 +27,7 @@ function toRankLine(cards, suitName) {
 	}
 	const arr = (cards || []).filter((c) => c.suit === suitName)
 	arr.sort((a, b) => (order[b.rank] || 0) - (order[a.rank] || 0))
-	return arr.length
-		? arr.map((c) => (c.rank === '10' ? 'T' : c.rank)).join('')
-		: '-'
+	return arr.length ? arr.map((c) => String(c.rank)).join('') : '-'
 }
 
 function seatBlockRTF(seatId, d) {
@@ -60,24 +58,6 @@ function seatBlockRTF(seatId, d) {
 		'\\cf1 ',
 		h
 	)}\\line ${line(U.diamond, '\\cf1 ', dmd)}\\line ${line(U.club, '', c)}`
-}
-
-function metaKVRTF(d) {
-	const m = d.meta || {}
-	const kv = [
-		['Theme', m.theme],
-		['System', m.system],
-		['Interf', m.interf],
-		['Lead', m.lead],
-		['DDPar', m.ddpar || m.DDPar || m.ddPar],
-		['Scoring', m.scoring || 'MPs'],
-		['Contract', deriveContract(d) || ''],
-		['Declarer', m.declarer || d.declarer || ''],
-	]
-	return (
-		`{\\fs20 {\\b Details}}\\line ` +
-		kv.map(([k, v]) => `{\\fs20 ${esc(k)}: ${esc(v || '-')}}\\line `).join('')
-	)
 }
 
 // Compact metadata grid (4 rows x 2 columns) with small font under header
@@ -134,27 +114,6 @@ function notesRTF(d) {
 	const cellProps = ['\\clmgf', '\\clmrg']
 	const content = ` {\\fs18 {\\b Notes}}\\line {\\fs18 ${text}}`
 	return rtfRow(colW, [`${content}`, ``], cellProps)
-}
-
-function auctionRTF(d) {
-	const calls = Array.isArray(d.calls) ? d.calls : []
-	if (!calls.length) return ''
-	// Flatten to a single space-separated line
-	const flat = calls.join(' ')
-	return `{\\b Auction}\\line {\\f1 ${esc(flat)}}`
-}
-
-function playRTF(d) {
-	const play = d.meta?.play || d.meta?.playscript || d.meta?.playScript
-	if (!play) return ''
-	const rawLines = Array.isArray(play) ? play : String(play).split(/\r?\n/)
-	// Strip seat prefixes like "W:" or "E:" if present; keep the remainder
-	const lines = rawLines
-		.map((ln) => String(ln).trim())
-		.filter(Boolean)
-		.map((ln) => ln.replace(/^(N|E|S|W)\s*:\s*/, ''))
-	// Flatten to a single space-separated line
-	return `{\\b Play}\\line {\\f1 ${esc(lines.join(' '))}}`
 }
 
 // Build an RTF table row: cellWidths in twips, cells content as raw RTF strings
@@ -237,7 +196,6 @@ function auctionPlayTableRTF(d) {
 				.map((ln) => ln.replace(/^(N|E|S|W)\s*:\s*/, ''))
 		: []
 	if (!calls.length && !playLines.length) return ''
-	const auctionRows = []
 	// Flatten auction to single line
 	const auctionFlat = calls.join(' ')
 	const colW = [4800, 4800]

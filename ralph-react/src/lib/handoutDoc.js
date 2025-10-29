@@ -73,12 +73,13 @@ export async function generateHandoutDOC(deals, options = {}) {
 			3: 3,
 			2: 2,
 		}
-		const ranks = (arr, suitName) => {
+    const ranks = (arr, suitName) => {
 			const inSuit = arr.filter((c) => c.suit === suitName)
 			const sorted = [...inSuit].sort(
 				(a, b) => (order[b.rank] || 0) - (order[a.rank] || 0)
 			)
-			return sorted.map((c) => (c.rank === '10' ? 'T' : c.rank)).join('') || '—'
+      // Display Ten as "10" for consistency
+      return sorted.map((c) => String(c.rank)).join('') || '—'
 		}
 		const dealerId = String(d?.dealer || '')
 			.toUpperCase()
