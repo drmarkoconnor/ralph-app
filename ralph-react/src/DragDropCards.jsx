@@ -25,6 +25,7 @@ import {
 	getCachedGrid,
 } from './lib/makeableGridWorker'
 import { settings } from './lib/settings'
+import cardPngUrl from './lib/cardImage'
 
 // Deck suit order: Clubs, Diamonds, Hearts, Spades (traditional CDHS)
 const suits = [
@@ -1482,9 +1483,9 @@ export default function DragDropCards({ meta, setMeta }) {
 	}
 
 	const CARD_DECK =
-		'rounded-lg shadow-md cursor-pointer select-none transition-all duration-150 font-serif w-[48px] h-[72px] flex flex-col items-center justify-center border border-neutral-300 bg-[#FFF8E7]'
+		'rounded-lg shadow-md cursor-pointer select-none transition-all duration-150 w-[48px] h-[72px] flex items-center justify-center border border-neutral-300 bg-white'
 	const CARD_BUCKET =
-		'rounded-md shadow cursor-pointer select-none transition-all duration-150 font-serif w-[40px] h-[60px] flex flex-col items-center justify-center border border-neutral-300 bg-[#FFF8E7]'
+		'rounded-md shadow cursor-pointer select-none transition-all duration-150 w-[40px] h-[60px] flex items-center justify-center border border-neutral-300 bg-white'
 
 	const renderFace = (card, largeCenter = false) => {
 		const isA = card.rank === 'A'
@@ -2351,15 +2352,20 @@ export default function DragDropCards({ meta, setMeta }) {
 									onDragStart={(e) => onDragStartDeck(e, card)}
 									onDragEnd={onDragEnd}
 									onClick={() => toggleSelect(card.id)}
-									className={`rounded-lg shadow-md cursor-pointer select-none transition-all duration-150 font-serif w-[48px] h-[72px] flex flex-col items-center justify-center border border-neutral-300 bg-[#FFF8E7] ${
+									className={`${CARD_DECK} ${
 										isSelected
 											? 'ring-4 ring-yellow-300 scale-105'
 											: 'hover:scale-105'
-									}`}
+									} p-0`}
 									title={
 										hintsEnabled ? 'Click to select, drag to a seat' : undefined
 									}>
-									{renderFace(card, true)}
+									<img
+										src={cardPngUrl(card.suit, card.rank)}
+										alt={`${card.rank} of ${card.suit}`}
+										className="w-full h-full object-contain pointer-events-none select-none"
+										draggable={false}
+									/>
 								</div>
 							)
 						})}

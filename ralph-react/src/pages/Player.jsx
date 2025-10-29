@@ -134,37 +134,37 @@ function SeatPanel({
 							}`}>
 							{suitSymbol(s)}
 						</div>
-						<div className="flex flex-wrap gap-1 flex-1">
+												<div className="flex flex-wrap gap-1 flex-1">
 							{visible ? (
 								grouped[s].map((c) => {
 									const legal =
 										!isTurn || !leadSuit || !mustFollow || c.suit === leadSuit
 									const isRedSuit = c.suit === 'Hearts' || c.suit === 'Diamonds'
 									return (
-										<button
+																								<button
 											key={c.id}
 											disabled={!playStarted || !legal || !isTurn}
 											onClick={() => onPlay(id, c.id)}
-											className={`px-1.5 py-0.5 text-base rounded-md font-bold shadow-sm border bg-white ${
-												isRedSuit
-													? 'text-rose-600 border-rose-300'
-													: 'text-slate-800 border-slate-300'
-											} ${
-												legal && isTurn && playStarted
-													? 'ring-2 ring-yellow-300'
-													: ''
-											} ${
-												openingLeadPulse && isTurn && playStarted
-													? 'animate-pulse'
-													: ''
-											} ${
-												!playStarted || !legal || !isTurn ? 'opacity-40' : ''
-											} ${highlight ? 'outline outline-white/70' : ''}`}>
-											<span className="font-extrabold tracking-tight">
-												{c.rank}
-											</span>
-											<span className="ml-0.5">{suitSymbol(c.suit)}</span>
-										</button>
+																									className={`px-1.5 py-0.5 text-base rounded-md font-bold shadow-sm border bg-white ${
+																										isRedSuit
+																											? 'text-rose-600 border-rose-300'
+																											: 'text-slate-800 border-slate-300'
+																									} ${
+																										legal && isTurn && playStarted
+																											? 'ring-2 ring-yellow-300'
+																											: ''
+																									} ${
+																										openingLeadPulse && isTurn && playStarted
+																											? 'animate-pulse'
+																											: ''
+																									} ${
+																										!playStarted || !legal || !isTurn ? 'opacity-40' : ''
+																									} ${highlight ? 'outline outline-white/70' : ''}`}>
+																									<span className="font-extrabold tracking-tight">
+																										{c.rank}
+																									</span>
+																									<span className="ml-0.5">{suitSymbol(c.suit)}</span>
+																								</button>
 									)
 								})
 							) : (
@@ -274,22 +274,19 @@ function CardSlot({
 	dim = false,
 	tilt = true,
 }) {
-	const it = trick.find((t) => t.seat === seat)
+		const it = trick.find((t) => t.seat === seat)
 	const dims =
 		size === 'lg'
-			? { w: 'w-24', h: 'h-36', text: 'text-4xl', corner: 'text-sm' }
+				? { w: 'w-24', h: 'h-36', text: 'text-4xl', corner: 'text-sm' }
 			: size === 'sm'
-			? { w: 'w-14', h: 'h-20', text: 'text-xl', corner: 'text-[9px]' }
-			: { w: 'w-16', h: 'h-24', text: 'text-2xl', corner: 'text-[10px]' }
+				? { w: 'w-14', h: 'h-20', text: 'text-xl', corner: 'text-[9px]' }
+				: { w: 'w-16', h: 'h-24', text: 'text-2xl', corner: 'text-[10px]' }
 	if (!it)
 		return (
 			<div
 				className={`${dims.w} ${dims.h} rounded-xl border bg-white/90 shadow-inner`}
 			/>
 		)
-	const isRed = it.card.suit === 'Hearts' || it.card.suit === 'Diamonds'
-	const suitColor = isRed ? 'text-rose-600' : 'text-slate-800'
-	const isFace = ['J', 'Q', 'K'].includes(it.card.rank)
 	const rotateClass = tilt
 		? seat === 'E'
 			? 'rotate-6'
@@ -297,97 +294,100 @@ function CardSlot({
 			? '-rotate-6'
 			: ''
 		: ''
-	const borderClass = isRed ? 'border-rose-200' : 'border-slate-200'
-	return (
-		<div
-			className={`relative ${dims.w} ${
-				dims.h
-			} rounded-[14px] ${borderClass} bg-white flex items-center justify-center overflow-hidden ${rotateClass} ${
-				isWinner ? 'winner-gold animate-spin-once' : ''
-			} ${dim ? 'animate-fade-dim' : ''}`}
-			style={{
-				boxShadow:
-					'0 8px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -3px 10px rgba(0,0,0,0.10)',
-			}}>
-			{/* faint paper texture */}
+		const isRed = it.card.suit === 'Hearts' || it.card.suit === 'Diamonds'
+		const suitColor = isRed ? 'text-rose-600' : 'text-slate-800'
+		const isFace = ['J', 'Q', 'K'].includes(it.card.rank)
+		const borderClass = isRed ? 'border-rose-200' : 'border-slate-200'
+		return (
 			<div
-				className="absolute inset-0 opacity-[0.04] pointer-events-none"
+				className={`relative ${dims.w} ${
+					dims.h
+				} rounded-[14px] ${borderClass} bg-white flex items-center justify-center overflow-hidden ${rotateClass} ${
+					isWinner ? 'winner-gold animate-spin-once' : ''
+				} ${dim ? 'animate-fade-dim' : ''}`}
 				style={{
-					backgroundImage:
-						'repeating-linear-gradient(135deg, #000 0, #000 1px, transparent 1px, transparent 6px)',
-				}}
-			/>
-			{/* gloss highlight */}
-			<div
-				className="absolute inset-0 pointer-events-none"
-				style={{
-					background:
-						'radial-gradient(circle at 20% 0%, rgba(255,255,255,0.55), rgba(255,255,255,0.05) 40%, rgba(255,255,255,0) 60%)',
-				}}
-			/>
-			{/* subtle suit watermark for face cards */}
-			{isFace && (
-				<div className="absolute inset-0 opacity-10 pointer-events-none select-none">
-					<div
-						className={`absolute -rotate-12 ${dims.text} ${suitColor} right-2 bottom-2`}>
-						{suitSymbol(it.card.suit)}
+					boxShadow:
+						'0 8px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -3px 10px rgba(0,0,0,0.10)',
+				}}>
+				{/* faint paper texture */}
+				<div
+					className="absolute inset-0 opacity-[0.04] pointer-events-none"
+					style={{
+						backgroundImage:
+							'repeating-linear-gradient(135deg, #000 0, #000 1px, transparent 1px, transparent 6px)',
+					}}
+				/>
+				{/* gloss highlight */}
+				<div
+					className="absolute inset-0 pointer-events-none"
+					style={{
+						background:
+							'radial-gradient(circle at 20% 0%, rgba(255,255,255,0.55), rgba(255,255,255,0.05) 40%, rgba(255,255,255,0) 60%)',
+					}}
+				/>
+				{/* subtle suit watermark for face cards */}
+				{isFace && (
+					<div className="absolute inset-0 opacity-10 pointer-events-none select-none">
+						<div
+							className={`absolute -rotate-12 ${dims.text} ${suitColor} right-2 bottom-2`}>
+							{suitSymbol(it.card.suit)}
+						</div>
+						<div
+							className={`absolute rotate-12 ${dims.text} ${suitColor} left-2 top-2`}>
+							{suitSymbol(it.card.suit)}
+						</div>
 					</div>
-					<div
-						className={`absolute rotate-12 ${dims.text} ${suitColor} left-2 top-2`}>
-						{suitSymbol(it.card.suit)}
+				)}
+				{/* face-card icon overlays */}
+				{isFace && (
+					<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+						{it.card.rank === 'K' || it.card.rank === 'Q' ? (
+							<svg
+								width="72"
+								height="72"
+								viewBox="0 0 64 64"
+								className="opacity-15"
+								aria-hidden>
+								<path
+									d="M8 40 L20 12 L32 28 L44 12 L56 40 L8 40 Z"
+									fill={isRed ? '#dc2626' : '#1f2937'}
+								/>
+								<circle cx="32" cy="36" r="6" fill="white" opacity="0.5" />
+							</svg>
+						) : (
+							<svg
+								width="72"
+								height="72"
+								viewBox="0 0 64 64"
+								className="opacity-15"
+								aria-hidden>
+								<path
+									d="M10 44 C20 28, 44 28, 54 44 L48 46 C42 36, 22 36, 16 46 Z"
+									fill={isRed ? '#dc2626' : '#1f2937'}
+								/>
+								<circle cx="24" cy="30" r="5" fill="white" opacity="0.45" />
+								<circle cx="40" cy="30" r="5" fill="white" opacity="0.45" />
+							</svg>
+						)}
 					</div>
+				)}
+				{/* top-left small suit */}
+				<div className={`absolute top-1 left-1 ${dims.corner} ${suitColor}`}>
+					{suitSymbol(it.card.suit)}
 				</div>
-			)}
-			{/* face-card icon overlays */}
-			{isFace && (
-				<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-					{it.card.rank === 'K' || it.card.rank === 'Q' ? (
-						<svg
-							width="72"
-							height="72"
-							viewBox="0 0 64 64"
-							className="opacity-15"
-							aria-hidden>
-							<path
-								d="M8 40 L20 12 L32 28 L44 12 L56 40 L8 40 Z"
-								fill={isRed ? '#dc2626' : '#1f2937'}
-							/>
-							<circle cx="32" cy="36" r="6" fill="white" opacity="0.5" />
-						</svg>
-					) : (
-						<svg
-							width="72"
-							height="72"
-							viewBox="0 0 64 64"
-							className="opacity-15"
-							aria-hidden>
-							<path
-								d="M10 44 C20 28, 44 28, 54 44 L48 46 C42 36, 22 36, 16 46 Z"
-								fill={isRed ? '#dc2626' : '#1f2937'}
-							/>
-							<circle cx="24" cy="30" r="5" fill="white" opacity="0.45" />
-							<circle cx="40" cy="30" r="5" fill="white" opacity="0.45" />
-						</svg>
-					)}
+				{/* bottom-right small suit (rotated) */}
+				<div
+					className={`absolute bottom-1 right-1 ${dims.corner} ${suitColor} rotate-180`}>
+					{suitSymbol(it.card.suit)}
 				</div>
-			)}
-			{/* top-left small suit */}
-			<div className={`absolute top-1 left-1 ${dims.corner} ${suitColor}`}>
-				{suitSymbol(it.card.suit)}
+				{/* center rank + suit */}
+				<div
+					className={`${dims.text} font-extrabold ${suitColor} drop-shadow-sm`}>
+					{it.card.rank}
+					<span className="ml-0.5">{suitSymbol(it.card.suit)}</span>
+				</div>
 			</div>
-			{/* bottom-right small suit (rotated) */}
-			<div
-				className={`absolute bottom-1 right-1 ${dims.corner} ${suitColor} rotate-180`}>
-				{suitSymbol(it.card.suit)}
-			</div>
-			{/* center rank + suit */}
-			<div
-				className={`${dims.text} font-extrabold ${suitColor} drop-shadow-sm`}>
-				{it.card.rank}
-				<span className="ml-0.5">{suitSymbol(it.card.suit)}</span>
-			</div>
-		</div>
-	)
+		)
 }
 
 function CrossTrick({
@@ -646,13 +646,8 @@ export default function Player() {
 	const [manualStrain, setManualStrain] = useState('')
 	const [manualDbl, setManualDbl] = useState('')
 
-	const [visibilityMode, setVisibilityMode] = useState('hidden')
+	const [visibilityMode, setVisibilityMode] = useState('mimic')
 	const [hideDefenders, setHideDefenders] = useState(true)
-	const [fastAutoDef, setFastAutoDef] = useState(false)
-	const [aiDifficulty, setAiDifficulty] = useState('Intermediate')
-	const [signalMode, setSignalMode] = useState('Standard')
-	const [showAiLog, setShowAiLog] = useState(false)
-	const [pauseAtTrickEnd, setPauseAtTrickEnd] = useState(false)
 
 	const [remaining, setRemaining] = useState(null)
 	const [trick, setTrick] = useState([])
@@ -669,7 +664,7 @@ export default function Player() {
 	const [lastTrickPreview, setLastTrickPreview] = useState(null)
 	const [lastAutoSeat, setLastAutoSeat] = useState(null)
 	const [lastAutoPlay, setLastAutoPlay] = useState(null)
-	const [aiLogs, setAiLogs] = useState([])
+	// AI logs and controls removed
 	const [showCompletedTricks, setShowCompletedTricks] = useState(true)
 	const [teacherFocus, setTeacherFocus] = useState(false)
 	const [actualWinners, setActualWinners] = useState(null)
@@ -687,28 +682,12 @@ export default function Player() {
 	const collapseSidebar = teacherFocus || playStarted || sidebarCollapsed
 
 	const playIdxRef = useRef(0)
-	const pauseRef = useRef(false)
+	// removed pause-at-trick-end; always animate briefly
 	const fileRef = useRef(null)
 	const initialTrumpRef = useRef(null)
 	const audioCtxRef = useRef(null)
 
-	// Ensure AI log is off by default on first mount (in case state is retained across HMR or navigation)
-	useEffect(() => {
-		setShowAiLog(false)
-	}, [])
-
-	// Also turn AI log off when a new file is loaded or the deals set changes
-	useEffect(() => {
-		setShowAiLog(false)
-	}, [selectedName])
-
-	useEffect(() => {
-		setShowAiLog(false)
-	}, [deals?.length])
-
-	useEffect(() => {
-		setShowAiLog(false)
-	}, [index])
+	// removed AI log state and toggles
 
 	// --- Audio helpers ---
 	const ensureAudio = useCallback(() => {
@@ -915,9 +894,10 @@ export default function Player() {
 		setCompletedTrickList([])
 		setPlayIdx(0)
 		setFlashWinner(null)
-		setVisibilityMode('hidden')
-		setHideDefenders(true)
-		setPlayStarted(false)
+	setVisibilityMode('mimic')
+	setHideDefenders(true)
+	setShowCompletedTricks(true)
+	setPlayStarted(false)
 	}, [
 		hands,
 		effTrump,
@@ -1125,11 +1105,9 @@ export default function Player() {
 				return v
 			})
 			if (r.winner) {
-				// Always trigger a brief winner flash for animation; if pause is enabled, keep it until user proceeds
+				// Always trigger a brief winner flash for animation
 				setFlashWinner(r.winner)
-				if (!pauseRef.current) {
-					setTimeout(() => setFlashWinner(null), 800)
-				}
+				setTimeout(() => setFlashWinner(null), 800)
 				if (effDeclarer) {
 					if (isDeclarerSide(r.winner, effDeclarer)) playTing()
 					else playKlaxon()
@@ -1277,20 +1255,10 @@ export default function Player() {
 						reason: sel.reason,
 						ts: Date.now(),
 					})
-					setAiLogs((l) =>
-						[
-							...l,
-							{
-								id: Date.now() + Math.random().toString(36).slice(2, 6),
-								seat: turnSeat,
-								text: `${turnSeat} ${sel.card.rank}${sel.card.suit[0]} – ${sel.reason}`,
-							},
-						].slice(-40)
-					)
 				}
 				autoPlayRef.current = false
 			},
-			fastAutoDef ? 120 : 420
+			420
 		)
 		return () => {
 			clearTimeout(timer)
@@ -1302,7 +1270,6 @@ export default function Player() {
 		visibilityMode,
 		turnSeat,
 		effDeclarer,
-		fastAutoDef,
 		selectDefenderCard,
 		onPlayCard,
 		playStarted,
@@ -1395,6 +1362,7 @@ export default function Player() {
 				setManualLevel('')
 				setManualStrain('')
 				setManualDbl('')
+				if (fileRef.current) fileRef.current.value = ''
 			} catch (err) {
 				console.error(err)
 			}
@@ -1442,10 +1410,11 @@ export default function Player() {
 		setDeals([])
 		setIndex(0)
 		setSelectedName('')
-		setVisibilityMode('hidden')
+		setVisibilityMode('mimic')
 		setHideDefenders(true)
-		setShowAiLog(false)
 		setLastTrickPreview(null)
+		setShowCompletedTricks(true)
+		if (fileRef.current) fileRef.current.value = ''
 	}
 
 	// Escape key exits teacher focus mode
@@ -1590,7 +1559,7 @@ export default function Player() {
 								else if (visibilityMode === 'mimic') setVisibilityMode('hidden')
 							}}
 						/>{' '}
-						<span>Mimic table</span>
+						<span>Mimic table pre lead</span>
 					</label>
 					<label className="flex items-center gap-1">
 						<input
@@ -1611,58 +1580,7 @@ export default function Player() {
 						/>{' '}
 						<span>Hide defenders</span>
 					</label>
-					{hideDefenders && (
-						<div className="ml-4 flex flex-col gap-1">
-							<label className="flex items-center gap-1">
-								<input
-									type="checkbox"
-									checked={fastAutoDef}
-									onChange={(e) => setFastAutoDef(e.target.checked)}
-								/>{' '}
-								<span>Fast auto-play</span>
-							</label>
-							<label className="flex items-center gap-1">
-								<span>AI</span>
-								<select
-									value={aiDifficulty}
-									onChange={(e) => setAiDifficulty(e.target.value)}
-									className="border rounded px-1 py-0.5">
-									<option>Basic</option>
-									<option>Intermediate</option>
-									<option>Advanced</option>
-								</select>
-							</label>
-							<label className="flex items-center gap-1">
-								<span>Signals</span>
-								<select
-									value={signalMode}
-									onChange={(e) => setSignalMode(e.target.value)}
-									className="border rounded px-1 py-0.5">
-									<option value="Standard">Standard</option>
-									<option value="LowEnc">LowEnc</option>
-								</select>
-							</label>
-							<label className="flex items-center gap-1">
-								<input
-									type="checkbox"
-									checked={showAiLog}
-									onChange={(e) => setShowAiLog(e.target.checked)}
-								/>{' '}
-								<span>Show AI log</span>
-							</label>
-						</div>
-					)}
-					<label className="flex items-center gap-1">
-						<input
-							type="checkbox"
-							checked={pauseAtTrickEnd}
-							onChange={(e) => {
-								setPauseAtTrickEnd(e.target.checked)
-								pauseRef.current = e.target.checked
-							}}
-						/>{' '}
-						<span>Pause at trick end</span>
-					</label>
+					{/* removed AI/signal/log/fast options and pause-at-trick-end */}
 					<label className="flex items-center gap-1">
 						<input
 							type="checkbox"
@@ -1793,24 +1711,6 @@ export default function Player() {
 				{showCompletedTricks && (
 					<div className="rounded border bg-white p-1 text-[10px] max-h-60 overflow-auto">
 						<CompletedTricks tricks={completedTrickList} />
-					</div>
-				)}
-				{showAiLog && hideDefenders && (
-					<div className="flex-1 overflow-auto rounded border bg-white p-1 text-[10px]">
-						<div className="font-semibold mb-1">AI Log</div>
-						<div className="space-y-0.5">
-							{aiLogs
-								.slice()
-								.reverse()
-								.map((l) => (
-									<div key={l.id} className="truncate">
-										<span className="font-mono text-[9px] text-gray-500 mr-1">
-											{l.seat}
-										</span>
-										{l.text}
-									</div>
-								))}
-						</div>
 					</div>
 				)}
 			</div>
