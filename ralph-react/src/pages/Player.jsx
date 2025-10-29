@@ -68,14 +68,24 @@ function SeatPanel({
 	return (
 		<div
 			className={`relative z-10 rounded-2xl border w-full h-full overflow-hidden flex flex-col ${
-				isTurn ? 'border-rose-500' : id === 'N' || id === 'S' ? 'border-sky-300' : 'border-teal-300'
+				isTurn
+					? 'border-rose-500'
+					: id === 'N' || id === 'S'
+					? 'border-sky-300'
+					: 'border-teal-300'
 			} ${lastAutoSeat === id ? 'ring-2 ring-sky-300 animate-pulse' : ''} ${
 				highlight
 					? 'relative z-20 shadow-xl shadow-yellow-200/30 ring-2 ring-yellow-300'
 					: ''
-			} ${id === 'N' || id === 'S' ? 'bg-gradient-to-br from-sky-50 to-sky-100' : 'bg-gradient-to-br from-teal-50 to-teal-100'}`}>
+			} ${
+				id === 'N' || id === 'S'
+					? 'bg-gradient-to-br from-sky-50 to-sky-100'
+					: 'bg-gradient-to-br from-teal-50 to-teal-100'
+			}`}>
 			<div
-				className={`px-2 ${compact ? 'py-0.5' : 'py-1'} text-[11px] font-semibold flex items-center justify-between ${
+				className={`px-2 ${
+					compact ? 'py-0.5' : 'py-1'
+				} text-[11px] font-semibold flex items-center justify-between ${
 					isTurn
 						? 'bg-rose-100'
 						: id === 'N' || id === 'S'
@@ -106,11 +116,18 @@ function SeatPanel({
 					)}
 				</span>
 			</div>
-			<div className={`${compact ? 'p-1' : 'p-2'} flex flex-col ${compact ? 'gap-1' : 'gap-2'} flex-1 min-h-0 overflow-auto`}>
+			<div
+				className={`${compact ? 'p-1' : 'p-2'} flex flex-col ${
+					compact ? 'gap-1' : 'gap-2'
+				} flex-1 min-h-0 overflow-auto`}>
 				{suitOrder.map((s) => (
-					<div key={s} className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`}>
+					<div
+						key={s}
+						className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`}>
 						<div
-							className={`${compact ? 'w-5 text-lg' : 'w-6 text-xl'} text-center ${
+							className={`${
+								compact ? 'w-5 text-lg' : 'w-6 text-xl'
+							} text-center ${
 								s === 'Hearts' || s === 'Diamonds'
 									? 'text-red-600'
 									: 'text-black'
@@ -1051,8 +1068,14 @@ export default function Player() {
 			setTricksDef(next.tricksDef)
 			setCompletedTricks(next.completed)
 			setTrickComplete(next.trickComplete || false)
-			setHistory((h) => [...h, { seat, cardId, suit: playedSuit, rank: playedRank }])
-			setManualMoves((m) => [...m, { seat, suit: playedSuit, rank: playedRank }])
+			setHistory((h) => [
+				...h,
+				{ seat, cardId, suit: playedSuit, rank: playedRank },
+			])
+			setManualMoves((m) => [
+				...m,
+				{ seat, suit: playedSuit, rank: playedRank },
+			])
 			setPlayIdx((k) => {
 				const v = k + 1
 				playIdxRef.current = v
@@ -1737,8 +1760,7 @@ export default function Player() {
 				aria-label={collapseSidebar ? 'Expand sidebar' : 'Collapse sidebar'}
 				className={`fixed top-1/2 -translate-y-1/2 z-40 bg-white/90 backdrop-blur border rounded-full shadow px-2 py-1 text-sm hover:bg-white transition ${
 					collapseSidebar ? 'left-1' : 'left-[18rem]'
-				}`}
-			>
+				}`}>
 				{collapseSidebar ? '›' : '‹'}
 			</button>
 
@@ -1766,8 +1788,14 @@ export default function Player() {
 					<PreUpload onChooseFile={() => fileRef.current?.click()} />
 				)}
 				{current && hands && (
-					<div className={`flex flex-col ${compactPlay ? 'gap-4' : 'gap-6'} items-center`}>
-						<div className={`w-full max-w-3xl mx-auto ${compactPlay ? '-mt-4' : '-mt-2'}`}>
+					<div
+						className={`flex flex-col ${
+							compactPlay ? 'gap-4' : 'gap-6'
+						} items-center`}>
+						<div
+							className={`w-full max-w-3xl mx-auto ${
+								compactPlay ? '-mt-4' : '-mt-2'
+							}`}>
 							<div className="flex items-center justify-end gap-2 mb-1">
 								<button
 									disabled={!effContract || !effDeclarer}
@@ -1901,38 +1929,45 @@ export default function Player() {
 							<div
 								className={`grid grid-cols-3 grid-rows-3 relative ${
 									teacherFocus ? 'z-20' : ''
-								} ${compactPlay ? 'gap-3' : 'gap-4'} ${collapseSidebar ? '' : '-ml-4'}`}>
+								} ${compactPlay ? 'gap-3' : 'gap-4'} ${
+									collapseSidebar ? '' : '-ml-4'
+								}`}>
 								<div className="col-start-2 row-start-1 flex justify-center">
 									<div className="w-[260px] h-[260px]">
 										<SeatPanel
-										id="N"
-										highlight={teacherFocus}
-										remaining={remaining}
-										turnSeat={turnSeat}
-										trick={trick}
-										onPlay={onPlayCard}
-										visible={seatVisible('N')}
-										dealer={current?.dealer}
-										vul={current?.vul}
-										declarer={effDeclarer}
-										showHCP={
-											hideDefenders &&
-											(effDeclarer === 'N' || partnerOf(effDeclarer) === 'N')
-										}
-										lastAutoSeat={lastAutoSeat}
-										openingLeader={
-											history.length === 0 && openingLeader === 'N'
-										}
-										playStarted={playStarted}
-										openingLeadPulse={openingLeadPulse && openingLeader === 'N'}
-										compact={compactPlay}
-									/>
+											id="N"
+											highlight={teacherFocus}
+											remaining={remaining}
+											turnSeat={turnSeat}
+											trick={trick}
+											onPlay={onPlayCard}
+											visible={seatVisible('N')}
+											dealer={current?.dealer}
+											vul={current?.vul}
+											declarer={effDeclarer}
+											showHCP={
+												hideDefenders &&
+												(effDeclarer === 'N' || partnerOf(effDeclarer) === 'N')
+											}
+											lastAutoSeat={lastAutoSeat}
+											openingLeader={
+												history.length === 0 && openingLeader === 'N'
+											}
+											playStarted={playStarted}
+											openingLeadPulse={
+												openingLeadPulse && openingLeader === 'N'
+											}
+											compact={compactPlay}
+										/>
 									</div>
 								</div>
 								{(effContract || current?.auction?.length) && (
 									<div className="col-start-3 row-start-1 flex justify-start items-start">
 										{compactPlay ? (
-											<ContractBadge contract={effContract} declarer={effDeclarer} />
+											<ContractBadge
+												contract={effContract}
+												declarer={effDeclarer}
+											/>
 										) : (
 											<AuctionGraphic
 												auction={current?.auction || []}
@@ -1946,92 +1981,100 @@ export default function Player() {
 								<div className="col-start-1 row-start-2 flex justify-center items-center">
 									<div className="w-[260px] h-[260px]">
 										<SeatPanel
-										id="W"
-										highlight={teacherFocus}
-										remaining={remaining}
-										turnSeat={turnSeat}
-										trick={trick}
-										onPlay={onPlayCard}
-										visible={seatVisible('W')}
-										dealer={current?.dealer}
-										vul={current?.vul}
-										declarer={effDeclarer}
-										showHCP={
-											hideDefenders &&
-											(effDeclarer === 'W' || partnerOf(effDeclarer) === 'W')
-										}
-										lastAutoSeat={lastAutoSeat}
-										openingLeader={
-											history.length === 0 && openingLeader === 'W'
-										}
-										playStarted={playStarted}
-										openingLeadPulse={openingLeadPulse && openingLeader === 'W'}
-									/>
+											id="W"
+											highlight={teacherFocus}
+											remaining={remaining}
+											turnSeat={turnSeat}
+											trick={trick}
+											onPlay={onPlayCard}
+											visible={seatVisible('W')}
+											dealer={current?.dealer}
+											vul={current?.vul}
+											declarer={effDeclarer}
+											showHCP={
+												hideDefenders &&
+												(effDeclarer === 'W' || partnerOf(effDeclarer) === 'W')
+											}
+											lastAutoSeat={lastAutoSeat}
+											openingLeader={
+												history.length === 0 && openingLeader === 'W'
+											}
+											playStarted={playStarted}
+											openingLeadPulse={
+												openingLeadPulse && openingLeader === 'W'
+											}
+										/>
 									</div>
 								</div>
 								<div className="col-start-3 row-start-2 flex justify-center items-center">
 									<div className="w-[260px] h-[260px]">
 										<SeatPanel
-										id="E"
-										highlight={teacherFocus}
-										remaining={remaining}
-										turnSeat={turnSeat}
-										trick={trick}
-										onPlay={onPlayCard}
-										visible={seatVisible('E')}
-										dealer={current?.dealer}
-										vul={current?.vul}
-										declarer={effDeclarer}
-										showHCP={
-											hideDefenders &&
-											(effDeclarer === 'E' || partnerOf(effDeclarer) === 'E')
-										}
-										lastAutoSeat={lastAutoSeat}
-										openingLeader={
-											history.length === 0 && openingLeader === 'E'
-										}
-										playStarted={playStarted}
-										openingLeadPulse={openingLeadPulse && openingLeader === 'E'}
-									/>
+											id="E"
+											highlight={teacherFocus}
+											remaining={remaining}
+											turnSeat={turnSeat}
+											trick={trick}
+											onPlay={onPlayCard}
+											visible={seatVisible('E')}
+											dealer={current?.dealer}
+											vul={current?.vul}
+											declarer={effDeclarer}
+											showHCP={
+												hideDefenders &&
+												(effDeclarer === 'E' || partnerOf(effDeclarer) === 'E')
+											}
+											lastAutoSeat={lastAutoSeat}
+											openingLeader={
+												history.length === 0 && openingLeader === 'E'
+											}
+											playStarted={playStarted}
+											openingLeadPulse={
+												openingLeadPulse && openingLeader === 'E'
+											}
+										/>
 									</div>
 								</div>
 								<div className="col-start-2 row-start-3 flex justify-center">
 									<div className="w-[260px] h-[260px]">
 										<SeatPanel
-										id="S"
-										highlight={teacherFocus}
-										remaining={remaining}
-										turnSeat={turnSeat}
-										trick={trick}
-										onPlay={onPlayCard}
-										visible={seatVisible('S')}
-										dealer={current?.dealer}
-										vul={current?.vul}
-										declarer={effDeclarer}
-										showHCP={
-											hideDefenders &&
-											(effDeclarer === 'S' || partnerOf(effDeclarer) === 'S')
-										}
-										lastAutoSeat={lastAutoSeat}
-										openingLeader={
-											history.length === 0 && openingLeader === 'S'
-										}
-										playStarted={playStarted}
-										openingLeadPulse={openingLeadPulse && openingLeader === 'S'}
-										compact={compactPlay}
-									/>
+											id="S"
+											highlight={teacherFocus}
+											remaining={remaining}
+											turnSeat={turnSeat}
+											trick={trick}
+											onPlay={onPlayCard}
+											visible={seatVisible('S')}
+											dealer={current?.dealer}
+											vul={current?.vul}
+											declarer={effDeclarer}
+											showHCP={
+												hideDefenders &&
+												(effDeclarer === 'S' || partnerOf(effDeclarer) === 'S')
+											}
+											lastAutoSeat={lastAutoSeat}
+											openingLeader={
+												history.length === 0 && openingLeader === 'S'
+											}
+											playStarted={playStarted}
+											openingLeadPulse={
+												openingLeadPulse && openingLeader === 'S'
+											}
+											compact={compactPlay}
+										/>
 									</div>
 								</div>
 								<div className="col-start-2 row-start-2 flex items-center justify-center">
 									<div className="w-[260px] h-[260px]">
 										<CrossTrick
-										trick={trick}
-										winner={flashWinner}
-										turnSeat={turnSeat}
-										lastAutoPlay={lastAutoPlay}
-										highlight={teacherFocus}
-										openingLeader={history.length === 0 ? openingLeader : null}
-									/>
+											trick={trick}
+											winner={flashWinner}
+											turnSeat={turnSeat}
+											lastAutoPlay={lastAutoPlay}
+											highlight={teacherFocus}
+											openingLeader={
+												history.length === 0 ? openingLeader : null
+											}
+										/>
 									</div>
 								</div>
 							</div>
