@@ -492,20 +492,23 @@ function TrickCounter({ tricksDecl, tricksDef, contract }) {
 	return (
 		<div
 			className={`relative rounded-2xl border-4 border-indigo-300/70 bg-gradient-to-br ${bgGrad} shadow-lg px-6 py-4 flex flex-col items-center justify-center min-w-[120px]`}
-			style={{ backdropFilter: 'blur(2px)' }}
-		>
+			style={{ backdropFilter: 'blur(2px)' }}>
 			<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-1">
 				TRICK COUNT
 			</div>
 			<div className="flex items-end gap-3">
 				<div className="text-5xl font-extrabold text-slate-800 drop-shadow-sm leading-none">
 					{tricksDecl}
-					<div className="text-[11px] text-indigo-700 font-semibold -mt-0.5">Decl</div>
+					<div className="text-[11px] text-indigo-700 font-semibold -mt-0.5">
+						Decl
+					</div>
 				</div>
 				<div className="text-3xl font-bold text-slate-500 mb-1">·</div>
 				<div className="text-5xl font-extrabold text-slate-800 drop-shadow-sm leading-none">
 					{tricksDef}
-					<div className="text-[11px] text-indigo-700 font-semibold -mt-0.5">Def</div>
+					<div className="text-[11px] text-indigo-700 font-semibold -mt-0.5">
+						Def
+					</div>
 				</div>
 			</div>
 			{typeof target === 'number' && (
@@ -1137,7 +1140,10 @@ export default function Player() {
 					const playedRankNorm = playedRank === 'T' ? '10' : playedRank
 					const completedTrick = [
 						...trickBefore,
-						{ seat, card: { id: cardId, suit: playedSuit, rank: playedRankNorm } },
+						{
+							seat,
+							card: { id: cardId, suit: playedSuit, rank: playedRankNorm },
+						},
 					]
 					// Re-evaluate winner from the completed trick for the preview.
 					// Prefer engine's winner; only compute locally if missing
@@ -1487,8 +1493,14 @@ export default function Player() {
 						onClick={() => setPlayStarted((v) => !v)}
 						disabled={!playStarted && (!effContract || !effDeclarer)}
 						className={`fixed top-2 right-2 z-30 px-3 py-1 rounded text-white text-xs font-semibold shadow ${
-							playStarted ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
-						} ${!playStarted && (!effContract || !effDeclarer) ? 'opacity-50 cursor-not-allowed' : ''}`}>
+							playStarted
+								? 'bg-rose-600 hover:bg-rose-700'
+								: 'bg-emerald-600 hover:bg-emerald-700'
+						} ${
+							!playStarted && (!effContract || !effDeclarer)
+								? 'opacity-50 cursor-not-allowed'
+								: ''
+						}`}>
 						{playStarted ? 'Stop' : 'Start Play'}
 					</button>
 				</>
@@ -1838,7 +1850,9 @@ export default function Player() {
 				)}
 				{current && hands && (
 					<div
-						className={`flex flex-col ${compactPlay ? 'gap-3' : 'gap-4'} items-center`}>
+						className={`flex flex-col ${
+							compactPlay ? 'gap-3' : 'gap-4'
+						} items-center`}>
 						<div
 							className={`w-full max-w-3xl mx-auto ${
 								compactPlay ? '-mt-4' : '-mt-2'
@@ -2029,7 +2043,11 @@ export default function Player() {
 										</div>
 									)}
 									{/* Trick badge placed just below auction/contract and visible immediately */}
-									<TrickCounter tricksDecl={tricksDecl} tricksDef={tricksDef} contract={effContract} />
+									<TrickCounter
+										tricksDecl={tricksDecl}
+										tricksDef={tricksDef}
+										contract={effContract}
+									/>
 								</div>
 								<div className="col-start-1 row-start-2 flex justify-center items-center">
 									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
