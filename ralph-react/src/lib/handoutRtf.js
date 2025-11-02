@@ -38,7 +38,9 @@ function seatBlockRTF(seatId, d) {
 		String(d.dealer || '')
 			.toUpperCase()
 			.charAt(0) === seatId
-	const title = `{\\fs22\\b ${esc(seatName)}}${dealer ? ` ${esc('(dealer)')}` : ''}`
+	const title = `{\\fs22\\b ${esc(seatName)}}${
+		dealer ? ` ${esc('(dealer)')}` : ''
+	}`
 	// RTF Unicode escapes for suit symbols to avoid mojibake in Pages
 	const U = {
 		spade: '\\u9824?',
@@ -145,7 +147,10 @@ function miniMakeablesRTF(d) {
 	const headerProps = [`${grid}\\clcbpat4`, grid, grid, grid, grid]
 	const header = rtfRowInner(
 		colW,
-			[`{\\ql {\\b \\fs18 Suit}}`, ...seats.map((s) => `{\\ql {\\b \\fs18 ${s}}}`)],
+		[
+			`{\\ql {\\b \\fs18 Suit}}`,
+			...seats.map((s) => `{\\ql {\\b \\fs18 ${s}}}`),
+		],
 		headerProps
 	)
 
@@ -169,10 +174,19 @@ function miniMakeablesRTF(d) {
 function auctionRoundsTableRTF(d) {
 	const calls = Array.isArray(d.calls) ? d.calls.map(String) : []
 	const seats = ['N', 'E', 'S', 'W']
-	const start = Math.max(0, seats.indexOf(String(d.dealer || 'N').toUpperCase()))
-	const grid = '\\clbrdrt\\brdrs\\brdrw8\\clbrdrl\\brdrs\\brdrw8\\clbrdrr\\brdrs\\brdrw8\\clbrdrb\\brdrs\\brdrw8'
+	const start = Math.max(
+		0,
+		seats.indexOf(String(d.dealer || 'N').toUpperCase())
+	)
+	const grid =
+		'\\clbrdrt\\brdrs\\brdrw8\\clbrdrl\\brdrs\\brdrw8\\clbrdrr\\brdrs\\brdrw8\\clbrdrb\\brdrs\\brdrw8'
 	const colW = [2500, 2500, 2500, 2500]
-	const headerProps = [grid + '\\clcbpat4', grid + '\\clcbpat4', grid + '\\clcbpat4', grid + '\\clcbpat4']
+	const headerProps = [
+		grid + '\\clcbpat4',
+		grid + '\\clcbpat4',
+		grid + '\\clcbpat4',
+		grid + '\\clcbpat4',
+	]
 	const header = rtfRowInner(
 		colW,
 		seats.map((s) => `{\\ql {\\b \\fs18 ${s}}}`),
@@ -201,7 +215,13 @@ function auctionRoundsTableRTF(d) {
 		if (current.some((c) => c !== '')) rows.push(current)
 	}
 	const body = rows
-		.map((r) => rtfRowInner(colW, r.map((c) => `{\\qc ${c}}`), [grid, grid, grid, grid]))
+		.map((r) =>
+			rtfRowInner(
+				colW,
+				r.map((c) => `{\\qc ${c}}`),
+				[grid, grid, grid, grid]
+			)
+		)
 		.join('')
 	return header + body
 }
