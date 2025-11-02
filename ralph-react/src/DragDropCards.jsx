@@ -2559,7 +2559,7 @@ export default function DragDropCards({ meta, setMeta }) {
 									</Tooltip>
 									<Tooltip
 										label={
-											'Export a Pages-friendly handout (.rtf) with one board per page. Opens cleanly in Apple Pages.'
+											'Export a Pages-friendly handout (.rtf) with two boards per page. Opens cleanly in Apple Pages.'
 										}>
 										<button
 											className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed ${

@@ -907,6 +907,16 @@ export default function Player() {
 		openingLeader,
 	])
 
+	// When navigating to a new board, clear any manual contract overrides and close any board-scoped UI
+	useEffect(() => {
+		setManualDeclarer('')
+		setManualLevel('')
+		setManualStrain('')
+		setManualDbl('')
+		setShowAuctionModal(false)
+		setHandInfoOpen(false)
+	}, [index])
+
 	// Close hand info in compact mode to reduce clutter
 	useEffect(() => {
 		if (compactPlay && handInfoOpen) setHandInfoOpen(false)
@@ -1511,9 +1521,7 @@ export default function Player() {
 					</div>
 					<div className="text-gray-700 mt-0.5">
 						{deals.length
-							? `Board ${current?.board || index + 1} — ${index + 1}/${
-									deals.length
-							  }`
+							? `Board ${current?.board || index + 1} — ${index + 1}/${deals.length}`
 							: 'No file loaded'}
 					</div>
 					{effContract ? (

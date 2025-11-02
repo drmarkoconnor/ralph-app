@@ -38,7 +38,7 @@ function seatBlockRTF(seatId, d) {
 		String(d.dealer || '')
 			.toUpperCase()
 			.charAt(0) === seatId
-	const title = `{\\b ${esc(seatName)}}${dealer ? ` ${esc('(dealer)')}` : ''}`
+	const title = `{\\fs22\\b ${esc(seatName)}}${dealer ? ` ${esc('(dealer)')}` : ''}`
 	// RTF Unicode escapes for suit symbols to avoid mojibake in Pages
 	const U = {
 		spade: '\\u9824?',
@@ -47,7 +47,7 @@ function seatBlockRTF(seatId, d) {
 		club: '\\u9827?',
 	}
 	const line = (sym, colorCmd, ranks) =>
-		`\\fs22 ${colorCmd}${sym}\\cf0\\tab {\\f1 ${esc(ranks)}}`
+		`\\fs24 ${colorCmd}${sym}\\cf0\\tab {\\f1 ${esc(ranks)}}`
 	const s = toRankLine(cards, 'Spades')
 	const h = toRankLine(cards, 'Hearts')
 	const dmd = toRankLine(cards, 'Diamonds')
@@ -80,27 +80,7 @@ function deriveContract(d) {
 	return `${level}${strain}${hasXX ? 'XX' : hasX ? 'X' : ''}`
 }
 
-function metaGridRTF(d) {
-	const m = d.meta || {}
-	const pairs = [
-		['Theme', m.theme],
-		['System', m.system],
-		['Interf', m.interf],
-		['Lead', m.lead],
-		['DDPar', m.ddpar || m.DDPar || m.ddPar],
-		['Scoring', m.scoring || 'MPs'],
-		['Contract', deriveContract(d) || ''],
-		['Declarer', m.declarer || d.declarer || ''],
-	]
-	const colW = [5000, 5000]
-	let out = ''
-	for (let i = 0; i < pairs.length; i += 2) {
-		const row = pairs.slice(i, i + 2)
-		const contents = row.map(([k, v]) => `{\\fs18 ${esc(k)}: ${esc(v || '-')}}`)
-		out += rtfRow(colW, contents)
-	}
-	return out
-}
+// meta grid removed per new layout
 
 function notesRTF(d) {
 	const notes = Array.isArray(d.notes)
@@ -112,7 +92,7 @@ function notesRTF(d) {
 	// Merged two-cell row across the full width to be robust in Pages
 	const colW = [5000, 5000]
 	const cellProps = ['\\clmgf', '\\clmrg']
-	const content = ` {\\fs18 {\\b Notes}}\\line {\\fs18 ${text}}`
+	const content = ` {\\fs22\\b Notes}\\line {\\fs16 ${text}}`
 	return rtfRow(colW, [`${content}`, ``], cellProps)
 }
 
@@ -165,7 +145,7 @@ function miniMakeablesRTF(d) {
 	const headerProps = [`${grid}\\clcbpat4`, grid, grid, grid, grid]
 	const header = rtfRowInner(
 		colW,
-		[`{\\qc {\\b Suit}}`, ...seats.map((s) => `{\\qc {\\b ${s}}}`)],
+			[`{\\ql {\\b \\fs18 Suit}}`, ...seats.map((s) => `{\\ql {\\b \\fs18 ${s}}}`)],
 		headerProps
 	)
 
@@ -176,64 +156,61 @@ function miniMakeablesRTF(d) {
 			const vals = seats.map((seat) => {
 				const raw = table?.[st]?.[seat]
 				const v = Number.isFinite(raw) ? Math.max(0, raw - 6) : 0
-				return `{\\qc {\\f1 ${esc(String(v))}}}`
+				return `{\\qc \\fs16 {\\f1 ${esc(String(v))}}}`
 			})
 			const props = [grid, grid, grid, grid, grid]
-			return rtfRowInner(colW, [`{\\qc ${suitText}}`, ...vals], props)
+			return rtfRowInner(colW, [`{\\qc \\fs16 ${suitText}}`, ...vals], props)
 		})
 		.join('')
 
 	return header + rows
 }
 
-function auctionPlayTableRTF(d) {
-	const calls = Array.isArray(d.calls) ? d.calls : []
-	const playRaw = d.meta?.play || d.meta?.playscript || d.meta?.playScript
-	const playLines = playRaw
-		? (Array.isArray(playRaw) ? playRaw : String(playRaw).split(/\r?\n/))
-				.map((ln) => String(ln).trim())
-				.filter(Boolean)
-				.map((ln) => ln.replace(/^(N|E|S|W)\s*:\s*/, ''))
-		: []
-	if (!calls.length && !playLines.length) return ''
-	// Flatten auction to single line
-	const auctionFlat = calls.join(' ')
-	const colW = [4800, 4800]
-	const grid =
-		'\\clbrdrt\\brdrs\\brdrw8\\clbrdrl\\brdrs\\brdrw8\\clbrdrr\\brdrs\\brdrw8\\clbrdrb\\brdrs\\brdrw8'
-	const headerProps = [`${grid}\\clcbpat4`, `${grid}\\clcbpat4`]
+function auctionRoundsTableRTF(d) {
+	const calls = Array.isArray(d.calls) ? d.calls.map(String) : []
+	const seats = ['N', 'E', 'S', 'W']
+	const start = Math.max(0, seats.indexOf(String(d.dealer || 'N').toUpperCase()))
+	const grid = '\\clbrdrt\\brdrs\\brdrw8\\clbrdrl\\brdrs\\brdrw8\\clbrdrr\\brdrs\\brdrw8\\clbrdrb\\brdrs\\brdrw8'
+	const colW = [2500, 2500, 2500, 2500]
+	const headerProps = [grid + '\\clcbpat4', grid + '\\clcbpat4', grid + '\\clcbpat4', grid + '\\clcbpat4']
 	const header = rtfRowInner(
 		colW,
-		[`{\\ql \\fs18 {\\b Auction}}`, `{\\ql \\fs18 {\\b Play}}`],
-		headerProps,
-		'\\trkeep'
+		seats.map((s) => `{\\ql {\\b \\fs18 ${s}}}`),
+		headerProps
 	)
-	const bodyProps = [grid, grid]
-	const body = rtfRowInner(
-		colW,
-		[
-			`{\\ql \\fs18 {\\f1 ${esc(auctionFlat)}}}`,
-			`{\\ql \\fs18 {\\f1 ${esc(playLines.join(' '))}}}`,
-		],
-		bodyProps,
-		'\\trkeep'
-	)
+	// Build rows with rotation from dealer; blanks before dealer in first row
+	const rows = []
+	if (calls.length === 0) {
+		// produce a few empty rows
+		for (let i = 0; i < 4; i++) rows.push(['', '', '', ''])
+	} else {
+		let col = start
+		let current = ['', '', '', '']
+		// pre-blanks before dealer in first round
+		for (let i = 0; i < start; i++) current[i] = ''
+		for (let i = 0; i < calls.length; i++) {
+			const disp = calls[i] === 'P' ? 'Pass' : calls[i]
+			current[col] = `\\fs16 {\\f1 ${esc(String(disp))}}`
+			col = (col + 1) % 4
+			if (col === start) {
+				rows.push(current)
+				current = ['', '', '', '']
+			}
+		}
+		// push any partial row
+		if (current.some((c) => c !== '')) rows.push(current)
+	}
+	const body = rows
+		.map((r) => rtfRowInner(colW, r.map((c) => `{\\qc ${c}}`), [grid, grid, grid, grid]))
+		.join('')
 	return header + body
 }
 
 function renderBoard(d) {
 	const pageWidth = 10000 // twips (approx)
-	const headerRow = rtfRow(
-		[6000, 4000],
-		[
-			`{\\b ${esc(`Board ${d.number || ''}`)}}`,
-			`{\\qr Dealer: ${esc(d.dealer || '')}   Vul: ${esc(d.vul || 'None')}}`,
-		]
-	)
-	const metaRows = metaGridRTF(d)
 	const notesRow = notesRTF(d)
-	const spacer = `\\pard\\sb80 \\par `
-	// Cross layout 3x3
+	const spacer = `\\pard\\sb40 \\par `
+	// Cross layout 3x3: N centered on row 1, W/E on row 2, S centered on row 3
 	const north = seatBlockRTF('N', d)
 	const south = seatBlockRTF('S', d)
 	const east = seatBlockRTF('E', d)
@@ -246,7 +223,7 @@ function renderBoard(d) {
 	)
 	const crossRow2 = rtfRow(
 		[pageWidth / 3, pageWidth / 3, pageWidth / 3],
-		[west, center, east],
+		[`{\\qr ${west}}`, center, east],
 		[`\\clcbpat3`, ``, `\\clcbpat3`]
 	)
 	const crossRow3 = rtfRow(
@@ -255,21 +232,20 @@ function renderBoard(d) {
 		[``, `\\clcbpat2`, ``]
 	)
 	let out = ''
-	out += headerRow
-	out += metaRows
+	// Notes at top
 	out += notesRow
 	out += spacer
+	// Seats in cross
 	out += crossRow1 + crossRow2 + crossRow3
-	// Place makeables grid below the cross, centered, so it doesn't disturb the seat layout
+	// Makeables grid below, centered
 	const makeablesBlock = miniMakeablesRTF(d)
 	if (makeablesBlock) {
-		out += spacer + `\\pard\\qc ` + makeablesBlock + `\\par `
+		out += spacer + `\\pard\\ql {\\b \\fs22 Makeables}\\par `
+		out += `\\pard\\qc ` + makeablesBlock + `\\par `
 	}
-	const auctionPlay = auctionPlayTableRTF(d)
-	if (auctionPlay) {
-		out += spacer + auctionPlay
-	}
-	out += `\\page `
+	// Bidding table (rounds)
+	const auctionTbl = auctionRoundsTableRTF(d)
+	out += spacer + `{\\pard\\ql {\\b \\fs22 Auction}\\par }` + auctionTbl
 	return out
 }
 
@@ -279,8 +255,14 @@ export async function generateHandoutRTF(deals, options = {}) {
 	const { filenameBase = 'handout' } = options
 	// color table: [auto]; red (idx1); NS gray (idx2); EW gray (idx3); header blue (idx4)
 	const header =
-		'{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Times New Roman;}{\\f1 Courier New;}}{\\colortbl;\\red220\\green38\\blue38;\\red240\\green240\\blue240;\\red228\\green228\\blue228;\\red218\\green235\\blue252;}'
-	const body = deals.map(renderBoard).join('')
+		'{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Times New Roman;}{\\f1 Courier New;}}{\\colortbl;\\red220\\green38\\blue38;\\red240\\green240\\blue240;\\red228\\green228\\blue228;\\red218\\green235\\blue252;}\\paperw11906\\paperh16838\\margl720\\margr720\\margt720\\margb720'
+	const blocks = deals.map(renderBoard)
+	let body = ''
+	for (let i = 0; i < blocks.length; i++) {
+		body += blocks[i]
+		// Strict one board per page: add page break between boards, not after the last
+		if (i < blocks.length - 1) body += '\\page '
+	}
 	const rtf = header + body + '}'
 	const blob = new Blob([rtf], { type: 'application/rtf' })
 	const url = URL.createObjectURL(blob)
