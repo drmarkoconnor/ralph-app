@@ -312,7 +312,10 @@ export default function DragDropCards({ meta, setMeta }) {
 		const b = deal?.buckets || {}
 		return SEATS.every((s) => Array.isArray(b[s]) && b[s].length === 13)
 	}, [deal?.buckets])
-	const auctionStartSeat = useMemo(() => meta?.auctionStart || 'N', [meta?.auctionStart])
+	const auctionStartSeat = useMemo(
+		() => meta?.auctionStart || 'N',
+		[meta?.auctionStart]
+	)
 	const currentTurnSeat = useMemo(() => {
 		const startIdx = SEATS.indexOf(auctionStartSeat)
 		const text = String(meta?.auctionText || '').trim()
@@ -337,7 +340,11 @@ export default function DragDropCards({ meta, setMeta }) {
 		return (lvl - 1) * BID_SUITS.length + BID_SUITS.indexOf(suit)
 	}
 	const auctionTokens = useMemo(
-		() => String(meta?.auctionText || '').trim().split(/\s+/).filter(Boolean),
+		() =>
+			String(meta?.auctionText || '')
+				.trim()
+				.split(/\s+/)
+				.filter(Boolean),
 		[meta?.auctionText]
 	)
 	const highestBidIndex = useMemo(() => {
@@ -386,7 +393,10 @@ export default function DragDropCards({ meta, setMeta }) {
 	}
 	const undoCall = () => {
 		setMeta?.((m) => {
-			const tokens = String(m?.auctionText || '').trim().split(/\s+/).filter(Boolean)
+			const tokens = String(m?.auctionText || '')
+				.trim()
+				.split(/\s+/)
+				.filter(Boolean)
 			if (!tokens.length) return m
 			const next = tokens.slice(0, -1).join(' ')
 			return { ...m, auctionText: next }
@@ -2374,10 +2384,23 @@ export default function DragDropCards({ meta, setMeta }) {
 										</button>
 									</div>
 									<div className="flex items-center gap-2">
-										<span className="text-[11px] uppercase tracking-wide text-gray-500">Turn</span>
-										<span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${BUCKET_STYLES[currentTurnSeat]?.headerBg || 'bg-gray-100'} ${BUCKET_STYLES[currentTurnSeat]?.headerText || 'text-gray-800'}`}>{currentTurnSeat}</span>
+										<span className="text-[11px] uppercase tracking-wide text-gray-500">
+											Turn
+										</span>
+										<span
+											className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
+												BUCKET_STYLES[currentTurnSeat]?.headerBg ||
+												'bg-gray-100'
+											} ${
+												BUCKET_STYLES[currentTurnSeat]?.headerText ||
+												'text-gray-800'
+											}`}>
+											{currentTurnSeat}
+										</span>
 										{!isFullyDealt && (
-											<span className="text-[11px] text-amber-600">Deal all 4 hands to enable bidding</span>
+											<span className="text-[11px] text-amber-600">
+												Deal all 4 hands to enable bidding
+											</span>
 										)}
 									</div>
 									<div className="flex items-center gap-2">
@@ -2418,7 +2441,9 @@ export default function DragDropCards({ meta, setMeta }) {
 									{/* Bidding buttons (always visible; disabled until fully dealt) */}
 									<div className="mt-2 space-y-1">
 										<div className="flex items-center justify-between">
-											<span className="text-[11px] uppercase tracking-wide text-gray-500">Bidding</span>
+											<span className="text-[11px] uppercase tracking-wide text-gray-500">
+												Bidding
+											</span>
 											<div className="flex gap-1">
 												<button
 													className="px-2 py-0.5 rounded border bg-white text-[11px] hover:bg-gray-50 disabled:opacity-30"
@@ -2436,28 +2461,56 @@ export default function DragDropCards({ meta, setMeta }) {
 												</button>
 											</div>
 										</div>
-										<div className={`grid grid-cols-7 gap-2 ${!isFullyDealt ? 'opacity-40 pointer-events-none' : ''}`}>
+										<div
+											className={`grid grid-cols-7 gap-2 ${
+												!isFullyDealt ? 'opacity-40 pointer-events-none' : ''
+											}`}>
 											{/* Group by level columns */}
 											{Array.from({ length: 7 }, (_, i) => i + 1).map((lvl) => {
 												const bidsAtLevel = BID_SUITS.map((s) => `${lvl}${s}`)
 												return (
-													<div key={`col-${lvl}`} className="flex flex-col gap-1">
+													<div
+														key={`col-${lvl}`}
+														className="flex flex-col gap-1">
 														{bidsAtLevel.map((b) => {
 															const idx = bidOrderIndex(b)
 															const disabled = idx <= highestBidIndex
 															const level = b[0]
 															const suit = b.slice(1)
-															const suitGlyph = suit === 'NT' ? 'NT' : ({ C: '♣', D: '♦', H: '♥', S: '♠' }[suit])
-															const baseColor = suit === 'NT' ? 'bg-indigo-600 text-white' : (suit === 'H' || suit === 'D') ? 'bg-red-600 text-white' : 'bg-black text-white'
+															const suitGlyph =
+																suit === 'NT'
+																	? 'NT'
+																	: { C: '♣', D: '♦', H: '♥', S: '♠' }[suit]
+															const baseColor =
+																suit === 'NT'
+																	? 'bg-indigo-600 text-white'
+																	: suit === 'H' || suit === 'D'
+																	? 'bg-red-600 text-white'
+																	: 'bg-black text-white'
 															const isCurrent = currentContract === b
 															return (
 																<button
 																	key={b}
-																	onClick={() => !disabled && isFullyDealt && addCall(b)}
-																	className={`relative flex flex-row items-center justify-center gap-1 rounded-md border text-center select-none ${baseColor} ${disabled ? 'opacity-30 cursor-not-allowed' : 'hover:brightness-110 active:scale-[.95]'} py-1 px-1 ${isCurrent ? 'ring-2 ring-yellow-300 ring-offset-1' : ''}`}
-																	title={b} aria-label={b}>
-																	<span className="leading-none font-extrabold text-[18px]">{level}</span>
-																	<span className="text-[14px] font-semibold">{suitGlyph}</span>
+																	onClick={() =>
+																		!disabled && isFullyDealt && addCall(b)
+																	}
+																	className={`relative flex flex-row items-center justify-center gap-1 rounded-md border text-center select-none ${baseColor} ${
+																		disabled
+																			? 'opacity-30 cursor-not-allowed'
+																			: 'hover:brightness-110 active:scale-[.95]'
+																	} py-1 px-1 ${
+																		isCurrent
+																			? 'ring-2 ring-yellow-300 ring-offset-1'
+																			: ''
+																	}`}
+																	title={b}
+																	aria-label={b}>
+																	<span className="leading-none font-extrabold text-[18px]">
+																		{level}
+																	</span>
+																	<span className="text-[14px] font-semibold">
+																		{suitGlyph}
+																	</span>
 																</button>
 															)
 														})}
@@ -2466,25 +2519,49 @@ export default function DragDropCards({ meta, setMeta }) {
 											})}
 										</div>
 										{/* Pass / Double / Redouble row underneath, same size as bid boxes */}
-										<div className={`mt-2 grid grid-cols-3 gap-2 ${!isFullyDealt ? 'opacity-40 pointer-events-none' : ''}`}>
+										<div
+											className={`mt-2 grid grid-cols-3 gap-2 ${
+												!isFullyDealt ? 'opacity-40 pointer-events-none' : ''
+											}`}>
 											{['P', 'X', 'XX'].map((sym) => {
-												const disabled = sym === 'X' ? !canDouble : sym === 'XX' ? !canRedouble : false
-												const label = sym === 'P' ? 'Pass' : sym === 'X' ? 'Double' : 'Redouble'
+												const disabled =
+													sym === 'X'
+														? !canDouble
+														: sym === 'XX'
+														? !canRedouble
+														: false
+												const label =
+													sym === 'P'
+														? 'Pass'
+														: sym === 'X'
+														? 'Double'
+														: 'Redouble'
 												return (
 													<button
 														key={sym}
-														onClick={() => !disabled && isFullyDealt && addCall(sym)}
-														className={`relative flex flex-col items-center justify-center rounded-md border text-center select-none bg-white text-gray-900 ${disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-50 active:scale-[.95]'} py-1 px-1`}
-														title={label} aria-label={label}>
-														<span className="leading-none font-bold text-[16px] -mb-0.5">{sym}</span>
-														<span className="text-[11px] font-semibold">{label}</span>
+														onClick={() =>
+															!disabled && isFullyDealt && addCall(sym)
+														}
+														className={`relative flex flex-col items-center justify-center rounded-md border text-center select-none bg-white text-gray-900 ${
+															disabled
+																? 'opacity-30 cursor-not-allowed'
+																: 'hover:bg-gray-50 active:scale-[.95]'
+														} py-1 px-1`}
+														title={label}
+														aria-label={label}>
+														<span className="leading-none font-bold text-[16px] -mb-0.5">
+															{sym}
+														</span>
+														<span className="text-[11px] font-semibold">
+															{label}
+														</span>
 													</button>
 												)
 											})}
 										</div>
 										<div className="text-[10px] text-gray-400 italic">
 											{isFullyDealt
-													? 'Higher bids disable lower ones automatically. X / XX availability simplified.'
+												? 'Higher bids disable lower ones automatically. X / XX availability simplified.'
 												: 'Deal all 4 hands to enable buttons.'}
 										</div>
 									</div>
@@ -2508,14 +2585,14 @@ export default function DragDropCards({ meta, setMeta }) {
 										placeholder="Teaching notes for this hand..."
 									/>
 									<div className="flex items-center gap-2">
-									<button
-										className="px-2 py-1 rounded border text-[11px]"
-										onClick={() =>
-											setMeta?.((m) => ({ ...m, notesDraft: '' }))
-										}>
-										Clear
-									</button>
-								</div>
+										<button
+											className="px-2 py-1 rounded border text-[11px]"
+											onClick={() =>
+												setMeta?.((m) => ({ ...m, notesDraft: '' }))
+											}>
+											Clear
+										</button>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -2576,17 +2653,18 @@ export default function DragDropCards({ meta, setMeta }) {
 											? 'ring-4 ring-blue-600 ring-offset-2 ring-offset-blue-100 scale-105 border-blue-600'
 											: 'hover:scale-105 border-neutral-300'
 									}`}
-										style={{ width: `${w}px`, height: `${h}px` }}
-										title={hintsEnabled ? 'Click to select, drag to a seat' : undefined}
-									>
-										<img
-											src={cardPngUrl(card.suit, card.rank)}
-											alt={`${card.rank} of ${card.suit}`}
-											className={`absolute inset-0 w-full h-full object-contain pointer-events-none select-none ${
-												isSelected ? 'opacity-0' : 'opacity-100'
-											}`}
-											draggable={false}
-										/>
+									style={{ width: `${w}px`, height: `${h}px` }}
+									title={
+										hintsEnabled ? 'Click to select, drag to a seat' : undefined
+									}>
+									<img
+										src={cardPngUrl(card.suit, card.rank)}
+										alt={`${card.rank} of ${card.suit}`}
+										className={`absolute inset-0 w-full h-full object-contain pointer-events-none select-none ${
+											isSelected ? 'opacity-0' : 'opacity-100'
+										}`}
+										draggable={false}
+									/>
 									{/* selection-only soft haze and glyph */}
 									{isSelected && (
 										<>
