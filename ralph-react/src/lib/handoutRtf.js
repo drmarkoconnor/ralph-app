@@ -38,7 +38,7 @@ function seatBlockRTF(seatId, d) {
 		String(d.dealer || '')
 			.toUpperCase()
 			.charAt(0) === seatId
-	const title = `{\\fs22\\b ${esc(seatName)}}${
+	const title = `{\\fs26\\b ${esc(seatName)}}${
 		dealer ? ` ${esc('(dealer)')}` : ''
 	}`
 	// RTF Unicode escapes for suit symbols to avoid mojibake in Pages
@@ -49,7 +49,7 @@ function seatBlockRTF(seatId, d) {
 		club: '\\u9827?',
 	}
 	const line = (sym, colorCmd, ranks) =>
-		`\\fs24 ${colorCmd}${sym}\\cf0\\tab {\\f1 ${esc(ranks)}}`
+		`\\fs28\\b ${colorCmd}${sym}\\cf0\\tab {\\f1 \\fs24 ${esc(ranks)}}`
 	const s = toRankLine(cards, 'Spades')
 	const h = toRankLine(cards, 'Hearts')
 	const dmd = toRankLine(cards, 'Diamonds')
@@ -94,7 +94,7 @@ function notesRTF(d) {
 	// Merged two-cell row across the full width to be robust in Pages
 	const colW = [5000, 5000]
 	const cellProps = ['\\clmgf', '\\clmrg']
-	const content = ` {\\fs22\\b Notes}\\line {\\fs16 ${text}}`
+	const content = ` {\\fs30\\b Notes}\\line {\\fs24 ${text}}`
 	return rtfRow(colW, [`${content}`, ``], cellProps)
 }
 
@@ -148,7 +148,7 @@ function miniMakeablesRTF(d) {
 	const header = rtfRowInner(
 		colW,
 		[
-			`{\\ql {\\b \\fs18 Suit}}`,
+			`{\\ql {\\b \\fs22 Suit}}`,
 			...seats.map((s) => `{\\ql {\\b \\fs18 ${s}}}`),
 		],
 		headerProps
@@ -161,10 +161,11 @@ function miniMakeablesRTF(d) {
 			const vals = seats.map((seat) => {
 				const raw = table?.[st]?.[seat]
 				const v = Number.isFinite(raw) ? Math.max(0, raw - 6) : 0
-				return `{\\qc \\fs16 {\\f1 ${esc(String(v))}}}`
+				return `{\\qc \\fs20\\b {\\f1 ${esc(String(v))}}}`
 			})
 			const props = [grid, grid, grid, grid, grid]
 			return rtfRowInner(colW, [`{\\qc \\fs16 ${suitText}}`, ...vals], props)
+			return rtfRowInner(colW, [`{\\qc \\fs20\\b ${suitText}}`, ...vals], props)
 		})
 		.join('')
 
@@ -189,7 +190,7 @@ function auctionRoundsTableRTF(d) {
 	]
 	const header = rtfRowInner(
 		colW,
-		seats.map((s) => `{\\ql {\\b \\fs18 ${s}}}`),
+		seats.map((s) => `{\\ql {\\b \\fs22 ${s}}}`),
 		headerProps
 	)
 	// Build rows with rotation from dealer; blanks before dealer in first row
@@ -204,7 +205,7 @@ function auctionRoundsTableRTF(d) {
 		for (let i = 0; i < start; i++) current[i] = ''
 		for (let i = 0; i < calls.length; i++) {
 			const disp = calls[i] === 'P' ? 'Pass' : calls[i]
-			current[col] = `\\fs16 {\\f1 ${esc(String(disp))}}`
+			current[col] = `\\fs22\\b {\\f1 ${esc(String(disp))}}`
 			col = (col + 1) % 4
 			if (col === start) {
 				rows.push(current)
@@ -260,12 +261,12 @@ function renderBoard(d) {
 	// Makeables grid below, centered
 	const makeablesBlock = miniMakeablesRTF(d)
 	if (makeablesBlock) {
-		out += spacer + `\\pard\\ql {\\b \\fs22 Makeables}\\par `
+		out += spacer + `\\pard\\ql {\\b \\fs28 Makeables}\\par `
 		out += `\\pard\\qc ` + makeablesBlock + `\\par `
 	}
 	// Bidding table (rounds)
 	const auctionTbl = auctionRoundsTableRTF(d)
-	out += spacer + `{\\pard\\ql {\\b \\fs22 Auction}\\par }` + auctionTbl
+	out += spacer + `{\\pard\\ql {\\b \\fs28 Auction}\\par }` + auctionTbl
 	return out
 }
 

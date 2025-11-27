@@ -307,6 +307,95 @@ export default function DragDropCards({ meta, setMeta }) {
 	// Auction format help modal
 	const [showAuctionHelp, setShowAuctionHelp] = useState(false)
 
+	// Enable bidding only when all 4 hands have 13 cards; compute current turn from auctionStart and calls count
+	const isFullyDealt = useMemo(() => {
+		const b = deal?.buckets || {}
+		return SEATS.every((s) => Array.isArray(b[s]) && b[s].length === 13)
+	}, [deal?.buckets])
+	const auctionStartSeat = useMemo(() => meta?.auctionStart || 'N', [meta?.auctionStart])
+	const currentTurnSeat = useMemo(() => {
+		const startIdx = SEATS.indexOf(auctionStartSeat)
+		const text = String(meta?.auctionText || '').trim()
+		const calls = text ? text.split(/\s+/).filter(Boolean).length : 0
+		if (startIdx === -1) return 'N'
+		return SEATS[(startIdx + calls) % 4]
+	}, [auctionStartSeat, meta?.auctionText])
+
+	// Bidding helpers
+	const BID_SUITS = ['C', 'D', 'H', 'S', 'NT']
+	const ALL_BIDS = useMemo(() => {
+		const res = []
+		for (let lvl = 1; lvl <= 7; lvl++) {
+			for (const s of BID_SUITS) res.push(`${lvl}${s}`)
+		}
+		return res
+	}, [])
+	const bidOrderIndex = (bid) => {
+		if (!/^[1-7](C|D|H|S|NT)$/.test(bid)) return -1
+		const lvl = parseInt(bid[0], 10)
+		const suit = bid.slice(1)
+		return (lvl - 1) * BID_SUITS.length + BID_SUITS.indexOf(suit)
+	}
+	const auctionTokens = useMemo(
+		() => String(meta?.auctionText || '').trim().split(/\s+/).filter(Boolean),
+		[meta?.auctionText]
+	)
+	const highestBidIndex = useMemo(() => {
+		let hi = -1
+		for (const t of auctionTokens) {
+			if (/^[1-7](C|D|H|S|NT)$/.test(t)) {
+				const idx = bidOrderIndex(t)
+				if (idx > hi) hi = idx
+			}
+		}
+		return hi
+	}, [auctionTokens])
+	const currentContract = useMemo(() => {
+		// last bid token that matches a contract
+		for (let i = auctionTokens.length - 1; i >= 0; i--) {
+			const t = auctionTokens[i]
+			if (/^[1-7](C|D|H|S|NT)$/.test(t)) return t
+		}
+		return ''
+	}, [auctionTokens])
+	const canDouble = useMemo(() => {
+		for (let i = auctionTokens.length - 1; i >= 0; i--) {
+			const t = auctionTokens[i]
+			if (t === 'P') continue
+			if (/^[1-7](C|D|H|S|NT)$/.test(t)) return true
+			if (t === 'X' || t === 'XX') return false
+			break
+		}
+		return false
+	}, [auctionTokens])
+	const canRedouble = useMemo(() => {
+		for (let i = auctionTokens.length - 1; i >= 0; i--) {
+			const t = auctionTokens[i]
+			if (t === 'P') continue
+			if (t === 'X') return true
+			return false
+		}
+		return false
+	}, [auctionTokens])
+	const addCall = (call) => {
+		setMeta?.((m) => {
+			const existing = String(m?.auctionText || '').trim()
+			const next = existing ? `${existing} ${call}` : call
+			return { ...m, auctionText: next }
+		})
+	}
+	const undoCall = () => {
+		setMeta?.((m) => {
+			const tokens = String(m?.auctionText || '').trim().split(/\s+/).filter(Boolean)
+			if (!tokens.length) return m
+			const next = tokens.slice(0, -1).join(' ')
+			return { ...m, auctionText: next }
+		})
+	}
+	const clearAuction = () => {
+		setMeta?.((m) => ({ ...m, auctionText: '' }))
+	}
+
 	// Track if user has manually interacted with Theme select to avoid auto-clearing after selection
 	const themeTouchedRef = useRef(false)
 	useEffect(() => {
@@ -388,17 +477,7 @@ export default function DragDropCards({ meta, setMeta }) {
 			)
 				return
 			if (e.metaKey || e.ctrlKey || e.altKey) return
-			// Guard against near-duplicate events for the same key
 			const now = Date.now()
-			const keyId = String(e.key || '').toLowerCase()
-			if (inFlightRef.current) return
-			if (
-				lastKeyRef.current.key === keyId &&
-				now - lastKeyRef.current.t < 200
-			) {
-				return
-			}
-			lastKeyRef.current = { key: keyId, t: now }
 			const k = e.key
 			if (k === 'Escape') {
 				if (typeof e.stopImmediatePropagation === 'function')
@@ -1237,9 +1316,9 @@ export default function DragDropCards({ meta, setMeta }) {
 			meta?.themeChoice === 'Custom…'
 				? meta?.themeCustom || ''
 				: meta?.themeChoice || ''
-		// Auto-promote notesDraft to notes if user forgot to click Set Notes
-		let effectiveNotes = meta?.notes && meta.notes.length ? [...meta.notes] : []
-		if ((!effectiveNotes || !effectiveNotes.length) && meta?.notesDraft) {
+		// Use notesDraft directly (Set Notes button removed)
+		let effectiveNotes = []
+		if (meta?.notesDraft) {
 			const raw = String(meta.notesDraft).trim()
 			if (raw) effectiveNotes = [raw]
 		}
@@ -1278,8 +1357,14 @@ export default function DragDropCards({ meta, setMeta }) {
 			},
 		])
 		resetBoard()
-		// Clear notes draft & notes ready for next hand authoring
-		setMeta?.((m) => ({ ...m, notesDraft: '', notes: [] }))
+		// Clear notes draft and auction/contract fields ready for next hand authoring
+		setMeta?.((m) => ({
+			...m,
+			notesDraft: '',
+			auctionText: '',
+			contract: '',
+			declarer: '',
+		}))
 	}
 
 	const downloadPBN = (content) => {
@@ -2289,6 +2374,13 @@ export default function DragDropCards({ meta, setMeta }) {
 										</button>
 									</div>
 									<div className="flex items-center gap-2">
+										<span className="text-[11px] uppercase tracking-wide text-gray-500">Turn</span>
+										<span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${BUCKET_STYLES[currentTurnSeat]?.headerBg || 'bg-gray-100'} ${BUCKET_STYLES[currentTurnSeat]?.headerText || 'text-gray-800'}`}>{currentTurnSeat}</span>
+										{!isFullyDealt && (
+											<span className="text-[11px] text-amber-600">Deal all 4 hands to enable bidding</span>
+										)}
+									</div>
+									<div className="flex items-center gap-2">
 										<label className="flex items-center gap-1">
 											<span className="text-[12px] text-gray-600">Start</span>
 											<select
@@ -2299,7 +2391,9 @@ export default function DragDropCards({ meta, setMeta }) {
 														...m,
 														auctionStart: e.target.value,
 													}))
-												}>
+												}
+												disabled={!isFullyDealt}
+												aria-disabled={!isFullyDealt}>
 												<option>N</option>
 												<option>E</option>
 												<option>S</option>
@@ -2307,23 +2401,92 @@ export default function DragDropCards({ meta, setMeta }) {
 											</select>
 										</label>
 										<input
-											className={`border rounded px-2 py-1 text-[12px] flex-1 ${
+											className={`border rounded px-2 py-1 text-[12px] flex-1 bg-gray-50 cursor-default ${
 												String(meta?.auctionText || '').trim()
 													? 'border-gray-300'
 													: 'border-rose-400 ring-1 ring-rose-300'
 											}`}
-											placeholder="e.g. 1NT Pass 2C … Pass Pass Pass"
+											placeholder="(use buttons below to build the auction)"
 											value={meta?.auctionText || ''}
-											onChange={(e) =>
-												setMeta?.((m) => ({
-													...m,
-													auctionText: e.target.value,
-												}))
-											}
+											readOnly
+											aria-readonly="true"
 										/>
 									</div>
 									<div className="text-[11px] text-gray-500">
 										Ends with three Passes. Use X/XX for doubles; P for Pass.
+									</div>
+									{/* Bidding buttons (always visible; disabled until fully dealt) */}
+									<div className="mt-2 space-y-1">
+										<div className="flex items-center justify-between">
+											<span className="text-[11px] uppercase tracking-wide text-gray-500">Bidding</span>
+											<div className="flex gap-1">
+												<button
+													className="px-2 py-0.5 rounded border bg-white text-[11px] hover:bg-gray-50 disabled:opacity-30"
+													onClick={undoCall}
+													disabled={!String(meta?.auctionText || '').trim()}
+													title="Remove last call">
+													Undo
+												</button>
+												<button
+													className="px-2 py-0.5 rounded border bg-white text-[11px] hover:bg-gray-50 disabled:opacity-30"
+													onClick={clearAuction}
+													disabled={!String(meta?.auctionText || '').trim()}
+													title="Clear entire auction">
+													Clear
+												</button>
+											</div>
+										</div>
+										<div className={`grid grid-cols-7 gap-2 ${!isFullyDealt ? 'opacity-40 pointer-events-none' : ''}`}>
+											{/* Group by level columns */}
+											{Array.from({ length: 7 }, (_, i) => i + 1).map((lvl) => {
+												const bidsAtLevel = BID_SUITS.map((s) => `${lvl}${s}`)
+												return (
+													<div key={`col-${lvl}`} className="flex flex-col gap-1">
+														{bidsAtLevel.map((b) => {
+															const idx = bidOrderIndex(b)
+															const disabled = idx <= highestBidIndex
+															const level = b[0]
+															const suit = b.slice(1)
+															const suitGlyph = suit === 'NT' ? 'NT' : ({ C: '♣', D: '♦', H: '♥', S: '♠' }[suit])
+															const baseColor = suit === 'NT' ? 'bg-indigo-600 text-white' : (suit === 'H' || suit === 'D') ? 'bg-red-600 text-white' : 'bg-black text-white'
+															const isCurrent = currentContract === b
+															return (
+																<button
+																	key={b}
+																	onClick={() => !disabled && isFullyDealt && addCall(b)}
+																	className={`relative flex flex-row items-center justify-center gap-1 rounded-md border text-center select-none ${baseColor} ${disabled ? 'opacity-30 cursor-not-allowed' : 'hover:brightness-110 active:scale-[.95]'} py-1 px-1 ${isCurrent ? 'ring-2 ring-yellow-300 ring-offset-1' : ''}`}
+																	title={b} aria-label={b}>
+																	<span className="leading-none font-extrabold text-[18px]">{level}</span>
+																	<span className="text-[14px] font-semibold">{suitGlyph}</span>
+																</button>
+															)
+														})}
+													</div>
+												)
+											})}
+										</div>
+										{/* Pass / Double / Redouble row underneath, same size as bid boxes */}
+										<div className={`mt-2 grid grid-cols-3 gap-2 ${!isFullyDealt ? 'opacity-40 pointer-events-none' : ''}`}>
+											{['P', 'X', 'XX'].map((sym) => {
+												const disabled = sym === 'X' ? !canDouble : sym === 'XX' ? !canRedouble : false
+												const label = sym === 'P' ? 'Pass' : sym === 'X' ? 'Double' : 'Redouble'
+												return (
+													<button
+														key={sym}
+														onClick={() => !disabled && isFullyDealt && addCall(sym)}
+														className={`relative flex flex-col items-center justify-center rounded-md border text-center select-none bg-white text-gray-900 ${disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-50 active:scale-[.95]'} py-1 px-1`}
+														title={label} aria-label={label}>
+														<span className="leading-none font-bold text-[16px] -mb-0.5">{sym}</span>
+														<span className="text-[11px] font-semibold">{label}</span>
+													</button>
+												)
+											})}
+										</div>
+										<div className="text-[10px] text-gray-400 italic">
+											{isFullyDealt
+													? 'Higher bids disable lower ones automatically. X / XX availability simplified.'
+												: 'Deal all 4 hands to enable buttons.'}
+										</div>
 									</div>
 								</div>
 
@@ -2345,28 +2508,14 @@ export default function DragDropCards({ meta, setMeta }) {
 										placeholder="Teaching notes for this hand..."
 									/>
 									<div className="flex items-center gap-2">
-										<button
-											className="px-2 py-1 rounded border text-[11px]"
-											onClick={() => {
-												const raw = String(meta?.notesDraft || '').trim()
-												if (!raw) return
-												setMeta?.((m) => ({ ...m, notes: [raw] }))
-											}}>
-											Set Notes
-										</button>
-										<button
-											className="px-2 py-1 rounded border text-[11px]"
-											onClick={() =>
-												setMeta?.((m) => ({ ...m, notes: [], notesDraft: '' }))
-											}>
-											Clear
-										</button>
-									</div>
-									{(meta?.notes || []).length > 0 && (
-										<div className="mt-1 text-[11px] text-gray-700 line-clamp-3 whitespace-pre-wrap break-words border rounded p-1 bg-gray-50">
-											{meta?.notes[0]}
-										</div>
-									)}
+									<button
+										className="px-2 py-1 rounded border text-[11px]"
+										onClick={() =>
+											setMeta?.((m) => ({ ...m, notesDraft: '' }))
+										}>
+										Clear
+									</button>
+								</div>
 								</div>
 							</div>
 						</div>
@@ -2427,18 +2576,17 @@ export default function DragDropCards({ meta, setMeta }) {
 											? 'ring-4 ring-blue-600 ring-offset-2 ring-offset-blue-100 scale-105 border-blue-600'
 											: 'hover:scale-105 border-neutral-300'
 									}`}
-									style={{ width: `${w}px`, height: `${h}px` }}
-									title={
-										hintsEnabled ? 'Click to select, drag to a seat' : undefined
-									}>
-									<img
-										src={cardPngUrl(card.suit, card.rank)}
-										alt={`${card.rank} of ${card.suit}`}
-										className={`absolute inset-0 w-full h-full object-contain pointer-events-none select-none ${
-											isSelected ? 'opacity-0' : 'opacity-100'
-										}`}
-										draggable={false}
-									/>
+										style={{ width: `${w}px`, height: `${h}px` }}
+										title={hintsEnabled ? 'Click to select, drag to a seat' : undefined}
+									>
+										<img
+											src={cardPngUrl(card.suit, card.rank)}
+											alt={`${card.rank} of ${card.suit}`}
+											className={`absolute inset-0 w-full h-full object-contain pointer-events-none select-none ${
+												isSelected ? 'opacity-0' : 'opacity-100'
+											}`}
+											draggable={false}
+										/>
 									{/* selection-only soft haze and glyph */}
 									{isSelected && (
 										<>
