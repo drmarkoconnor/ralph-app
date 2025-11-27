@@ -231,6 +231,24 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [draggedCard, setDraggedCard] = useState(null)
 	const [dragSource, setDragSource] = useState(null) // 'deck' | 'N' | 'E' | 'S' | 'W' | null
 	const [activeBucket, setActiveBucket] = useState(null)
+	// Deck card size slider (persisted)
+	const [deckScale, setDeckScale] = useState(1.0)
+	useEffect(() => {
+		try {
+			const raw = localStorage.getItem('deckScale')
+			if (raw) {
+				const n = parseFloat(raw)
+				if (Number.isFinite(n)) {
+					setDeckScale(Math.min(1.8, Math.max(0.7, n)))
+				}
+			}
+		} catch {}
+	}, [])
+	useEffect(() => {
+		try {
+			localStorage.setItem('deckScale', String(deckScale))
+		} catch {}
+	}, [deckScale])
 	// Selection under deck
 	const [selected, setSelected] = useState(() => new Set())
 	// Saved hands as {N,E,S,W}
@@ -286,6 +304,8 @@ export default function DragDropCards({ meta, setMeta }) {
 		W: 0,
 	})
 	const [shapeModal, setShapeModal] = useState({ open: false, message: '' })
+	// Auction format help modal
+	const [showAuctionHelp, setShowAuctionHelp] = useState(false)
 
 	// Track if user has manually interacted with Theme select to avoid auto-clearing after selection
 	const themeTouchedRef = useRef(false)
@@ -1238,7 +1258,7 @@ export default function DragDropCards({ meta, setMeta }) {
 			declarer: meta?.declarer,
 			auctionStart: meta?.auctionStart,
 			auctionText: meta?.auctionText,
-			playscript: meta?.playscript,
+			// playscript removed
 			notes: effectiveNotes,
 		}
 
@@ -1415,7 +1435,7 @@ export default function DragDropCards({ meta, setMeta }) {
 				ddpar: metaSnap.ddpar || meta?.ddpar || undefined,
 				scoring: metaSnap.scoring || meta?.scoring || undefined,
 				lead: metaSnap.lead || meta?.lead || undefined,
-				playscript: metaSnap.playscript || meta?.playscript || undefined,
+				// playscript removed
 			},
 		}
 		return BoardZ.parse(boardObj)
@@ -1482,8 +1502,8 @@ export default function DragDropCards({ meta, setMeta }) {
 		setStartBoard(startBoard + delta)
 	}
 
-	const CARD_DECK =
-		'rounded-lg shadow-md cursor-pointer select-none transition-all duration-150 w-[48px] h-[72px] flex items-center justify-center border border-neutral-300 bg-white'
+	const CARD_DECK_BASE =
+		'rounded-lg shadow-md cursor-pointer select-none transition-all duration-150 flex items-center justify-center border bg-white relative overflow-hidden'
 	const CARD_BUCKET =
 		'rounded-md shadow cursor-pointer select-none transition-all duration-150 w-[40px] h-[60px] flex items-center justify-center border border-neutral-300 bg-white'
 
@@ -1871,97 +1891,7 @@ export default function DragDropCards({ meta, setMeta }) {
 									</div>
 								</div>
 
-								{/* Auction & Play */}
-								<div className="space-y-1">
-									<div className="text-[11px] font-semibold text-gray-800">
-										Ideal Bidding
-									</div>
-									<div className="flex items-center gap-1">
-										<label className="flex items-center gap-1">
-											<span className="text-[11px] text-gray-600">Start</span>
-											<select
-												className="border rounded px-1 py-0.5 text-[11px]"
-												value={meta?.auctionStart || 'N'}
-												onChange={(e) =>
-													setMeta?.((m) => ({
-														...m,
-														auctionStart: e.target.value,
-													}))
-												}>
-												<option>N</option>
-												<option>E</option>
-												<option>S</option>
-												<option>W</option>
-											</select>
-										</label>
-										<input
-											className="border rounded px-1 py-0.5 text-[11px] flex-1"
-											placeholder="e.g. 1NT Pass 2C … Pass Pass Pass"
-											value={meta?.auctionText || ''}
-											onChange={(e) =>
-												setMeta?.((m) => ({
-													...m,
-													auctionText: e.target.value,
-												}))
-											}
-										/>
-									</div>
-									<div className="text-[10px] text-gray-500">
-										Ends with three Passes.
-									</div>
-								</div>
-								<div className="space-y-1">
-									<div className="text-[11px] font-semibold text-gray-800">
-										PlayScript
-									</div>
-									<textarea
-										className="border rounded px-1 py-0.5 text-[11px] h-16 w-full"
-										placeholder={`One play per line, e.g.\nW:♠4\nN:♠A\nE:♠2\nS:♠7`}
-										value={meta?.playscript || ''}
-										onChange={(e) =>
-											setMeta?.((m) => ({ ...m, playscript: e.target.value }))
-										}
-									/>
-								</div>
-
-								{/* Notes */}
-								<div className="pt-1 border-t space-y-1">
-									<div className="text-[11px] font-semibold text-gray-800">
-										Notes
-									</div>
-									<textarea
-										className="border rounded px-1 py-0.5 text-[11px] h-24 w-full"
-										value={meta?.notesDraft || ''}
-										onChange={(e) =>
-											setMeta?.((m) => ({ ...m, notesDraft: e.target.value }))
-										}
-										placeholder="Teaching notes for this hand..."
-									/>
-									<div className="flex items-center gap-1">
-										<button
-											className="px-2 py-1 rounded border text-[11px]"
-											onClick={() => {
-												const raw = String(meta?.notesDraft || '').trim()
-												if (!raw) return
-												// Single block stored as one element; PDF will wrap
-												setMeta?.((m) => ({ ...m, notes: [raw] }))
-											}}>
-											Set Notes
-										</button>
-										<button
-											className="px-2 py-1 rounded border text-[11px]"
-											onClick={() =>
-												setMeta?.((m) => ({ ...m, notes: [], notesDraft: '' }))
-											}>
-											Clear
-										</button>
-									</div>
-									{(meta?.notes || []).length > 0 && (
-										<div className="mt-1 text-[10px] text-gray-600 line-clamp-4 whitespace-pre-wrap break-words border rounded p-1 bg-gray-50">
-											{meta?.notes[0]}
-										</div>
-									)}
-								</div>
+								{/* Auction/Notes removed from left panel; now always-visible in main area */}
 
 								{/* Preview template removed per user request */}
 
@@ -2182,7 +2112,11 @@ export default function DragDropCards({ meta, setMeta }) {
 									<button
 										className="px-3 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
 										onClick={saveCurrentHand}
-										disabled={!complete}>
+										disabled={
+											!complete ||
+											!String(meta?.auctionText || '').trim() ||
+											!String(meta?.notesDraft || '').trim()
+										}>
 										Save Hand
 									</button>
 									<button
@@ -2323,6 +2257,140 @@ export default function DragDropCards({ meta, setMeta }) {
 					</div>
 
 					{/* Deck with DnD */}
+					<div className="w-full max-w-[900px] mx-auto -mt-1 mb-1 flex items-center justify-center gap-2 text-[11px] text-gray-700">
+						<span>Deck size</span>
+						<input
+							type="range"
+							min={0.7}
+							max={1.8}
+							step={0.05}
+							value={deckScale}
+							onChange={(e) => setDeckScale(parseFloat(e.target.value))}
+							className="w-56 accent-indigo-600"
+						/>
+						<span className="tabular-nums">{Math.round(deckScale * 100)}%</span>
+					</div>
+
+					{/* Always-visible Auction and Notes authoring */}
+					<div className="w-full max-w-[900px] mx-auto mb-2">
+						<div className="rounded-md border border-gray-200 bg-white p-3">
+							<div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+								{/* Auction */}
+								<div className="space-y-1 md:col-span-2">
+									<div className="flex items-center justify-between">
+										<div className="text-sm font-semibold text-gray-800">
+											Auction
+										</div>
+										<button
+											className="text-[11px] px-2 py-0.5 rounded border bg-white"
+											onClick={() => setShowAuctionHelp(true)}
+											title="Show format help">
+											Format help
+										</button>
+									</div>
+									<div className="flex items-center gap-2">
+										<label className="flex items-center gap-1">
+											<span className="text-[12px] text-gray-600">Start</span>
+											<select
+												className="border rounded px-1 py-0.5 text-[12px]"
+												value={meta?.auctionStart || 'N'}
+												onChange={(e) =>
+													setMeta?.((m) => ({
+														...m,
+														auctionStart: e.target.value,
+													}))
+												}>
+												<option>N</option>
+												<option>E</option>
+												<option>S</option>
+												<option>W</option>
+											</select>
+										</label>
+										<input
+											className={`border rounded px-2 py-1 text-[12px] flex-1 ${
+												String(meta?.auctionText || '').trim()
+													? 'border-gray-300'
+													: 'border-rose-400 ring-1 ring-rose-300'
+											}`}
+											placeholder="e.g. 1NT Pass 2C … Pass Pass Pass"
+											value={meta?.auctionText || ''}
+											onChange={(e) =>
+												setMeta?.((m) => ({
+													...m,
+													auctionText: e.target.value,
+												}))
+											}
+										/>
+									</div>
+									<div className="text-[11px] text-gray-500">
+										Ends with three Passes. Use X/XX for doubles; P for Pass.
+									</div>
+								</div>
+
+								{/* Notes */}
+								<div className="space-y-1">
+									<div className="text-sm font-semibold text-gray-800">
+										Notes
+									</div>
+									<textarea
+										className={`border rounded px-2 py-1 text-[12px] h-20 w-full ${
+											String(meta?.notesDraft || '').trim()
+												? 'border-gray-300'
+												: 'border-rose-400 ring-1 ring-rose-300'
+										}`}
+										value={meta?.notesDraft || ''}
+										onChange={(e) =>
+											setMeta?.((m) => ({ ...m, notesDraft: e.target.value }))
+										}
+										placeholder="Teaching notes for this hand..."
+									/>
+									<div className="flex items-center gap-2">
+										<button
+											className="px-2 py-1 rounded border text-[11px]"
+											onClick={() => {
+												const raw = String(meta?.notesDraft || '').trim()
+												if (!raw) return
+												setMeta?.((m) => ({ ...m, notes: [raw] }))
+											}}>
+											Set Notes
+										</button>
+										<button
+											className="px-2 py-1 rounded border text-[11px]"
+											onClick={() =>
+												setMeta?.((m) => ({ ...m, notes: [], notesDraft: '' }))
+											}>
+											Clear
+										</button>
+									</div>
+									{(meta?.notes || []).length > 0 && (
+										<div className="mt-1 text-[11px] text-gray-700 line-clamp-3 whitespace-pre-wrap break-words border rounded p-1 bg-gray-50">
+											{meta?.notes[0]}
+										</div>
+									)}
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* Auction format help modal */}
+					{showAuctionHelp && (
+						<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+							<div className="bg-white rounded shadow-xl p-4 max-w-sm w-[90%]">
+								<div className="text-sm font-semibold mb-2">Auction format</div>
+								<div className="text-[12px] whitespace-pre-wrap text-gray-700">
+									Start seat sets who opens. Separate calls by spaces. Use P for
+									Pass, X for Double, XX for Redouble. End with three Passes.
+								</div>
+								<div className="mt-3 text-right">
+									<button
+										className="px-3 py-1 rounded bg-gray-800 text-white text-[12px]"
+										onClick={() => setShowAuctionHelp(false)}>
+										OK
+									</button>
+								</div>
+							</div>
+						</div>
+					)}
 
 					{SEATS.includes(dragSource) && hintsEnabled && (
 						<div className="w-full text-center mb-1">
@@ -2345,6 +2413,8 @@ export default function DragDropCards({ meta, setMeta }) {
 						onDrop={onDropToDeck}>
 						{deal.deck.map((card) => {
 							const isSelected = selected.has(card.id)
+							const w = Math.round(48 * deckScale)
+							const h = Math.round(72 * deckScale)
 							return (
 								<div
 									key={card.id}
@@ -2352,20 +2422,44 @@ export default function DragDropCards({ meta, setMeta }) {
 									onDragStart={(e) => onDragStartDeck(e, card)}
 									onDragEnd={onDragEnd}
 									onClick={() => toggleSelect(card.id)}
-									className={`${CARD_DECK} ${
+									className={`${CARD_DECK_BASE} ${
 										isSelected
-											? 'ring-4 ring-yellow-300 scale-105'
-											: 'hover:scale-105'
-									} p-0`}
+											? 'ring-4 ring-blue-600 ring-offset-2 ring-offset-blue-100 scale-105 border-blue-600'
+											: 'hover:scale-105 border-neutral-300'
+									}`}
+									style={{ width: `${w}px`, height: `${h}px` }}
 									title={
 										hintsEnabled ? 'Click to select, drag to a seat' : undefined
 									}>
 									<img
 										src={cardPngUrl(card.suit, card.rank)}
 										alt={`${card.rank} of ${card.suit}`}
-										className="w-full h-full object-contain pointer-events-none select-none"
+										className={`absolute inset-0 w-full h-full object-contain pointer-events-none select-none ${
+											isSelected ? 'opacity-0' : 'opacity-100'
+										}`}
 										draggable={false}
 									/>
+									{/* selection-only soft haze and glyph */}
+									{isSelected && (
+										<>
+											<div className="absolute inset-0 bg-white/25"></div>
+											<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+												<div
+													className={`opacity-90 font-black tracking-tight ${
+														SUIT_TEXT[card.suit]
+													}`}
+													style={{
+														fontSize: `${Math.round(24 * deckScale)}px`,
+														// Simulated stroke for better contrast
+														textShadow:
+															'0 0.5px 0 rgba(255,255,255,0.8), 0 1px 2px rgba(0,0,0,0.25)',
+													}}>
+													{card.rank}
+													{card.symbol}
+												</div>
+											</div>
+										</>
+									)}
 								</div>
 							)
 						})}
@@ -2398,7 +2492,11 @@ export default function DragDropCards({ meta, setMeta }) {
 										<button
 											className="px-4 py-2 rounded bg-indigo-600 text-white text-xs hover:opacity-90 disabled:opacity-40"
 											onClick={saveCurrentHand}
-											disabled={!complete}>
+											disabled={
+												!complete ||
+												!String(meta?.auctionText || '').trim() ||
+												!String(meta?.notesDraft || '').trim()
+											}>
 											Save Hand
 										</button>
 									</Tooltip>
