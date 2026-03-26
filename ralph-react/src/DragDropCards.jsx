@@ -171,7 +171,7 @@ function buildBucketsFromDealString(dealStr) {
 	const deckCopy = initialCards.map((c) => ({ ...c }))
 	const takeCard = (suitName, rank) => {
 		const idx = deckCopy.findIndex(
-			(c) => c.suit === suitName && c.rank === rank
+			(c) => c.suit === suitName && c.rank === rank,
 		)
 		if (idx === -1) return null
 		const [card] = deckCopy.splice(idx, 1)
@@ -254,11 +254,14 @@ export default function DragDropCards({ meta, setMeta }) {
 	// Saved hands as {N,E,S,W}
 	const [savedHands, setSavedHands] = useState([]) // each item: {N,E,S,W, meta?}
 	const [startBoard, setStartBoard] = useState(1)
+	const [authoredDealer, setAuthoredDealer] = useState('N')
 	// Preview / copy state
 	const [previewIndex, setPreviewIndex] = useState(0)
 	const [copyState, setCopyState] = useState('idle') // idle | ok | err
 	const [hintsEnabled, setHintsEnabled] = useState(true)
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
+	const [pdfIncludeMetadata, setPdfIncludeMetadata] = useState(false)
+	const [pdfIncludeMakeables, setPdfIncludeMakeables] = useState(false)
 	const copyTimerRef = useRef(null)
 	// PBN import session
 	const [pbnImport, setPbnImport] = useState(null) // { filename, deals:[{deal, board, dealer, vul, auctionDealer, auctionTokens, ext}], index }
@@ -306,6 +309,10 @@ export default function DragDropCards({ meta, setMeta }) {
 	const [shapeModal, setShapeModal] = useState({ open: false, message: '' })
 	// Auction format help modal
 	const [showAuctionHelp, setShowAuctionHelp] = useState(false)
+	const authoredBoardBase = 1
+	const currentBoardNo = pbnImport ? startBoard + savedHands.length : authoredBoardBase + savedHands.length
+	const exportBoardBase = pbnImport ? startBoard : authoredBoardBase
+	const currentDealer = pbnImport ? dealerForBoard(currentBoardNo) : authoredDealer
 
 	// Enable bidding only when all 4 hands have 13 cards; compute current turn from auctionStart and calls count
 	const isFullyDealt = useMemo(() => {
@@ -313,8 +320,8 @@ export default function DragDropCards({ meta, setMeta }) {
 		return SEATS.every((s) => Array.isArray(b[s]) && b[s].length === 13)
 	}, [deal?.buckets])
 	const auctionStartSeat = useMemo(
-		() => meta?.auctionStart || 'N',
-		[meta?.auctionStart]
+		() => currentDealer,
+		[currentDealer],
 	)
 	const currentTurnSeat = useMemo(() => {
 		const startIdx = SEATS.indexOf(auctionStartSeat)
@@ -345,7 +352,7 @@ export default function DragDropCards({ meta, setMeta }) {
 				.trim()
 				.split(/\s+/)
 				.filter(Boolean),
-		[meta?.auctionText]
+		[meta?.auctionText],
 	)
 	const highestBidIndex = useMemo(() => {
 		let hi = -1
@@ -538,7 +545,7 @@ export default function DragDropCards({ meta, setMeta }) {
 						const idx = seatArr.findIndex(
 							(c) =>
 								c.suit === suitAtKey &&
-								(c.rank === last || (last === '10' && c.rank === '10'))
+								(c.rank === last || (last === '10' && c.rank === '10')),
 						)
 						if (idx === -1) return prev
 						const card = seatArr[idx]
@@ -639,14 +646,14 @@ export default function DragDropCards({ meta, setMeta }) {
 				(prev.buckets[s] || []).some(
 					(c) =>
 						c.suit === suit &&
-						(c.rank === rank || (rank === '10' && c.rank === '10'))
-				)
+						(c.rank === rank || (rank === '10' && c.rank === '10')),
+				),
 			)
 			if (allocated) {
 				const idxInDeck = prev.deck.findIndex(
 					(c) =>
 						c.suit === suit &&
-						(c.rank === rank || (rank === '10' && c.rank === '10'))
+						(c.rank === rank || (rank === '10' && c.rank === '10')),
 				)
 				if (idxInDeck === -1) return prev
 				return {
@@ -659,12 +666,12 @@ export default function DragDropCards({ meta, setMeta }) {
 			const idxInDeck = prev.deck.findIndex(
 				(c) =>
 					c.suit === suit &&
-					(c.rank === rank || (rank === '10' && c.rank === '10'))
+					(c.rank === rank || (rank === '10' && c.rank === '10')),
 			)
 			if (idxInDeck === -1) return prev
 			const card = prev.deck[idxInDeck]
 			const existsInSeat = prev.buckets[seat].some(
-				(c) => c.suit === suit && c.rank === card.rank
+				(c) => c.suit === suit && c.rank === card.rank,
 			)
 			if (existsInSeat) return prev
 			return {
@@ -685,13 +692,13 @@ export default function DragDropCards({ meta, setMeta }) {
 			const arr = []
 			for (let i = 0; i < savedHands.length; i++) {
 				try {
-					const board = buildBoardFromHand(savedHands[i], startBoard + i)
+					const board = buildBoardFromHand(savedHands[i], exportBoardBase + i)
 					const txt = await exportBoardPBN(board)
 					if (cancelled) return
 					arr.push(txt)
 				} catch {
 					// If something goes wrong, still push a minimal placeholder
-					arr.push('// Error generating preview for board ' + (startBoard + i))
+					arr.push('// Error generating preview for board ' + (exportBoardBase + i))
 				}
 			}
 			if (!cancelled) setExtSlides(arr)
@@ -700,7 +707,7 @@ export default function DragDropCards({ meta, setMeta }) {
 		return () => {
 			cancelled = true
 		}
-	}, [savedHands, startBoard, meta])
+	}, [savedHands, exportBoardBase, meta])
 
 	useEffect(() => {
 		if (previewIndex > Math.max(0, extSlides.length - 1)) {
@@ -715,8 +722,7 @@ export default function DragDropCards({ meta, setMeta }) {
 	const remaining = deal.deck.length
 	const selectedCount = useMemo(() => selected.size, [selected])
 	const complete = SEATS.every((s) => deal.buckets[s].length === 13)
-	const nextBoardNo = startBoard + savedHands.length
-	const currentDealer = dealerForBoard(nextBoardNo)
+	const nextBoardNo = currentBoardNo
 
 	const toggleSelect = (id) => {
 		setSelected((prev) => {
@@ -746,8 +752,8 @@ export default function DragDropCards({ meta, setMeta }) {
 		let cancelled = false
 		const run = async () => {
 			setGridState({ status: 'computing' })
-			const boardNo = startBoard + savedHands.length
-			const dealer = dealerForBoard(boardNo)
+			const boardNo = currentBoardNo
+			const dealer = currentDealer
 			const vul = vulnerabilityForBoard(boardNo)
 			const { hash, hands } = await computeDealKeyFromEditor(deal, dealer, vul)
 			const cached = getCachedGrid(hash)
@@ -783,8 +789,10 @@ export default function DragDropCards({ meta, setMeta }) {
 	}, [complete, deal, startBoard, savedHands.length])
 
 	const fullReset = () => {
+		setPbnImport(null)
 		setSavedHands([])
 		setStartBoard(1)
+		setAuthoredDealer('N')
 		resetBoard()
 	}
 	// HTML5 DnD handlers (robust across browsers)
@@ -969,7 +977,7 @@ export default function DragDropCards({ meta, setMeta }) {
 		const availHonorPoints = honors.reduce((s, it) => s + it.hcp, 0)
 		if (totalWanted > availHonorPoints) {
 			setHcpError(
-				'Not enough honor points available in the deck for the requested totals.'
+				'Not enough honor points available in the deck for the requested totals.',
 			)
 			return
 		}
@@ -1051,7 +1059,7 @@ export default function DragDropCards({ meta, setMeta }) {
 					const { picked, rest } = pickFromSuits(
 						zeros,
 						needMaj0,
-						new Set(['Hearts', 'Spades'])
+						new Set(['Hearts', 'Spades']),
 					)
 					picked0.push(...picked)
 					zeros = rest
@@ -1064,7 +1072,7 @@ export default function DragDropCards({ meta, setMeta }) {
 					const { picked, rest } = pickFromSuits(
 						zeros,
 						needMin0,
-						new Set(['Clubs', 'Diamonds'])
+						new Set(['Clubs', 'Diamonds']),
 					)
 					picked0.push(...picked)
 					zeros = rest
@@ -1083,18 +1091,18 @@ export default function DragDropCards({ meta, setMeta }) {
 				built[s] = picked0
 				// Shape warning if unmet
 				const majAch0 = built[s].filter(
-					(c) => c.suit === 'Hearts' || c.suit === 'Spades'
+					(c) => c.suit === 'Hearts' || c.suit === 'Spades',
 				).length
 				const minAch0 = built[s].filter(
-					(c) => c.suit === 'Clubs' || c.suit === 'Diamonds'
+					(c) => c.suit === 'Clubs' || c.suit === 'Diamonds',
 				).length
 				if (prefer.majors > 0 && majAch0 < prefer.majors)
 					warnings.push(
-						`${s}: requested Majors≥${prefer.majors}, achieved ${majAch0}. Proceeded.`
+						`${s}: requested Majors≥${prefer.majors}, achieved ${majAch0}. Proceeded.`,
 					)
 				if (prefer.minors > 0 && minAch0 < prefer.minors)
 					warnings.push(
-						`${s}: requested Minors≥${prefer.minors}, achieved ${minAch0}. Proceeded.`
+						`${s}: requested Minors≥${prefer.minors}, achieved ${minAch0}. Proceeded.`,
 					)
 				continue
 			}
@@ -1103,7 +1111,7 @@ export default function DragDropCards({ meta, setMeta }) {
 			const idxs = findHonorSubset(honors, target)
 			if (!idxs) {
 				setHcpError(
-					`Could not find an exact ${target} HCP honor combination for ${s}. Try slightly different totals or fewer selected seats.`
+					`Could not find an exact ${target} HCP honor combination for ${s}. Try slightly different totals or fewer selected seats.`,
 				)
 				return
 			}
@@ -1151,7 +1159,7 @@ export default function DragDropCards({ meta, setMeta }) {
 					const { picked, rest } = pickFromSuits(
 						poolZ,
 						needMaj,
-						new Set(['Hearts', 'Spades'])
+						new Set(['Hearts', 'Spades']),
 					)
 					filler.push(...picked)
 					for (const c of picked)
@@ -1166,7 +1174,7 @@ export default function DragDropCards({ meta, setMeta }) {
 					const { picked, rest } = pickFromSuits(
 						poolZ,
 						needMin,
-						new Set(['Clubs', 'Diamonds'])
+						new Set(['Clubs', 'Diamonds']),
 					)
 					filler.push(...picked)
 					for (const c of picked)
@@ -1188,24 +1196,24 @@ export default function DragDropCards({ meta, setMeta }) {
 			built[s] = [...chosen, ...filler]
 			// Shape warning if unmet
 			const majAch = built[s].filter(
-				(c) => c.suit === 'Hearts' || c.suit === 'Spades'
+				(c) => c.suit === 'Hearts' || c.suit === 'Spades',
 			).length
 			const minAch = built[s].filter(
-				(c) => c.suit === 'Clubs' || c.suit === 'Diamonds'
+				(c) => c.suit === 'Clubs' || c.suit === 'Diamonds',
 			).length
 			if (prefer.majors > 0 && majAch < prefer.majors)
 				warnings.push(
-					`${s}: requested Majors≥${prefer.majors}, achieved ${majAch}. Proceeded.`
+					`${s}: requested Majors≥${prefer.majors}, achieved ${majAch}. Proceeded.`,
 				)
 			if (prefer.minors > 0 && minAch < prefer.minors)
 				warnings.push(
-					`${s}: requested Minors≥${prefer.minors}, achieved ${minAch}. Proceeded.`
+					`${s}: requested Minors≥${prefer.minors}, achieved ${minAch}. Proceeded.`,
 				)
 			// Verification: ensure exact HCP match for this seat before continuing
 			const seatHcp = hcpOfCards(built[s])
 			if (seatHcp !== target) {
 				setHcpError(
-					`Internal allocation error for ${s}: expected ${target} HCP, got ${seatHcp}. Please try again.`
+					`Internal allocation error for ${s}: expected ${target} HCP, got ${seatHcp}. Please try again.`,
 				)
 				return
 			}
@@ -1214,7 +1222,9 @@ export default function DragDropCards({ meta, setMeta }) {
 		const usedIds = new Set()
 		Object.values(built).forEach((arr) => arr.forEach((c) => usedIds.add(c.id)))
 		const nextDeck = sortDeck(
-			[...honors.map((h) => h.card), ...zeros].filter((c) => !usedIds.has(c.id))
+			[...honors.map((h) => h.card), ...zeros].filter(
+				(c) => !usedIds.has(c.id),
+			),
 		)
 		const nextBuckets = { ...workBuckets }
 		for (const s of orderSeats) nextBuckets[s] = built[s]
@@ -1306,7 +1316,7 @@ export default function DragDropCards({ meta, setMeta }) {
 			const nextBuckets = { ...prev.buckets }
 			while (pool.length) {
 				const candidates = SEATS.filter(
-					(s) => !lockedSeats[s] && nextBuckets[s].length < 13
+					(s) => !lockedSeats[s] && nextBuckets[s].length < 13,
 				)
 				if (candidates.length === 0) break
 				const idx = Math.floor(Math.random() * pool.length)
@@ -1321,6 +1331,9 @@ export default function DragDropCards({ meta, setMeta }) {
 
 	const saveCurrentHand = () => {
 		if (!complete) return
+		const wasImportedMode = !!pbnImport
+		const effectiveBoardNo = currentBoardNo
+		const effectiveDealer = currentDealer
 		// Snapshot current teaching metadata so later edits don't retroactively change earlier saved hands
 		const snapshotTheme =
 			meta?.themeChoice === 'Custom…'
@@ -1345,7 +1358,7 @@ export default function DragDropCards({ meta, setMeta }) {
 			scoring: meta?.scoring,
 			contract: meta?.contract,
 			declarer: meta?.declarer,
-			auctionStart: meta?.auctionStart,
+			auctionStart: effectiveDealer,
 			auctionText: meta?.auctionText,
 			// playscript removed
 			notes: effectiveNotes,
@@ -1355,6 +1368,9 @@ export default function DragDropCards({ meta, setMeta }) {
 		let gridSnapshot = null
 		if (gridState.status === 'ready' && gridData?.table) {
 			gridSnapshot = { ...gridData.table }
+		}
+		if (wasImportedMode && savedHands.length === 0) {
+			setStartBoard(1)
 		}
 		setSavedHands((prev) => [
 			...prev,
@@ -1366,6 +1382,11 @@ export default function DragDropCards({ meta, setMeta }) {
 				meta: { ...snapshot, grid_snapshot: gridSnapshot },
 			},
 		])
+		setPbnImport(null)
+		if (!wasImportedMode) {
+			const dealerIdx = SEATS.indexOf(effectiveDealer)
+			if (dealerIdx !== -1) setAuthoredDealer(SEATS[(dealerIdx + 1) % 4])
+		}
 		resetBoard()
 		// Clear notes draft and auction/contract fields ready for next hand authoring
 		setMeta?.((m) => ({
@@ -1410,11 +1431,16 @@ export default function DragDropCards({ meta, setMeta }) {
 		const d = dealsArr[idx]
 		const built = buildBucketsFromDealString(d.deal)
 		if (!built) return false
+		const importedAuctionStart = ['N', 'E', 'S', 'W'].includes(d.auctionDealer)
+			? d.auctionDealer
+			: ['N', 'E', 'S', 'W'].includes(d.dealer)
+				? d.dealer
+				: 'N'
 		setDeal({ deck: sortDeck(built.remainingDeck), buckets: built.buckets })
 		// Seed metadata from PBN
 		setMeta?.((m) => ({
 			...m,
-			auctionStart: d.auctionDealer || d.dealer || m?.auctionStart || 'N',
+			auctionStart: importedAuctionStart,
 			auctionText: (d.auctionTokens || []).join(' '),
 			date: d.ext?.Date || m?.date,
 			dateISO: (d.ext?.Date || '').replace(/\./g, '-'),
@@ -1430,6 +1456,8 @@ export default function DragDropCards({ meta, setMeta }) {
 	const handleLoadPbnFile = async (file) => {
 		if (!file) return
 		try {
+			// Start imported boards in their own edit context; authored sessions are reset separately.
+			setSavedHands([])
 			const text = await file.text()
 			const clean = sanitizePBN(text)
 			const parsed = parsePBN(clean)
@@ -1458,22 +1486,22 @@ export default function DragDropCards({ meta, setMeta }) {
 	const mapSeatHand = (handArr) => {
 		return {
 			S: sortByPbnRank(handArr.filter((c) => c.suit === 'Spades')).map((c) =>
-				toRankChar(c.rank)
+				toRankChar(c.rank),
 			),
 			H: sortByPbnRank(handArr.filter((c) => c.suit === 'Hearts')).map((c) =>
-				toRankChar(c.rank)
+				toRankChar(c.rank),
 			),
 			D: sortByPbnRank(handArr.filter((c) => c.suit === 'Diamonds')).map((c) =>
-				toRankChar(c.rank)
+				toRankChar(c.rank),
 			),
 			C: sortByPbnRank(handArr.filter((c) => c.suit === 'Clubs')).map((c) =>
-				toRankChar(c.rank)
+				toRankChar(c.rank),
 			),
 		}
 	}
 
 	const buildBoardFromHand = (hand, boardNo) => {
-		const dealer = dealerForBoard(boardNo)
+		const dealer = hand.meta?.auctionStart || dealerForBoard(boardNo)
 		const vul = vulnerabilityForBoard(boardNo)
 		const today = new Date()
 		const y = today.getFullYear()
@@ -1519,9 +1547,7 @@ export default function DragDropCards({ meta, setMeta }) {
 				metaSnap.notes && metaSnap.notes.length
 					? metaSnap.notes
 					: meta?.notes || [],
-			auctionStart: auctionTokens.length
-				? metaSnap.auctionStart || meta?.auctionStart || 'N'
-				: undefined,
+			auctionStart: auctionTokens.length ? dealer : undefined,
 			auction: auctionTokens.length ? auctionTokens : undefined,
 			ext: {
 				system: metaSnap.system || meta?.system || undefined,
@@ -1539,7 +1565,7 @@ export default function DragDropCards({ meta, setMeta }) {
 	const exportSavedBoards = async () => {
 		const texts = []
 		for (let i = 0; i < savedHands.length; i++) {
-			const bno = startBoard + i
+			const bno = exportBoardBase + i
 			const board = buildBoardFromHand(savedHands[i], bno)
 			const txt = await exportBoardPBN(board, { dealer4Mode })
 			texts.push(txt)
@@ -1579,7 +1605,7 @@ export default function DragDropCards({ meta, setMeta }) {
 		try {
 			const pbn = await exportSavedBoards()
 			const subject = encodeURIComponent(
-				"PBN hands from Bristol Bridge Club's PBN Picker"
+				"PBN hands from Bristol Bridge Club's PBN Picker",
 			)
 			const body = encodeURIComponent(pbn)
 			window.location.href = `mailto:dr.mark.oconnor@googlemail.com?subject=${subject}&body=${body}`
@@ -1590,11 +1616,16 @@ export default function DragDropCards({ meta, setMeta }) {
 
 	// Explicit dealer selection: aligns startBoard so the next board's dealer equals the chosen seat
 	const setDealerExplicit = (seat) => {
-		const idx = SEATS.indexOf(seat)
-		if (idx === -1) return
-		const currentMod = (startBoard + savedHands.length - 1) % 4
-		const delta = (idx - currentMod + 4) % 4
-		setStartBoard(startBoard + delta)
+		if (!SEATS.includes(seat)) return
+		if (pbnImport) {
+			const idx = SEATS.indexOf(seat)
+			if (idx === -1) return
+			const currentMod = (startBoard + savedHands.length - 1) % 4
+			const delta = (idx - currentMod + 4) % 4
+			setStartBoard(startBoard + delta)
+			return
+		}
+		setAuthoredDealer(seat)
 	}
 
 	const CARD_DECK_BASE =
@@ -1646,9 +1677,9 @@ export default function DragDropCards({ meta, setMeta }) {
 	const Bucket = ({ id }) => {
 		const styles = BUCKET_STYLES[id]
 		const highlight = activeBucket === id ? `ring-2 ${styles.ring}` : ''
-		const nextBoardNo = startBoard + savedHands.length
+		const nextBoardNo = currentBoardNo
 		const vul = vulnerabilityForBoard(nextBoardNo)
-		const dealer = dealerForBoard(nextBoardNo)
+		const dealer = currentDealer
 		const isDealer = dealer === id
 		const seatIsVul =
 			vul === 'All' ||
@@ -1709,7 +1740,7 @@ export default function DragDropCards({ meta, setMeta }) {
 					className={`h-64 p-3 flex flex-col gap-2 items-stretch justify-center`}>
 					{displayOrder.map((suit) => {
 						const suitCards = sortByPbnRank(
-							deal.buckets[id].filter((c) => c.suit === suit)
+							deal.buckets[id].filter((c) => c.suit === suit),
 						)
 						const suitColor = SUIT_TEXT[suit]
 						return (
@@ -1721,10 +1752,10 @@ export default function DragDropCards({ meta, setMeta }) {
 									{suit === 'Clubs'
 										? '♣'
 										: suit === 'Diamonds'
-										? '♦'
-										: suit === 'Hearts'
-										? '♥'
-										: '♠'}
+											? '♦'
+											: suit === 'Hearts'
+												? '♥'
+												: '♠'}
 								</div>
 								<div
 									className={`flex-1 ${
@@ -2056,8 +2087,8 @@ export default function DragDropCards({ meta, setMeta }) {
 															0,
 															Math.min(
 																29,
-																Math.round(Number(e.target.value) || 0)
-															)
+																Math.round(Number(e.target.value) || 0),
+															),
 														)
 														setHcpTargets((prev) => ({ ...prev, [s]: v }))
 													}}
@@ -2103,7 +2134,7 @@ export default function DragDropCards({ meta, setMeta }) {
 																...prev,
 																[s]: Math.max(
 																	0,
-																	Math.min(13, Number(e.target.value) || 0)
+																	Math.min(13, Number(e.target.value) || 0),
 																),
 															}))
 														}
@@ -2123,7 +2154,7 @@ export default function DragDropCards({ meta, setMeta }) {
 																...prev,
 																[s]: Math.max(
 																	0,
-																	Math.min(13, Number(e.target.value) || 0)
+																	Math.min(13, Number(e.target.value) || 0),
 																),
 															}))
 														}
@@ -2219,16 +2250,16 @@ export default function DragDropCards({ meta, setMeta }) {
 											copyState === 'ok'
 												? 'bg-green-600'
 												: copyState === 'err'
-												? 'bg-rose-600'
-												: 'bg-teal-500'
+													? 'bg-rose-600'
+													: 'bg-teal-500'
 										}`}
 										onClick={handleCopyPBN}
 										disabled={savedHands.length === 0}>
 										{copyState === 'ok'
 											? 'Copied!'
 											: copyState === 'err'
-											? 'Copy failed'
-											: 'Copy PBN'}
+												? 'Copy failed'
+												: 'Copy PBN'}
 									</button>
 									<button
 										className="px-3 py-2 rounded bg-teal-500 text-white text-xs hover:opacity-90 disabled:opacity-40"
@@ -2280,9 +2311,8 @@ export default function DragDropCards({ meta, setMeta }) {
 								className="ml-3 px-4 py-2 rounded-full bg-sky-600 text-white text-sm shadow hover:bg-sky-700"
 								onClick={async () => {
 									try {
-										const { generateTeacherCheatSheetPDF } = await import(
-											'./lib/teacherCheatSheetPdf'
-										)
+										const { generateTeacherCheatSheetPDF } =
+											await import('./lib/teacherCheatSheetPdf')
 										await generateTeacherCheatSheetPDF()
 									} catch (e) {
 										console.error('Cheat sheet PDF failed', e)
@@ -2404,25 +2434,12 @@ export default function DragDropCards({ meta, setMeta }) {
 										)}
 									</div>
 									<div className="flex items-center gap-2">
-										<label className="flex items-center gap-1">
-											<span className="text-[12px] text-gray-600">Start</span>
-											<select
-												className="border rounded px-1 py-0.5 text-[12px]"
-												value={meta?.auctionStart || 'N'}
-												onChange={(e) =>
-													setMeta?.((m) => ({
-														...m,
-														auctionStart: e.target.value,
-													}))
-												}
-												disabled={!isFullyDealt}
-												aria-disabled={!isFullyDealt}>
-												<option>N</option>
-												<option>E</option>
-												<option>S</option>
-												<option>W</option>
-											</select>
-										</label>
+										<div className="text-[12px] text-gray-600 whitespace-nowrap">
+											Auction starts with dealer:
+											<span className="ml-1 font-semibold text-gray-800">
+												{auctionStartSeat}
+											</span>
+										</div>
 										<input
 											className={`border rounded px-2 py-1 text-[12px] flex-1 bg-gray-50 cursor-default ${
 												String(meta?.auctionText || '').trim()
@@ -2434,6 +2451,10 @@ export default function DragDropCards({ meta, setMeta }) {
 											readOnly
 											aria-readonly="true"
 										/>
+									</div>
+									<div className="text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded px-2 py-1">
+										Opening seat for PBN/PDF:{' '}
+										<span className="font-semibold">{auctionStartSeat}</span>
 									</div>
 									<div className="text-[11px] text-gray-500">
 										Ends with three Passes. Use X/XX for doubles; P for Pass.
@@ -2485,8 +2506,8 @@ export default function DragDropCards({ meta, setMeta }) {
 																suit === 'NT'
 																	? 'bg-indigo-600 text-white'
 																	: suit === 'H' || suit === 'D'
-																	? 'bg-red-600 text-white'
-																	: 'bg-black text-white'
+																		? 'bg-red-600 text-white'
+																		: 'bg-black text-white'
 															const isCurrent = currentContract === b
 															return (
 																<button
@@ -2528,14 +2549,14 @@ export default function DragDropCards({ meta, setMeta }) {
 													sym === 'X'
 														? !canDouble
 														: sym === 'XX'
-														? !canRedouble
-														: false
+															? !canRedouble
+															: false
 												const label =
 													sym === 'P'
 														? 'Pass'
 														: sym === 'X'
-														? 'Double'
-														: 'Redouble'
+															? 'Double'
+															: 'Redouble'
 												return (
 													<button
 														key={sym}
@@ -2741,7 +2762,9 @@ export default function DragDropCards({ meta, setMeta }) {
 									</Tooltip>
 									<Tooltip
 										label={
-											'Generate a formatted PDF handout (2 boards/page) including notes, metadata, and makeables.'
+											pdfIncludeMetadata || pdfIncludeMakeables
+												? `Generate a formatted PDF handout (2 boards/page) with board number, cards, bidding table and comments${pdfIncludeMetadata ? ', plus metadata' : ''}${pdfIncludeMakeables ? `${pdfIncludeMetadata ? ' and' : ', plus'} makeables` : ''}.`
+												: 'Generate a formatted PDF handout (2 boards/page) with board number, cards, bidding table and comments.'
 										}>
 										<button
 											className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-40 disabled:cursor-not-allowed ${
@@ -2753,12 +2776,11 @@ export default function DragDropCards({ meta, setMeta }) {
 											onClick={async () => {
 												if (savedHands.length === 0) return
 												try {
-													const { generateHandoutPDF } = await import(
-														'./lib/handoutPdf'
-													)
+													const { generateHandoutPDF } =
+														await import('./lib/handoutPdf')
 													const dealsForPdf = savedHands.map((h, i) => {
-														const boardNo = startBoard + i
-														const dealer = dealerForBoard(boardNo)
+														const boardNo = exportBoardBase + i
+														const dealer = h.meta?.auctionStart || dealerForBoard(boardNo)
 														const vul = vulnerabilityForBoard(boardNo)
 														const notes = h.meta?.notes || []
 														const auctionTokens = (h.meta?.auctionText || '')
@@ -2770,6 +2792,7 @@ export default function DragDropCards({ meta, setMeta }) {
 															number: boardNo,
 															dealer,
 															vul,
+															auctionStart: dealer,
 															hands: { N: h.N, E: h.E, S: h.S, W: h.W },
 															notes,
 															calls: auctionTokens,
@@ -2799,7 +2822,8 @@ export default function DragDropCards({ meta, setMeta }) {
 														mode: 'full',
 														filenameBase: base,
 														autoNotes: true,
-														includeMakeableGrid: true,
+														includeMetadata: pdfIncludeMetadata,
+														includeMakeableGrid: pdfIncludeMakeables,
 														copyright: '',
 													})
 												} catch (e) {
@@ -2814,67 +2838,41 @@ export default function DragDropCards({ meta, setMeta }) {
 									</Tooltip>
 									<Tooltip
 										label={
-											'Export a Word (.docx) handout with hard page breaks (one board per page).'
+											'Include dealer, vulnerability and other metadata in the PDF handout.'
+										}>
+										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
+											<input
+												type="checkbox"
+												checked={pdfIncludeMetadata}
+												onChange={(e) =>
+													setPdfIncludeMetadata(e.target.checked)
+												}
+											/>
+											<span>PDF metadata</span>
+										</label>
+									</Tooltip>
+									<Tooltip
+										label={
+											'Include the makeable contracts grid in the PDF handout.'
+										}>
+										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
+											<input
+												type="checkbox"
+												checked={pdfIncludeMakeables}
+												onChange={(e) =>
+													setPdfIncludeMakeables(e.target.checked)
+												}
+											/>
+											<span>PDF makeables</span>
+										</label>
+									</Tooltip>
+									<Tooltip
+										label={
+											"Word export is currently unavailable. Contact Mark O'Connor if Word functionality is required."
 										}>
 										<button
-											className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-not-allowed ${
-												savedHands.length === 0
-													? 'bg-blue-600 text-white'
-													: 'bg-blue-600 text-white hover:bg-blue-700'
-											}`}
-											disabled={savedHands.length === 0}
-											onClick={async () => {
-												if (savedHands.length === 0) return
-												try {
-													const { generateHandoutDOCX } = await import(
-														'./lib/handoutDocx'
-													)
-													const dealsForDoc = savedHands.map((h, i) => {
-														const boardNo = startBoard + i
-														const dealer = dealerForBoard(boardNo)
-														const vul = vulnerabilityForBoard(boardNo)
-														const notes = h.meta?.notes || []
-														const auctionTokens = (h.meta?.auctionText || '')
-															.trim()
-															.split(/\s+/)
-															.filter(Boolean)
-															.map((t) => (t === 'P' ? 'Pass' : t))
-														return {
-															number: boardNo,
-															dealer,
-															vul,
-															hands: { N: h.N, E: h.E, S: h.S, W: h.W },
-															notes,
-															calls: auctionTokens,
-															contract: h.meta?.contract,
-															declarer: h.meta?.declarer,
-															meta: { ...h.meta },
-														}
-													})
-													const now = new Date()
-													const yyyy = now.getFullYear()
-													const mm = String(now.getMonth() + 1).padStart(2, '0')
-													const dd = String(now.getDate()).padStart(2, '0')
-													let themeRaw = ''
-													if (meta?.themeChoice) {
-														if (meta.themeChoice === 'Custom…')
-															themeRaw = meta?.themeCustom || ''
-														else themeRaw = meta.themeChoice
-													}
-													const safeTheme =
-														(themeRaw || 'Session')
-															.toLowerCase()
-															.replace(/[^a-z0-9]+/g, '-')
-															.replace(/^-+|-+$/g, '')
-															.slice(0, 40) || 'session'
-													const base = `bbc-pbn`
-													await generateHandoutDOCX(dealsForDoc, {
-														filenameBase: base,
-													})
-												} catch (e) {
-													console.error('DOC handout failed', e)
-												}
-											}}>
+											className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow bg-gray-300 text-gray-600 cursor-not-allowed opacity-70"
+											disabled={true}>
 											<span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-sm bg-white/20">
 												W
 											</span>
@@ -2883,67 +2881,11 @@ export default function DragDropCards({ meta, setMeta }) {
 									</Tooltip>
 									<Tooltip
 										label={
-											'Export a Pages-friendly handout (.rtf) with two boards per page. Opens cleanly in Apple Pages.'
+											"RTF export is currently unavailable. Contact Mark O'Connor if RTF functionality is required."
 										}>
 										<button
-											className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed ${
-												savedHands.length === 0
-													? 'bg-emerald-600 text-white'
-													: 'bg-emerald-600 text-white hover:bg-emerald-700'
-											}`}
-											disabled={savedHands.length === 0}
-											onClick={async () => {
-												if (savedHands.length === 0) return
-												try {
-													const { generateHandoutRTF } = await import(
-														'./lib/handoutRtf'
-													)
-													const dealsForRtf = savedHands.map((h, i) => {
-														const boardNo = startBoard + i
-														const dealer = dealerForBoard(boardNo)
-														const vul = vulnerabilityForBoard(boardNo)
-														const notes = h.meta?.notes || []
-														const auctionTokens = (h.meta?.auctionText || '')
-															.trim()
-															.split(/\s+/)
-															.filter(Boolean)
-															.map((t) => (t === 'P' ? 'Pass' : t))
-														return {
-															number: boardNo,
-															dealer,
-															vul,
-															hands: { N: h.N, E: h.E, S: h.S, W: h.W },
-															notes,
-															calls: auctionTokens,
-															contract: h.meta?.contract,
-															declarer: h.meta?.declarer,
-															meta: { ...h.meta },
-														}
-													})
-													const now = new Date()
-													const yyyy = now.getFullYear()
-													const mm = String(now.getMonth() + 1).padStart(2, '0')
-													const dd = String(now.getDate()).padStart(2, '0')
-													let themeRaw = ''
-													if (meta?.themeChoice) {
-														if (meta.themeChoice === 'Custom…')
-															themeRaw = meta?.themeCustom || ''
-														else themeRaw = meta.themeChoice
-													}
-													const safeTheme =
-														(themeRaw || 'Session')
-															.toLowerCase()
-															.replace(/[^a-z0-9]+/g, '-')
-															.replace(/^-+|-+$/g, '')
-															.slice(0, 40) || 'session'
-													const base = `bbc-pbn`
-													await generateHandoutRTF(dealsForRtf, {
-														filenameBase: base,
-													})
-												} catch (e) {
-													console.error('Pages handout failed', e)
-												}
-											}}>
+											className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow bg-gray-300 text-gray-600 cursor-not-allowed opacity-70"
+											disabled={true}>
 											<span className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-sm bg-white/20">
 												P
 											</span>

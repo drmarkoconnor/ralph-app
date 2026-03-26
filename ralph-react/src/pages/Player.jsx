@@ -662,6 +662,8 @@ export default function Player() {
 	const [flashWinner, setFlashWinner] = useState(null)
 	const [completedTrickList, setCompletedTrickList] = useState([])
 	const [lastTrickPreview, setLastTrickPreview] = useState(null)
+	// When a trick completes, briefly keep it visible in the center before transferring to last trick
+	const [centralTrickOverlay, setCentralTrickOverlay] = useState(null)
 	const [lastAutoSeat, setLastAutoSeat] = useState(null)
 	const [lastAutoPlay, setLastAutoPlay] = useState(null)
 	// AI logs and controls removed
@@ -1122,33 +1124,38 @@ export default function Player() {
 					if (isDeclarerSide(r.winner, effDeclarer)) playTing()
 					else playKlaxon()
 				}
-				setCompletedTrickList((lst) => {
-					// Build the just-completed trick from the pre-state plus the played card
-					// using parsed id pieces to avoid any object identity issues.
-					const playedRankNorm = playedRank === 'T' ? '10' : playedRank
-					const completedTrick = [
-						...trickBefore,
-						{
-							seat,
-							card: { id: cardId, suit: playedSuit, rank: playedRankNorm },
-						},
-					]
-					// Re-evaluate winner from the completed trick for the preview.
-					// Prefer engine's winner; only compute locally if missing
-					let previewWinner = r.winner
-					if (!previewWinner) {
-						try {
-							previewWinner = evaluateTrick(completedTrick, effTrump)
-						} catch {}
-					}
-					const entry = {
-						no: lst.length + 1,
-						winner: previewWinner,
-						cards: completedTrick,
-					}
-					setLastTrickPreview(entry)
-					return [...lst, entry]
+				// Build the just-completed trick from the pre-state plus the played card
+				// using parsed id pieces to avoid any object identity issues.
+				const playedRankNorm = playedRank === 'T' ? '10' : playedRank
+				const completedTrick = [
+					...trickBefore,
+					{
+						seat,
+						card: { id: cardId, suit: playedSuit, rank: playedRankNorm },
+					},
+				]
+				// Show the completed trick in the center for ~1s before moving it to the last trick area
+				setCentralTrickOverlay(completedTrick)
+				let previewWinner = r.winner
+				if (!previewWinner) {
+					try {
+						previewWinner = evaluateTrick(completedTrick, effTrump)
+					} catch {}
+				}
+				const makeEntry = (lst) => ({
+					no: lst.length + 1,
+					winner: previewWinner,
+					cards: completedTrick,
 				})
+				setTimeout(() => {
+					// Clear the central overlay and append to the completed trick list
+					setCentralTrickOverlay(null)
+					setCompletedTrickList((lst) => {
+						const entry = makeEntry(lst)
+						setLastTrickPreview(entry)
+						return [...lst, entry]
+					})
+				}, 1000)
 			}
 			if (hideDefenders && isDefender(seat, effDeclarer)) {
 				setLastAutoSeat(seat)
@@ -1735,9 +1742,13 @@ export default function Player() {
 			<div className="flex-1 p-3 md:p-4 flex flex-col gap-3 md:gap-4 relative">
 				{/* Last trick mini preview - pinned to main area */}
 				{current && hands && lastTrickPreview && (
-					<div className="absolute top-2 left-2 z-0 pointer-events-none">
+					<div
+						className={`${teacherFocus ? 'fixed z-50' : 'absolute z-0'} top-2 left-2 pointer-events-none`}>
 						<div className="text-[10px] text-gray-600 mb-1">Last trick</div>
-						<div className="relative rounded-2xl border bg-white/40 backdrop-blur-sm p-2">
+						<div
+							className={`relative rounded-2xl border bg-white/40 ${
+								teacherFocus ? '' : 'backdrop-blur-sm'
+							} p-2`}>
 							<div className="w-[260px] h-[260px]">
 								<CrossTrick
 									trick={lastTrickPreview.cards}
@@ -2043,16 +2054,28 @@ export default function Player() {
 								</div>
 								<div className="col-start-2 row-start-2 flex items-center justify-center">
 									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
-										<CrossTrick
-											trick={trick}
-											winner={flashWinner}
-											turnSeat={turnSeat}
-											lastAutoPlay={lastAutoPlay}
-											highlight={teacherFocus}
-											openingLeader={
-												history.length === 0 ? openingLeader : null
-											}
-										/>
+										{/* Central trick overlay: when present, show the completed trick briefly */}
+										{centralTrickOverlay ? (
+											<CrossTrick
+												trick={centralTrickOverlay}
+												winner={flashWinner}
+												turnSeat={null}
+												lastAutoPlay={lastAutoPlay}
+												highlight={teacherFocus}
+												openingLeader={null}
+											/>
+										) : (
+											<CrossTrick
+												trick={trick}
+												winner={flashWinner}
+												turnSeat={turnSeat}
+												lastAutoPlay={lastAutoPlay}
+												highlight={teacherFocus}
+												openingLeader={
+													history.length === 0 ? openingLeader : null
+												}
+											/>
+										)}
 									</div>
 								</div>
 							</div>

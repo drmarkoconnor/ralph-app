@@ -99,11 +99,7 @@ export default function PlayerHelp() {
 			</section>
 			<section className="space-y-2">
 				<h2 className="text-lg font-semibold">5. Declarer Advice</h2>
-				<p className="italic text-gray-600">
-					Temporarily disabled — we will integrate a live coach API in a later
-					version.
-				</p>
-				<p className="line-through opacity-60">
+				<p>
 					The advice panel reacts to each card you (declarer or dummy) play:
 				</p>
 				<ul className="list-disc ml-5 space-y-1">

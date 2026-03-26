@@ -17,7 +17,7 @@ function App() {
 		date: toPbnDate(todayISO),
 		// extended
 		system: '',
-		themeChoice: 'Bidding - Stayman & Transfers',
+		themeChoice: '',
 		themeCustom: '',
 		theme: '', // derived
 		interf: '',

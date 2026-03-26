@@ -11,6 +11,7 @@ export async function generateHandoutPDF(deals, options = {}) {
 		filenameBase = 'handout',
 		autoNotes = false,
 		copyright: copyrightOverride,
+		includeMetadata = false,
 		includeMakeableGrid = true,
 	} = options
 	if (!Array.isArray(deals) || !deals.length)
@@ -89,7 +90,7 @@ export async function generateHandoutPDF(deals, options = {}) {
 				y + r + r * 0.2,
 				x,
 				y + r + r * 0.2,
-				'F'
+				'F',
 			)
 			return
 		}
@@ -104,14 +105,14 @@ export async function generateHandoutPDF(deals, options = {}) {
 				y + half + r * 0.2,
 				x,
 				y + half + r * 0.2,
-				'F'
+				'F',
 			)
 			docRef.rect(
 				x + half - r * 0.35,
 				y + half + r * 0.4,
 				r * 0.7,
 				half + r * 0.6,
-				'F'
+				'F',
 			)
 		}
 	}
@@ -164,65 +165,28 @@ export async function generateHandoutPDF(deals, options = {}) {
 		const leftX = marginX
 		const availW = pageW - marginX * 2
 		// Layout columns
-		const notesW = 60 // left notes column width
-		const metaW = 55 // right metadata box width
+		const notesW = 60 // left comments column width
+		const metaW = 0
 		const gutter = 4
 		const diagramAreaW = Math.max(58, availW - notesW - metaW - gutter * 2)
-		const diagramCenterX = leftX + notesW + gutter + diagramAreaW / 2
-		const metaX = leftX + notesW + gutter + diagramAreaW + gutter
+		const diagramCenterX = leftX + notesW + gutter + diagramAreaW / 2 - 2
 
 		// Header
 		doc.setFontSize(11)
 		doc.setFont('helvetica', 'bold')
 		doc.text(`Board ${dealObj.number ?? ''}`, leftX, topY + 4)
-		doc.setFontSize(8)
-		doc.setFont('helvetica', 'normal')
-		doc.text(
-			`Dealer: ${dealObj.dealer || '?'}  Vul: ${dealObj.vul || 'None'}`,
-			leftX + 24,
-			topY + 4
-		)
 
-		// Metadata summary
-		const meta = dealObj.meta || {}
-		const contract = deriveContract(dealObj)
-		const declarer = dealObj.declarer || meta.declarer || ''
-		const theme = meta.theme || meta.themeChoice || ''
-		const event = meta.event || ''
-		const site = meta.site || meta.siteChoice || ''
-		const date = meta.date || ''
-		const system = meta.system || ''
-		const ddpar = meta.ddpar || meta.DDPar || meta.ddPar || ''
-		const lead = meta.lead || ''
-		const interf = meta.interf || meta.interference || ''
-		const scoring = meta.scoring || ''
-		const resultTxt = meta.resultText || dealObj.resultText || ''
-		const lineStep = 3.6
-		let ly = topY + 6
-		const pushMeta = (label, value) => {
-			if (!value) return
-			doc.setFontSize(6.5)
-			doc.text(`${label}: ${value}`, metaX, ly, { maxWidth: metaW - 2 })
-			ly += lineStep
-		}
-		pushMeta('Contract', contract + (declarer ? ` (${declarer})` : ''))
-		pushMeta('Theme', theme)
-		pushMeta('Event', event)
-		pushMeta('Site', site)
-		pushMeta('Date', date)
-		if (mode === 'full') {
-			pushMeta('System', system)
-			pushMeta('Interf', interf)
-			pushMeta('DDPar', ddpar)
-			pushMeta('Lead', lead)
-			pushMeta('Scoring', scoring)
-			pushMeta('Result', resultTxt)
-		} else {
-			pushMeta('Lead', lead)
-			pushMeta('DDPar', ddpar)
+		if (includeMetadata) {
+			doc.setFontSize(8)
+			doc.setFont('helvetica', 'normal')
+			doc.text(
+				`Dealer: ${dealObj.dealer || '?'}  Vul: ${dealObj.vul || 'None'}`,
+				leftX + 24,
+				topY + 4,
+			)
 		}
 
-		// Notes (left column) with actual cursor measurement
+		// Comments / notes (left column) with actual cursor measurement
 		let cursorY = topY + 14
 		let renderedAnyNote = false
 		let sanitizedReplacements = 0
@@ -233,7 +197,7 @@ export async function generateHandoutPDF(deals, options = {}) {
 		) {
 			doc.setFontSize(8)
 			doc.setFont('helvetica', 'bold')
-			doc.text('Notes', leftX, topY + 10)
+			doc.text('Comments', leftX, topY + 10)
 			doc.setFont('helvetica', 'normal')
 			const maxRenderLines = mode === 'full' ? 42 : 18 // allow a few more lines (wrapped)
 			const lineGap = 3.5
@@ -280,9 +244,10 @@ export async function generateHandoutPDF(deals, options = {}) {
 		}
 		const drawSeat = (seat) => {
 			const [x, y] = seatPos[seat]
+			const labelX = x - 1.5
 			doc.setFontSize(seatFont)
 			doc.setFont('helvetica', 'bold')
-			doc.text(seat, x, y - 2.2, { align: 'center' })
+			doc.text(seat, labelX, y - 2.2, { align: 'center' })
 			doc.setFontSize(fontRanks)
 			doc.setFont(mono, 'bold')
 			suitOrderDisplay.forEach((suit, i) => {
@@ -300,9 +265,8 @@ export async function generateHandoutPDF(deals, options = {}) {
 		// S seat is at diagramTopY + seatDy; there are 4 suit lines spaced by suitLine
 		// Bottom line index is 3, so add 3 * suitLine, plus extra breathing room
 		const diagramBottomY = diagramTopY + seatDy + suitLine * 3 + 8
-		// Auction (full mode) placed under diagram spanning notes + diagram width (leave meta column untouched)
+		// Auction placed under diagram; must respect actual first bidder (auctionStart) rather than always North.
 		let lastContentY = diagramBottomY + 2 // small extra spacing for aesthetics
-		// Auction (if present) — render even in basic mode per metadata completeness principle
 		if (Array.isArray(dealObj.calls) && dealObj.calls.length) {
 			const auctionTop = lastContentY
 			doc.setFontSize(7)
@@ -311,98 +275,26 @@ export async function generateHandoutPDF(deals, options = {}) {
 			doc.setFont('helvetica', 'normal')
 			const cols = ['N', 'E', 'S', 'W']
 			const colWidth = 16
-			cols.forEach((c, i) => doc.text(c, leftX + i * colWidth, auctionTop + 4))
-			dealObj.calls.forEach((call, idx) => {
-				const col = idx % 4
-				const r = Math.floor(idx / 4)
-				doc.text(String(call), leftX + col * colWidth, auctionTop + 8 + r * 4)
-			})
-			lastContentY =
-				auctionTop + 8 + Math.ceil(dealObj.calls.length / 4) * 4 + 2
-		}
-
-		// Play Script (if present)
-		const playRaw =
-			dealObj.meta?.play || dealObj.meta?.playscript || dealObj.meta?.playScript
-		if (playRaw) {
-			const playTop = lastContentY + 2
-			doc.setFontSize(7)
-			doc.setFont('helvetica', 'bold')
-			doc.text('Play', leftX, playTop)
-			doc.setFont('courier', 'normal')
-			doc.setFontSize(6.6)
-			const lines = Array.isArray(playRaw)
-				? playRaw
-				: String(playRaw).split(/\r?\n/)
-			let y = playTop + 4
-			lines.filter(Boolean).forEach((ln) => {
-				doc.text(String(ln), leftX, y, { maxWidth: notesW + diagramAreaW - 6 })
-				y += 3.4
-			})
-			lastContentY = y
-		}
-
-		// Makeable Contracts grid (Double Dummy table)
-		if (includeMakeableGrid) {
-			const gridTop = lastContentY + 4
-			doc.setFont('helvetica', 'bold')
-			doc.setFontSize(7.2)
-			const snap = dealObj?.meta?.grid_snapshot || dealObj._gridSnapshot || null
-			const showOver = true
-			doc.text(
-				`Makeable Contracts (DD Table${showOver ? ' — overtricks' : ''})`,
-				leftX,
-				gridTop
-			)
-			doc.setFont('helvetica', 'normal')
-			doc.setFontSize(6.6)
-			const table = snap && snap.table ? snap.table : null
-			const strains = ['S', 'H', 'D', 'C', 'NT']
+			const tableX = leftX - 2
+			cols.forEach((c, i) => doc.text(c, tableX + i * colWidth, auctionTop + 4))
 			const seats = ['N', 'E', 'S', 'W']
-			const colW = (notesW + diagramAreaW - 6) / (seats.length + 1)
-			let y = gridTop + 4
-			// header
-			seats.forEach((seat, i) => {
-				doc.text(seat, leftX + (i + 1) * colW, y)
+			const startSeat =
+				dealObj.auctionStart || dealObj.auctionDealer || dealObj.dealer || 'N'
+			const startIdx = Math.max(0, seats.indexOf(startSeat))
+			const rows = []
+			dealObj.calls.forEach((call, idx) => {
+				const absoluteSeatIdx = (startIdx + idx) % 4
+				const rowIdx = Math.floor((startIdx + idx) / 4)
+				if (!rows[rowIdx]) rows[rowIdx] = new Array(4).fill('')
+				rows[rowIdx][absoluteSeatIdx] = String(call)
 			})
-			y += 3
-			if (table) {
-				// light rule under header
-				doc.setDrawColor(200)
-				doc.line(leftX, y - 2, leftX + (seats.length + 1) * colW, y - 2)
-
-				strains.forEach((st, rIdx) => {
-					// strain label at left: draw suit icon for S/H/D/C, text for NT
-					if (st === 'NT') {
-						doc.text('NT', leftX, y)
-					} else {
-						const suitMap = {
-							S: 'Spades',
-							H: 'Hearts',
-							D: 'Diamonds',
-							C: 'Clubs',
-						}
-						drawSuitIcon(doc, suitMap[st], leftX - 1.5, y - 3.1, 3.2)
-					}
-					seats.forEach((seat, c) => {
-						const raw = table?.[st]?.[seat]
-						let txt = ''
-						if (Number.isFinite(raw)) {
-							txt = String(Math.max(0, raw - 6))
-						}
-						doc.text(txt, leftX + (c + 1) * colW, y)
-					})
-					// row separator
-					doc.setDrawColor(230)
-					doc.line(leftX, y + 1.2, leftX + (seats.length + 1) * colW, y + 1.2)
-					y += 3
+			rows.forEach((row, r) => {
+				row.forEach((call, col) => {
+					if (!call) return
+					doc.text(call, tableX + col * colWidth, auctionTop + 8 + r * 4)
 				})
-			} else {
-				doc.setFont('helvetica', 'italic')
-				doc.text('unavailable', leftX + colW, y)
-				y += 3
-			}
-			lastContentY = y + 1
+			})
+			lastContentY = auctionTop + 8 + rows.length * 4 + 2
 		}
 
 		// Attach per-block preflight summary to the deal object for caller visibility
@@ -429,7 +321,7 @@ export async function generateHandoutPDF(deals, options = {}) {
 	doc.save(outName)
 	const totalRepl = deals.reduce(
 		(sum, d) => sum + (d?._pdfPreflight?.notesReplacements || 0),
-		0
+		0,
 	)
 	return { filename: outName, preflight: { notesReplacements: totalRepl } }
 }
