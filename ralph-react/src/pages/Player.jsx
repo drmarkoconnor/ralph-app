@@ -63,9 +63,9 @@ function SeatPanel({
 				.filter((c) => c.suit === s)
 				.sort(
 					(a, b) =>
-						'2345678910JQKA'.indexOf(a.rank) - '2345678910JQKA'.indexOf(b.rank)
+						'2345678910JQKA'.indexOf(a.rank) - '2345678910JQKA'.indexOf(b.rank),
 				),
-		])
+		]),
 	)
 	const leadSuit =
 		trick.length > 0 && trick.length < 4 ? trick[0].card.suit : null
@@ -77,8 +77,8 @@ function SeatPanel({
 				isTurn
 					? 'border-rose-500'
 					: id === 'N' || id === 'S'
-					? 'border-sky-300'
-					: 'border-teal-300'
+						? 'border-sky-300'
+						: 'border-teal-300'
 			} ${lastAutoSeat === id ? 'ring-2 ring-sky-300 animate-pulse' : ''} ${
 				highlight
 					? 'relative z-20 shadow-xl shadow-yellow-200/30 ring-2 ring-yellow-300'
@@ -95,8 +95,8 @@ function SeatPanel({
 					isTurn
 						? 'bg-rose-100'
 						: id === 'N' || id === 'S'
-						? 'bg-sky-200'
-						: 'bg-teal-200'
+							? 'bg-sky-200'
+							: 'bg-teal-200'
 				}`}>
 				<span className="flex items-center gap-1">
 					{seatName(id)}
@@ -151,7 +151,10 @@ function SeatPanel({
 									{visible ? (
 										grouped[s].map((c) => {
 											const legal =
-												!isTurn || !leadSuit || !mustFollow || c.suit === leadSuit
+												!isTurn ||
+												!leadSuit ||
+												!mustFollow ||
+												c.suit === leadSuit
 											const isRedSuit =
 												c.suit === 'Hearts' || c.suit === 'Diamonds'
 											return (
@@ -311,8 +314,8 @@ function CardSlot({
 		size === 'lg'
 			? { w: 'w-24', h: 'h-36', text: 'text-4xl', corner: 'text-sm' }
 			: size === 'sm'
-			? { w: 'w-14', h: 'h-20', text: 'text-xl', corner: 'text-[9px]' }
-			: { w: 'w-16', h: 'h-24', text: 'text-2xl', corner: 'text-[10px]' }
+				? { w: 'w-14', h: 'h-20', text: 'text-xl', corner: 'text-[9px]' }
+				: { w: 'w-16', h: 'h-24', text: 'text-2xl', corner: 'text-[10px]' }
 	if (!it)
 		return (
 			<div
@@ -323,8 +326,8 @@ function CardSlot({
 		? seat === 'E'
 			? 'rotate-6'
 			: seat === 'W'
-			? '-rotate-6'
-			: ''
+				? '-rotate-6'
+				: ''
 		: ''
 	const isRed = it.card.suit === 'Hearts' || it.card.suit === 'Diamonds'
 	const suitColor = isRed ? 'text-rose-600' : 'text-slate-800'
@@ -613,10 +616,10 @@ function AuctionGraphic({ auction = [], dealer = 'N', contract, declarer }) {
 		c === ''
 			? 'text-gray-300'
 			: /^(P|Pass)$/i.test(c)
-			? 'text-gray-500'
-			: /^(X|XX)$/.test(c)
-			? 'text-indigo-700 font-semibold'
-			: 'font-semibold'
+				? 'text-gray-500'
+				: /^(X|XX)$/.test(c)
+					? 'text-indigo-700 font-semibold'
+					: 'font-semibold'
 	return (
 		<div className="flex items-start gap-4">
 			<div className="relative rounded-2xl border-4 border-indigo-300/70 bg-gradient-to-br from-emerald-100 via-sky-50 to-indigo-100 px-5 py-4 shadow-lg">
@@ -640,7 +643,7 @@ function AuctionGraphic({ auction = [], dealer = 'N', contract, declarer }) {
 									const call = r[idx] || ''
 									const final = call && i * 4 + idx === auction.length - 1
 									const base = `px-2 py-0.5 text-center rounded transition-colors ${callClass(
-										call
+										call,
 									)}`
 									return (
 										<td key={seat} className="p-0">
@@ -817,7 +820,7 @@ export default function Player() {
 		if (!calls.length) return { legal: false }
 		return validateAuction(
 			current.auctionDealer || current.dealer || 'N',
-			calls
+			calls,
 		)
 	}, [current])
 
@@ -864,7 +867,7 @@ export default function Player() {
 	const effTrump = parseTrump(effContract)
 	const dummySeat = useMemo(
 		() => (effDeclarer ? partnerOf(effDeclarer) : null),
-		[effDeclarer]
+		[effDeclarer],
 	)
 
 	const getDisplaySuitOrder = useCallback(
@@ -874,7 +877,7 @@ export default function Player() {
 				return base
 			return [effTrump, ...base.filter((s) => s !== effTrump)]
 		},
-		[dummySeat, effTrump]
+		[dummySeat, effTrump],
 	)
 
 	const getDummyTrumpSide = useCallback(
@@ -889,7 +892,7 @@ export default function Player() {
 			if (declarerX > dummyX) return 'right'
 			return effDeclarer === 'S' ? 'right' : 'left'
 		},
-		[dummySeat, effDeclarer]
+		[dummySeat, effDeclarer],
 	)
 
 	const hands = useMemo(() => {
@@ -996,16 +999,16 @@ export default function Player() {
 		try {
 			const partner = partnerOf(effDeclarer)
 			const declCount = hands[effDeclarer].filter(
-				(c) => c.suit === effTrump
+				(c) => c.suit === effTrump,
 			).length
 			const dummyCount = hands[partner].filter(
-				(c) => c.suit === effTrump
+				(c) => c.suit === effTrump,
 			).length
 			const defCount = ['N', 'E', 'S', 'W']
 				.filter((s) => s !== effDeclarer && s !== partner)
 				.reduce(
 					(acc, s) => acc + hands[s].filter((c) => c.suit === effTrump).length,
-					0
+					0,
 				)
 			initialTrumpRef.current = {
 				decl: declCount,
@@ -1038,7 +1041,7 @@ export default function Player() {
 					.sort(
 						(a, b) =>
 							'AKQJ1098765432'.indexOf(a.rank) -
-							'AKQJ1098765432'.indexOf(b.rank)
+							'AKQJ1098765432'.indexOf(b.rank),
 					)
 					.reverse()
 				let w = 0
@@ -1053,7 +1056,7 @@ export default function Player() {
 					w++
 				const top3 = cards.slice(0, 3)
 				const honors = top3.filter((c) =>
-					['A', 'K', 'Q'].includes(c.rank)
+					['A', 'K', 'Q'].includes(c.rank),
 				).length
 				const l = Math.min(top3.length, 3 - honors)
 				winners += w
@@ -1073,7 +1076,7 @@ export default function Player() {
 			const partnershipHcp = hcpDecl + hcpDummy
 			const shapeOf = (hand) => {
 				const counts = suitList.map(
-					(s) => hand.filter((c) => c.suit === s).length
+					(s) => hand.filter((c) => c.suit === s).length,
 				)
 				return counts.join('-')
 			}
@@ -1086,7 +1089,7 @@ export default function Player() {
 					: {
 							decl: declHand.filter((c) => c.suit === effTrump).length,
 							dummy: dummyHand.filter((c) => c.suit === effTrump).length,
-					  }
+						}
 			trumpLens.total = trumpLens.decl + trumpLens.dummy
 			// Longest side suits (exclude trump if any)
 			const sideLengths = suitList
@@ -1109,9 +1112,9 @@ export default function Player() {
 				(acc, seat) =>
 					acc +
 					hands[seat].filter(
-						(c) => (c.rank === 'A' || c.rank === 'K') && c.suit !== effTrump
+						(c) => (c.rank === 'A' || c.rank === 'K') && c.suit !== effTrump,
 					).length,
-				0
+				0,
 			)
 			setPreAnalysis({
 				partnershipHcp,
@@ -1240,7 +1243,7 @@ export default function Player() {
 			hideDefenders,
 			playStarted,
 			openingLeader,
-		]
+		],
 	)
 
 	// Simple auto-play for hidden defenders
@@ -1278,7 +1281,7 @@ export default function Player() {
 					;(groups[c.suit] ||= []).push(c)
 				})
 				let entries = Object.entries(groups).sort(
-					(a, b) => b[1].length - a[1].length
+					(a, b) => b[1].length - a[1].length,
 				)
 				if (effTrump) {
 					const non = entries.filter((e) => e[0] !== effTrump)
@@ -1306,7 +1309,7 @@ export default function Player() {
 			}
 			return { card: playable[0], reason: 'Random' }
 		},
-		[remaining, trick, effTrump]
+		[remaining, trick, effTrump],
 	)
 
 	const autoPlayRef = useRef(false)
@@ -1359,7 +1362,7 @@ export default function Player() {
 			effContract,
 			effDeclarer,
 			isSeatVul(effDeclarer, current?.vul),
-			tricksDecl
+			tricksDecl,
 		)
 	}, [effContract, effDeclarer, tricksDecl, current?.vul])
 
@@ -1405,7 +1408,7 @@ export default function Player() {
 			}
 			return false
 		},
-		[visibilityMode, effDeclarer, history.length, hideDefenders]
+		[visibilityMode, effDeclarer, history.length, hideDefenders],
 	)
 
 	const onFile = (e) => {
@@ -1495,7 +1498,7 @@ export default function Player() {
 					seat: mv.seat,
 					suit: mv.suit,
 					rank: mv.rank,
-				}))
+				})),
 			)
 			setPlayIdx(to)
 			playIdxRef.current = to
@@ -1508,12 +1511,17 @@ export default function Player() {
 			current?.playLeader,
 			current?.dealer,
 			openingLeader,
-		]
+		],
 	)
 
 	const resetToOpeningState = useCallback(() => {
 		if (!hands) return
-		const init = createInitialManualState(hands, openingLeader, effTrump, effDeclarer)
+		const init = createInitialManualState(
+			hands,
+			openingLeader,
+			effTrump,
+			effDeclarer,
+		)
 		setRemaining(init.remaining)
 		setTrick(init.trick)
 		setTurnSeat(init.turnSeat)
@@ -1656,7 +1664,7 @@ export default function Player() {
 						{deals.length
 							? `Board ${current?.board || index + 1} — ${index + 1}/${
 									deals.length
-							  }`
+								}`
 							: 'No file loaded'}
 					</div>
 					{effContract ? (
@@ -1870,23 +1878,23 @@ export default function Player() {
 							className={`relative rounded-2xl border bg-white/40 ${
 								teacherFocus ? '' : 'backdrop-blur-sm'
 							} p-2`}>
-								{lastTrickPreview ? (
-									<div className="w-[260px] h-[260px]">
-										<CrossTrick
-											trick={lastTrickPreview.cards}
-											winner={lastTrickPreview.winner}
-											turnSeat={null}
-											lastAutoPlay={null}
-											highlight={false}
-											openingLeader={null}
-											showStatus={false}
-										/>
-									</div>
-								) : (
-									<div className="w-[260px] h-[260px] rounded-2xl border border-dashed border-slate-300 bg-white/50 flex items-center justify-center text-[13px] font-medium text-slate-600">
-										No previous trick yet
-									</div>
-								)}
+							{lastTrickPreview ? (
+								<div className="w-[260px] h-[260px]">
+									<CrossTrick
+										trick={lastTrickPreview.cards}
+										winner={lastTrickPreview.winner}
+										turnSeat={null}
+										lastAutoPlay={null}
+										highlight={false}
+										openingLeader={null}
+										showStatus={false}
+									/>
+								</div>
+							) : (
+								<div className="w-[260px] h-[260px] rounded-2xl border border-dashed border-slate-300 bg-white/50 flex items-center justify-center text-[13px] font-medium text-slate-600">
+									No previous trick yet
+								</div>
+							)}
 						</div>
 					</div>
 				)}

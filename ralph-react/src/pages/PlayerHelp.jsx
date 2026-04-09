@@ -67,8 +67,8 @@ export default function PlayerHelp() {
 						right; center panel shows current trick.
 					</li>
 					<li>
-						Auction and contract stay visible during play, with the final auction
-						call highlighted and declarer always shown.
+						Auction and contract stay visible during play, with the final
+						auction call highlighted and declarer always shown.
 					</li>
 					<li>
 						North/South headers tinted to emphasize the partnership vertically.
@@ -146,8 +146,8 @@ export default function PlayerHelp() {
 						Back One Trick, and Replay Hand after completion.
 					</li>
 					<li>
-						Navigation rebuilds state deterministically from history so review and
-						step-back stay reliable.
+						Navigation rebuilds state deterministically from history so review
+						and step-back stay reliable.
 					</li>
 				</ul>
 			</section>
