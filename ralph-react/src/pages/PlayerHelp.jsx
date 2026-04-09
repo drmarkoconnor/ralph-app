@@ -67,6 +67,10 @@ export default function PlayerHelp() {
 						right; center panel shows current trick.
 					</li>
 					<li>
+						Auction and contract stay visible during play, with the final auction
+						call highlighted and declarer always shown.
+					</li>
+					<li>
 						North/South headers tinted to emphasize the partnership vertically.
 					</li>
 					<li>
@@ -138,8 +142,12 @@ export default function PlayerHelp() {
 						Each completed trick stores seat → card mapping and the winner.
 					</li>
 					<li>
-						Navigation controls (⏮ ◀ ▶ ⏭) rebuild state deterministically from
-						history allowing review or step-back.
+						Large teaching controls let you go Back One Card, Forward One Card,
+						Back One Trick, and Replay Hand after completion.
+					</li>
+					<li>
+						Navigation rebuilds state deterministically from history so review and
+						step-back stay reliable.
 					</li>
 				</ul>
 			</section>
