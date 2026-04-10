@@ -180,13 +180,13 @@ function SeatPanel({
 													key={c.id}
 													disabled={!playStarted || !legal || !isTurn}
 													onClick={() => onPlay(id, c.id)}
-														className={`${cardBoxClass} rounded-md font-bold border bg-white transition-all duration-100 flex flex-col items-center justify-between px-1 py-[3px] ${
+													className={`${cardBoxClass} rounded-md font-bold border bg-white transition-all duration-100 flex flex-col items-center justify-between px-1 py-[3px] ${
 														isRedSuit
-																? 'text-rose-700 border-rose-400'
-																: 'text-slate-800 border-slate-500'
+															? 'text-rose-700 border-rose-400'
+															: 'text-slate-800 border-slate-500'
 													} ${
 														legal && isTurn && playStarted
-																? 'ring-2 ring-amber-400 shadow-xl'
+															? 'ring-2 ring-amber-400 shadow-xl'
 															: ''
 													} ${
 														openingLeadPulse && isTurn && playStarted
@@ -199,14 +199,14 @@ function SeatPanel({
 													} ${highlight ? 'outline outline-white/70' : ''}`}
 													style={{
 														boxShadow:
-																'0 6px 12px rgba(15,23,42,0.30), inset 0 1px 0 rgba(255,255,255,0.95)',
+															'0 6px 12px rgba(15,23,42,0.30), inset 0 1px 0 rgba(255,255,255,0.95)',
 													}}>
 													<span
 														className={`font-extrabold tracking-tight leading-none ${cardRankClass}`}>
 														{c.rank}
 													</span>
 													<span
-															className={`${isDummy ? 'text-[18px]' : 'text-[16px]'} leading-none`}>
+														className={`${isDummy ? 'text-[18px]' : 'text-[16px]'} leading-none`}>
 														{suitSymbol(c.suit)}
 													</span>
 												</button>
@@ -663,43 +663,43 @@ function AuctionGraphic({ auction = [], dealer = 'N', contract, declarer }) {
 	return (
 		<div className="relative rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-sky-50 via-white to-indigo-50 px-3 py-3 shadow-md w-full h-full flex flex-col">
 			<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-2 text-center">
-					AUCTION (Dealer {dealer})
+				AUCTION (Dealer {dealer})
 			</div>
 			<table className="text-[12px] font-semibold bg-white/70 rounded-xl overflow-hidden shadow-inner w-full">
-					<thead>
-						<tr>
-							{orderedSeats.map((s) => (
-								<th key={s} className="px-1.5 py-1 text-indigo-700">
-									{s}
-								</th>
-							))}
-						</tr>
-					</thead>
-					<tbody>
-						{rounds.map((r, i) => (
-							<tr key={i}>
-								{orderedSeats.map((seat, idx) => {
-									const call = r[idx] || ''
-									const final = call && i * 4 + idx === auction.length - 1
-									const base = `px-1.5 py-0.5 text-center rounded transition-colors ${callClass(
-										call,
-									)}`
-									return (
-										<td key={seat} className="p-0">
-											<span
-												className={`${base} ${
-													final
-														? 'bg-yellow-200/80 ring-2 ring-yellow-400 shadow font-bold'
-														: ''
-												}`}>
-												{call || '—'}
-											</span>
-										</td>
-									)
-								})}
-							</tr>
+				<thead>
+					<tr>
+						{orderedSeats.map((s) => (
+							<th key={s} className="px-1.5 py-1 text-indigo-700">
+								{s}
+							</th>
 						))}
-					</tbody>
+					</tr>
+				</thead>
+				<tbody>
+					{rounds.map((r, i) => (
+						<tr key={i}>
+							{orderedSeats.map((seat, idx) => {
+								const call = r[idx] || ''
+								const final = call && i * 4 + idx === auction.length - 1
+								const base = `px-1.5 py-0.5 text-center rounded transition-colors ${callClass(
+									call,
+								)}`
+								return (
+									<td key={seat} className="p-0">
+										<span
+											className={`${base} ${
+												final
+													? 'bg-yellow-200/80 ring-2 ring-yellow-400 shadow font-bold'
+													: ''
+											}`}>
+											{call || '—'}
+										</span>
+									</td>
+								)
+							})}
+						</tr>
+					))}
+				</tbody>
 			</table>
 			{!auction.length && (
 				<div className="mt-1 text-[11px] italic text-indigo-700/80 text-center">
@@ -2144,7 +2144,10 @@ export default function Player() {
 												No auction provided
 											</div>
 										)}
-										<ContractBadge contract={effContract} declarer={effDeclarer} />
+										<ContractBadge
+											contract={effContract}
+											declarer={effDeclarer}
+										/>
 										<TrickCounter
 											tricksDecl={tricksDecl}
 											tricksDef={tricksDef}
@@ -2156,7 +2159,9 @@ export default function Player() {
 											</div>
 											<button
 												onClick={onStartStopPlay}
-												disabled={!playStarted && (!effContract || !effDeclarer)}
+												disabled={
+													!playStarted && (!effContract || !effDeclarer)
+												}
 												className={`w-full mb-1.5 px-2 py-2 rounded-xl border-2 text-[11px] font-extrabold tracking-wide shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
 													playStarted
 														? 'border-rose-500 bg-rose-600 text-white shadow-rose-200'
