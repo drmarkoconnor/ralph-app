@@ -45,11 +45,18 @@ function SeatPanel({
 	openingLeader,
 	playStarted,
 	openingLeadPulse,
+	trumpSuit,
+	trumpSide = 'left',
+	displaySuitOrder,
+	isDummy = false,
 	compact = false,
 }) {
 	const hand = remaining?.[id] || []
 	const hcp = hand.reduce((s, c) => s + hcpValue(c.rank), 0)
-	const suitOrder = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
+	const suitOrder =
+		Array.isArray(displaySuitOrder) && displaySuitOrder.length === 4
+			? displaySuitOrder
+			: ['Spades', 'Hearts', 'Diamonds', 'Clubs']
 	const grouped = Object.fromEntries(
 		suitOrder.map((s) => [
 			s,
@@ -57,40 +64,50 @@ function SeatPanel({
 				.filter((c) => c.suit === s)
 				.sort(
 					(a, b) =>
-						'2345678910JQKA'.indexOf(a.rank) - '2345678910JQKA'.indexOf(b.rank)
+						'2345678910JQKA'.indexOf(a.rank) - '2345678910JQKA'.indexOf(b.rank),
 				),
-		])
+		]),
 	)
 	const leadSuit =
 		trick.length > 0 && trick.length < 4 ? trick[0].card.suit : null
 	const mustFollow = leadSuit && hand.some((c) => c.suit === leadSuit)
 	const isTurn = turnSeat === id
+	const cardBoxClass = isDummy
+		? compact
+			? 'w-10 h-[58px]'
+			: 'w-10 h-[58px] md:w-11 md:h-[62px]'
+		: compact
+			? 'w-9 h-[54px]'
+			: 'w-9 h-[54px] md:w-10 md:h-[58px]'
+	const cardRankClass = isDummy
+		? 'text-[16px] md:text-[17px]'
+		: 'text-[15px] md:text-[16px]'
 	return (
 		<div
 			className={`relative z-10 rounded-2xl border w-full h-full overflow-hidden flex flex-col ${
 				isTurn
-					? 'border-rose-500'
+					? 'border-rose-600 ring-2 ring-rose-300/70 shadow-lg shadow-rose-200/40'
 					: id === 'N' || id === 'S'
-					? 'border-sky-300'
-					: 'border-teal-300'
+						? 'border-sky-300'
+						: 'border-teal-300'
 			} ${lastAutoSeat === id ? 'ring-2 ring-sky-300 animate-pulse' : ''} ${
 				highlight
 					? 'relative z-20 shadow-xl shadow-yellow-200/30 ring-2 ring-yellow-300'
 					: ''
 			} ${
 				id === 'N' || id === 'S'
-					? 'bg-gradient-to-br from-sky-50 to-sky-100'
-					: 'bg-gradient-to-br from-teal-50 to-teal-100'
-			}`}>
+					? 'bg-gradient-to-br from-sky-100 to-sky-200/90'
+					: 'bg-gradient-to-br from-teal-100 to-teal-200/90'
+			} ${isDummy ? 'ring-1 ring-white/80 shadow-lg' : ''}`}>
 			<div
 				className={`px-2 ${
 					compact ? 'py-0.5' : 'py-1'
-				} text-[11px] font-semibold flex items-center justify-between ${
+				} text-[11px] tracking-wide font-semibold flex items-center justify-between ${
 					isTurn
-						? 'bg-rose-100'
+						? 'bg-rose-200/90'
 						: id === 'N' || id === 'S'
-						? 'bg-sky-200'
-						: 'bg-teal-200'
+							? 'bg-sky-300/80'
+							: 'bg-teal-300/80'
 				}`}>
 				<span className="flex items-center gap-1">
 					{seatName(id)}
@@ -117,63 +134,104 @@ function SeatPanel({
 				</span>
 			</div>
 			<div
-				className={`${compact ? 'p-1' : 'p-2'} flex flex-col ${
-					compact ? 'gap-1' : 'gap-2'
-				} flex-1 min-h-0 overflow-auto`}>
+				className={`${compact ? 'p-1.5' : isDummy ? 'p-2.5' : 'p-2'} flex flex-col ${
+					compact ? 'gap-1.5' : isDummy ? 'gap-2' : 'gap-1.5'
+				} flex-1 min-h-0 overflow-hidden`}>
 				{suitOrder.map((s) => (
 					<div
 						key={s}
-						className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`}>
-						<div
-							className={`${
-								compact ? 'w-5 text-lg' : 'w-6 text-xl'
-							} text-center ${
-								s === 'Hearts' || s === 'Diamonds'
-									? 'text-red-600'
-									: 'text-black'
-							}`}>
-							{suitSymbol(s)}
-						</div>
-						<div className="flex flex-wrap gap-1 flex-1">
-							{visible ? (
-								grouped[s].map((c) => {
-									const legal =
-										!isTurn || !leadSuit || !mustFollow || c.suit === leadSuit
-									const isRedSuit = c.suit === 'Hearts' || c.suit === 'Diamonds'
-									return (
-										<button
-											key={c.id}
-											disabled={!playStarted || !legal || !isTurn}
-											onClick={() => onPlay(id, c.id)}
-											className={`px-1.5 py-0.5 text-base rounded-md font-bold shadow-sm border bg-white ${
-												isRedSuit
-													? 'text-rose-600 border-rose-300'
-													: 'text-slate-800 border-slate-300'
-											} ${
-												legal && isTurn && playStarted
-													? 'ring-2 ring-yellow-300'
-													: ''
-											} ${
-												openingLeadPulse && isTurn && playStarted
-													? 'animate-pulse'
-													: ''
-											} ${
-												!playStarted || !legal || !isTurn ? 'opacity-40' : ''
-											} ${highlight ? 'outline outline-white/70' : ''}`}>
-											<span className="font-extrabold tracking-tight">
-												{c.rank}
-											</span>
-											<span className="ml-0.5">{suitSymbol(c.suit)}</span>
-										</button>
-									)
-								})
+						className={`flex items-start ${compact ? 'gap-1' : isDummy ? 'gap-2' : 'gap-1.5'}`}>
+						{(() => {
+							const isRed = s === 'Hearts' || s === 'Diamonds'
+							const isTrumpRow = !!trumpSuit && s === trumpSuit
+							const rowCount = grouped[s].length
+							const cardGapClass =
+								rowCount >= 8 ? 'gap-0' : rowCount >= 6 ? 'gap-0.5' : 'gap-1'
+							const symbolEl = (
+								<div
+									className={`${
+										compact
+											? 'w-5 text-xl'
+											: isDummy
+												? 'w-7 text-[28px]'
+												: 'w-6 text-[24px]'
+									} text-center ${isRed ? 'text-red-600' : 'text-black'} ${
+										isTrumpRow ? 'font-extrabold' : ''
+									}`}>
+									{suitSymbol(s)}
+								</div>
+							)
+							const cardsEl = (
+								<div
+									className={`flex flex-wrap ${cardGapClass} flex-1 content-start ${
+										isTrumpRow && trumpSide === 'right' ? 'justify-end' : ''
+									}`}>
+									{visible ? (
+										grouped[s].map((c) => {
+											const legal =
+												!isTurn ||
+												!leadSuit ||
+												!mustFollow ||
+												c.suit === leadSuit
+											const isRedSuit =
+												c.suit === 'Hearts' || c.suit === 'Diamonds'
+											return (
+												<button
+													key={c.id}
+													disabled={!playStarted || !legal || !isTurn}
+													onClick={() => onPlay(id, c.id)}
+													className={`${cardBoxClass} rounded-md font-bold border bg-white transition-all duration-100 flex flex-col items-center justify-between px-1 py-[3px] ${
+														isRedSuit
+															? 'text-rose-700 border-rose-400'
+															: 'text-slate-800 border-slate-500'
+													} ${
+														legal && isTurn && playStarted
+															? 'ring-2 ring-amber-400 shadow-xl'
+															: ''
+													} ${
+														openingLeadPulse && isTurn && playStarted
+															? 'animate-pulse'
+															: ''
+													} ${
+														!playStarted || !legal || !isTurn
+															? 'opacity-40'
+															: ''
+													} ${highlight ? 'outline outline-white/70' : ''}`}
+													style={{
+														boxShadow:
+															'0 6px 12px rgba(15,23,42,0.30), inset 0 1px 0 rgba(255,255,255,0.95)',
+													}}>
+													<span
+														className={`font-extrabold tracking-tight leading-none ${cardRankClass}`}>
+														{c.rank}
+													</span>
+													<span
+														className={`${isDummy ? 'text-[18px]' : 'text-[16px]'} leading-none`}>
+														{suitSymbol(c.suit)}
+													</span>
+												</button>
+											)
+										})
+									) : (
+										<span className="italic text-gray-400 text-sm">hidden</span>
+									)}
+									{visible && grouped[s].length === 0 && (
+										<span className="text-gray-300">-</span>
+									)}
+								</div>
+							)
+							return isTrumpRow && trumpSide === 'right' ? (
+								<>
+									{cardsEl}
+									{symbolEl}
+								</>
 							) : (
-								<span className="italic text-gray-400 text-sm">hidden</span>
-							)}
-							{visible && grouped[s].length === 0 && (
-								<span className="text-gray-300">-</span>
-							)}
-						</div>
+								<>
+									{symbolEl}
+									{cardsEl}
+								</>
+							)
+						})()}
 					</div>
 				))}
 			</div>
@@ -246,6 +304,9 @@ function ScorePanel({
 				Contract: <span className="font-semibold">{contract || '-'}</span>
 			</div>
 			<div>
+				Declarer: <span className="font-semibold">{declarer || '-'}</span>
+			</div>
+			<div>
 				Tricks:{' '}
 				<span className="font-semibold">
 					{tricksDecl} for, {tricksDef} against
@@ -273,26 +334,31 @@ function CardSlot({
 	isWinner = false,
 	dim = false,
 	tilt = true,
+	dissolve = false,
 }) {
 	const it = trick.find((t) => t.seat === seat)
 	const dims =
 		size === 'lg'
 			? { w: 'w-24', h: 'h-36', text: 'text-4xl', corner: 'text-sm' }
 			: size === 'sm'
-			? { w: 'w-14', h: 'h-20', text: 'text-xl', corner: 'text-[9px]' }
-			: { w: 'w-16', h: 'h-24', text: 'text-2xl', corner: 'text-[10px]' }
+				? { w: 'w-14', h: 'h-20', text: 'text-xl', corner: 'text-[9px]' }
+				: { w: 'w-16', h: 'h-24', text: 'text-2xl', corner: 'text-[10px]' }
 	if (!it)
 		return (
 			<div
-				className={`${dims.w} ${dims.h} rounded-xl border bg-white/90 shadow-inner`}
+				className={`${dims.w} ${dims.h} rounded-xl border ${
+					dissolve
+						? 'bg-white/15 border-white/20 shadow-none'
+						: 'bg-white/90 shadow-inner'
+				}`}
 			/>
 		)
 	const rotateClass = tilt
 		? seat === 'E'
 			? 'rotate-6'
 			: seat === 'W'
-			? '-rotate-6'
-			: ''
+				? '-rotate-6'
+				: ''
 		: ''
 	const isRed = it.card.suit === 'Hearts' || it.card.suit === 'Diamonds'
 	const suitColor = isRed ? 'text-rose-600' : 'text-slate-800'
@@ -300,14 +366,15 @@ function CardSlot({
 	const borderClass = isRed ? 'border-rose-200' : 'border-slate-200'
 	return (
 		<div
-			className={`relative ${dims.w} ${
-				dims.h
-			} rounded-[14px] ${borderClass} bg-white flex items-center justify-center overflow-hidden ${rotateClass} ${
+			className={`relative ${dims.w} ${dims.h} rounded-[14px] ${borderClass} ${
+				dissolve ? 'bg-white/75 border-white/30' : 'bg-white'
+			} flex items-center justify-center overflow-hidden ${rotateClass} ${
 				isWinner ? 'winner-gold animate-spin-once' : ''
 			} ${dim ? 'animate-fade-dim' : ''}`}
 			style={{
-				boxShadow:
-					'0 8px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -3px 10px rgba(0,0,0,0.10)',
+				boxShadow: dissolve
+					? '0 2px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.4)'
+					: '0 8px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -3px 10px rgba(0,0,0,0.10)',
 			}}>
 			{/* faint paper texture */}
 			<div
@@ -398,6 +465,7 @@ function CrossTrick({
 	highlight,
 	openingLeader,
 	showStatus = true,
+	dissolveCards = false,
 }) {
 	return (
 		<div
@@ -445,6 +513,7 @@ function CrossTrick({
 					size="md"
 					isWinner={winner === 'N'}
 					dim={!!winner && winner !== 'N'}
+					dissolve={dissolveCards}
 				/>
 			</div>
 			<div className="absolute right-6 top-1/2 -translate-y-1/2">
@@ -454,6 +523,7 @@ function CrossTrick({
 					size="md"
 					isWinner={winner === 'E'}
 					dim={!!winner && winner !== 'E'}
+					dissolve={dissolveCards}
 				/>
 			</div>
 			<div className="absolute left-6 top-1/2 -translate-y-1/2">
@@ -463,6 +533,7 @@ function CrossTrick({
 					size="md"
 					isWinner={winner === 'W'}
 					dim={!!winner && winner !== 'W'}
+					dissolve={dissolveCards}
 				/>
 			</div>
 			<div className="absolute left-1/2 -translate-x-1/2 bottom-6">
@@ -472,6 +543,7 @@ function CrossTrick({
 					size="md"
 					isWinner={winner === 'S'}
 					dim={!!winner && winner !== 'S'}
+					dissolve={dissolveCards}
 				/>
 			</div>
 			{/* Auto-play details hidden from central panel to keep visuals clean */}
@@ -487,24 +559,24 @@ function TrickCounter({ tricksDecl, tricksDef, contract }) {
 	const strain = m ? m[2] : ''
 	const isRed = strain === 'H' || strain === 'D'
 	const bgGrad = isRed
-		? 'from-rose-100 via-amber-50 to-rose-50'
-		: 'from-emerald-100 via-sky-50 to-indigo-100'
+		? 'from-rose-50 via-white to-rose-50'
+		: 'from-sky-50 via-white to-indigo-50'
 	return (
 		<div
-			className={`relative rounded-2xl border-4 border-indigo-300/70 bg-gradient-to-br ${bgGrad} shadow-lg px-6 py-4 flex flex-col items-center justify-center min-w-[120px]`}
+			className={`relative rounded-2xl border-2 border-indigo-200 bg-gradient-to-br ${bgGrad} shadow-md px-4 py-3 w-full h-full flex flex-col items-center justify-center`}
 			style={{ backdropFilter: 'blur(2px)' }}>
 			<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-1">
 				TRICK COUNT
 			</div>
 			<div className="flex items-end gap-3">
-				<div className="text-5xl font-extrabold text-slate-800 drop-shadow-sm leading-none">
+				<div className="text-4xl font-extrabold text-slate-800 drop-shadow-sm leading-none">
 					{tricksDecl}
 					<div className="text-[11px] text-indigo-700 font-semibold -mt-0.5">
 						Decl
 					</div>
 				</div>
-				<div className="text-3xl font-bold text-slate-500 mb-1">·</div>
-				<div className="text-5xl font-extrabold text-slate-800 drop-shadow-sm leading-none">
+				<div className="text-2xl font-bold text-slate-500 mb-1">·</div>
+				<div className="text-4xl font-extrabold text-slate-800 drop-shadow-sm leading-none">
 					{tricksDef}
 					<div className="text-[11px] text-indigo-700 font-semibold -mt-0.5">
 						Def
@@ -512,7 +584,7 @@ function TrickCounter({ tricksDecl, tricksDef, contract }) {
 				</div>
 			</div>
 			{typeof target === 'number' && (
-				<div className="mt-2 text-[12px] font-semibold text-indigo-700 bg-white/60 px-2 py-0.5 rounded-full shadow-inner">
+				<div className="mt-1 text-[11px] font-semibold text-indigo-700 bg-white/70 px-2 py-0.5 rounded-full shadow-inner">
 					Target {target}
 				</div>
 			)}
@@ -527,8 +599,14 @@ function ContractBadge({ contract, declarer }) {
 	const m = contract.match(/^(\d)([CDHSN]{1,2})(X{0,2})$/i)
 	if (!m)
 		return (
-			<div className="rounded-xl border-2 border-indigo-300 bg-gradient-to-br from-sky-50 to-indigo-50 px-5 py-3 text-xl font-bold tracking-wide">
-				{contract}
+			<div className="rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-sky-50 via-white to-indigo-50 shadow-md px-4 py-3 w-full h-full flex flex-col items-center justify-center text-xl font-bold tracking-wide">
+				<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-1">
+					FINAL CONTRACT
+				</div>
+				<div>{contract}</div>
+				<div className="mt-1 text-[11px] font-semibold text-indigo-700">
+					Declarer {declarer || '-'}
+				</div>
 			</div>
 		)
 	const level = m[1]
@@ -542,21 +620,21 @@ function ContractBadge({ contract, declarer }) {
 		? 'text-rose-600 drop-shadow-sm'
 		: 'text-slate-800 drop-shadow-sm'
 	const bgGrad = isRed
-		? 'from-rose-100 via-amber-50 to-rose-50'
-		: 'from-emerald-100 via-sky-50 to-indigo-100'
+		? 'from-rose-50 via-white to-rose-50'
+		: 'from-sky-50 via-white to-indigo-50'
 	return (
 		<div
-			className={`relative rounded-2xl border-4 border-indigo-300/70 bg-gradient-to-br ${bgGrad} shadow-lg px-6 py-4 flex flex-col items-center justify-center min-w-[120px]`}>
+			className={`relative rounded-2xl border-2 border-indigo-200 bg-gradient-to-br ${bgGrad} shadow-md px-4 py-3 w-full h-full flex flex-col items-center justify-center`}>
 			<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-1">
 				FINAL CONTRACT
 			</div>
-			<div className={`text-5xl font-extrabold leading-none ${colorClass}`}>
+			<div className={`text-4xl font-extrabold leading-none ${colorClass}`}>
 				{level}
 				{sym}
-				{dbl && <span className="text-indigo-700 text-3xl ml-1">{dbl}</span>}
+				{dbl && <span className="text-indigo-700 text-2xl ml-1">{dbl}</span>}
 			</div>
 			{declarer && (
-				<div className="mt-2 text-[12px] font-semibold text-indigo-700 bg-white/60 px-2 py-0.5 rounded-full shadow-inner">
+				<div className="mt-1 text-[11px] font-semibold text-indigo-700 bg-white/70 px-2 py-0.5 rounded-full shadow-inner">
 					Declarer {declarer}
 				</div>
 			)}
@@ -578,59 +656,56 @@ function AuctionGraphic({ auction = [], dealer = 'N', contract, declarer }) {
 		c === ''
 			? 'text-gray-300'
 			: /^(P|Pass)$/i.test(c)
-			? 'text-gray-500'
-			: /^(X|XX)$/.test(c)
-			? 'text-indigo-700 font-semibold'
-			: 'font-semibold'
+				? 'text-gray-500'
+				: /^(X|XX)$/.test(c)
+					? 'text-indigo-700 font-semibold'
+					: 'font-semibold'
 	return (
-		<div className="flex items-start gap-4">
-			<div className="relative rounded-2xl border-4 border-indigo-300/70 bg-gradient-to-br from-emerald-100 via-sky-50 to-indigo-100 px-5 py-4 shadow-lg">
-				<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-2">
-					AUCTION (Dealer {dealer})
-				</div>
-				<table className="text-sm font-semibold bg-white/50 rounded-xl overflow-hidden shadow-inner">
-					<thead>
-						<tr>
-							{orderedSeats.map((s) => (
-								<th key={s} className="px-2 py-1 text-indigo-700">
-									{s}
-								</th>
-							))}
-						</tr>
-					</thead>
-					<tbody>
-						{rounds.map((r, i) => (
-							<tr key={i}>
-								{orderedSeats.map((seat, idx) => {
-									const call = r[idx] || ''
-									const final = call && i * 4 + idx === auction.length - 1
-									const base = `px-2 py-0.5 text-center rounded transition-colors ${callClass(
-										call
-									)}`
-									return (
-										<td key={seat} className="p-0">
-											<span
-												className={`${base} ${
-													final
-														? 'bg-yellow-200/80 ring-2 ring-yellow-400 shadow font-bold'
-														: ''
-												}`}>
-												{call || '—'}
-											</span>
-										</td>
-									)
-								})}
-							</tr>
-						))}
-					</tbody>
-				</table>
-				{!auction.length && (
-					<div className="mt-1 text-[11px] italic text-indigo-700/80">
-						No auction provided (manual contract)
-					</div>
-				)}
+		<div className="relative rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-sky-50 via-white to-indigo-50 px-3 py-3 shadow-md w-full h-full flex flex-col">
+			<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-2 text-center">
+				AUCTION (Dealer {dealer})
 			</div>
-			<ContractBadge contract={contract} declarer={declarer} />
+			<table className="text-[12px] font-semibold bg-white/70 rounded-xl overflow-hidden shadow-inner w-full">
+				<thead>
+					<tr>
+						{orderedSeats.map((s) => (
+							<th key={s} className="px-1.5 py-1 text-indigo-700">
+								{s}
+							</th>
+						))}
+					</tr>
+				</thead>
+				<tbody>
+					{rounds.map((r, i) => (
+						<tr key={i}>
+							{orderedSeats.map((seat, idx) => {
+								const call = r[idx] || ''
+								const final = call && i * 4 + idx === auction.length - 1
+								const base = `px-1.5 py-0.5 text-center rounded transition-colors ${callClass(
+									call,
+								)}`
+								return (
+									<td key={seat} className="p-0">
+										<span
+											className={`${base} ${
+												final
+													? 'bg-yellow-200/80 ring-2 ring-yellow-400 shadow font-bold'
+													: ''
+											}`}>
+											{call || '—'}
+										</span>
+									</td>
+								)
+							})}
+						</tr>
+					))}
+				</tbody>
+			</table>
+			{!auction.length && (
+				<div className="mt-1 text-[11px] italic text-indigo-700/80 text-center">
+					No auction provided
+				</div>
+			)}
 		</div>
 	)
 }
@@ -688,8 +763,17 @@ export default function Player() {
 	const fileRef = useRef(null)
 	const initialTrumpRef = useRef(null)
 	const audioCtxRef = useRef(null)
+	const trickOverlayTimerRef = useRef(null)
+	const completedPreviewRef = useRef(null)
 
 	// removed AI log state and toggles
+
+	const clearTrickOverlayTimer = useCallback(() => {
+		if (trickOverlayTimerRef.current) {
+			clearTimeout(trickOverlayTimerRef.current)
+			trickOverlayTimerRef.current = null
+		}
+	}, [])
 
 	// --- Audio helpers ---
 	const ensureAudio = useCallback(() => {
@@ -782,7 +866,7 @@ export default function Player() {
 		if (!calls.length) return { legal: false }
 		return validateAuction(
 			current.auctionDealer || current.dealer || 'N',
-			calls
+			calls,
 		)
 	}, [current])
 
@@ -827,6 +911,47 @@ export default function Player() {
 	])
 
 	const effTrump = parseTrump(effContract)
+	const onStartStopPlay = useCallback(() => {
+		if (playStarted) {
+			setPlayStarted(false)
+			setTeacherFocus(false)
+			return
+		}
+		if (!effContract || !effDeclarer) return
+		setPlayStarted(true)
+		setTeacherFocus(true)
+	}, [playStarted, effContract, effDeclarer])
+	const centerLiveTrick = trickComplete ? [] : trick
+
+	const dummySeat = useMemo(
+		() => (effDeclarer ? partnerOf(effDeclarer) : null),
+		[effDeclarer],
+	)
+
+	const getDisplaySuitOrder = useCallback(
+		(seat) => {
+			const base = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
+			if (!dummySeat || seat !== dummySeat || !effTrump || effTrump === 'NT')
+				return base
+			return [effTrump, ...base.filter((s) => s !== effTrump)]
+		},
+		[dummySeat, effTrump],
+	)
+
+	const getDummyTrumpSide = useCallback(
+		(seat) => {
+			if (!dummySeat || seat !== dummySeat || !effDeclarer) return 'left'
+			const seatX = { W: 0, N: 1, S: 1, E: 2 }
+			const dummyX = seatX[dummySeat]
+			const declarerX = seatX[effDeclarer]
+			if (typeof dummyX !== 'number' || typeof declarerX !== 'number')
+				return 'left'
+			if (declarerX < dummyX) return 'left'
+			if (declarerX > dummyX) return 'right'
+			return effDeclarer === 'S' ? 'right' : 'left'
+		},
+		[dummySeat, effDeclarer],
+	)
 
 	const hands = useMemo(() => {
 		if (!current?.deal) return null
@@ -868,6 +993,7 @@ export default function Player() {
 
 	useEffect(() => {
 		if (!hands) {
+			clearTrickOverlayTimer()
 			setRemaining(null)
 			setTrick([])
 			setTurnSeat(null)
@@ -878,10 +1004,13 @@ export default function Player() {
 			setManualMoves([])
 			setCompletedTrickList([])
 			setLastTrickPreview(null)
+			setCentralTrickOverlay(null)
+			completedPreviewRef.current = null
 			setPlayIdx(0)
 			setPlayStarted(false)
 			return
 		}
+		clearTrickOverlayTimer()
 		const leader = openingLeader
 		const init = createInitialManualState(hands, leader, effTrump, effDeclarer)
 		setRemaining(init.remaining)
@@ -896,6 +1025,8 @@ export default function Player() {
 		setCompletedTrickList([])
 		setPlayIdx(0)
 		setFlashWinner(null)
+		setCentralTrickOverlay(null)
+		completedPreviewRef.current = null
 		setVisibilityMode('mimic')
 		setHideDefenders(true)
 		setShowCompletedTricks(true)
@@ -907,7 +1038,33 @@ export default function Player() {
 		current?.playLeader,
 		current?.dealer,
 		openingLeader,
+		clearTrickOverlayTimer,
 	])
+
+	useEffect(() => () => clearTrickOverlayTimer(), [clearTrickOverlayTimer])
+
+	useEffect(() => {
+		if (!centralTrickOverlay) return
+		clearTrickOverlayTimer()
+		trickOverlayTimerRef.current = setTimeout(() => {
+			const payload = completedPreviewRef.current
+			setCentralTrickOverlay(null)
+			if (payload) {
+				setCompletedTrickList((lst) => {
+					const entry = {
+						no: lst.length + 1,
+						winner: payload.winner,
+						cards: payload.cards,
+					}
+					setLastTrickPreview(entry)
+					return [...lst, entry]
+				})
+			}
+			completedPreviewRef.current = null
+			trickOverlayTimerRef.current = null
+		}, 900)
+		return () => clearTrickOverlayTimer()
+	}, [centralTrickOverlay, clearTrickOverlayTimer])
 
 	// When navigating to a new board, clear any manual contract overrides and close any board-scoped UI
 	useEffect(() => {
@@ -932,16 +1089,16 @@ export default function Player() {
 		try {
 			const partner = partnerOf(effDeclarer)
 			const declCount = hands[effDeclarer].filter(
-				(c) => c.suit === effTrump
+				(c) => c.suit === effTrump,
 			).length
 			const dummyCount = hands[partner].filter(
-				(c) => c.suit === effTrump
+				(c) => c.suit === effTrump,
 			).length
 			const defCount = ['N', 'E', 'S', 'W']
 				.filter((s) => s !== effDeclarer && s !== partner)
 				.reduce(
 					(acc, s) => acc + hands[s].filter((c) => c.suit === effTrump).length,
-					0
+					0,
 				)
 			initialTrumpRef.current = {
 				decl: declCount,
@@ -974,7 +1131,7 @@ export default function Player() {
 					.sort(
 						(a, b) =>
 							'AKQJ1098765432'.indexOf(a.rank) -
-							'AKQJ1098765432'.indexOf(b.rank)
+							'AKQJ1098765432'.indexOf(b.rank),
 					)
 					.reverse()
 				let w = 0
@@ -989,7 +1146,7 @@ export default function Player() {
 					w++
 				const top3 = cards.slice(0, 3)
 				const honors = top3.filter((c) =>
-					['A', 'K', 'Q'].includes(c.rank)
+					['A', 'K', 'Q'].includes(c.rank),
 				).length
 				const l = Math.min(top3.length, 3 - honors)
 				winners += w
@@ -1009,7 +1166,7 @@ export default function Player() {
 			const partnershipHcp = hcpDecl + hcpDummy
 			const shapeOf = (hand) => {
 				const counts = suitList.map(
-					(s) => hand.filter((c) => c.suit === s).length
+					(s) => hand.filter((c) => c.suit === s).length,
 				)
 				return counts.join('-')
 			}
@@ -1022,7 +1179,7 @@ export default function Player() {
 					: {
 							decl: declHand.filter((c) => c.suit === effTrump).length,
 							dummy: dummyHand.filter((c) => c.suit === effTrump).length,
-					  }
+						}
 			trumpLens.total = trumpLens.decl + trumpLens.dummy
 			// Longest side suits (exclude trump if any)
 			const sideLengths = suitList
@@ -1045,9 +1202,9 @@ export default function Player() {
 				(acc, seat) =>
 					acc +
 					hands[seat].filter(
-						(c) => (c.rank === 'A' || c.rank === 'K') && c.suit !== effTrump
+						(c) => (c.rank === 'A' || c.rank === 'K') && c.suit !== effTrump,
 					).length,
-				0
+				0,
 			)
 			setPreAnalysis({
 				partnershipHcp,
@@ -1135,6 +1292,7 @@ export default function Player() {
 					},
 				]
 				// Show the completed trick in the center for ~1s before moving it to the last trick area
+				clearTrickOverlayTimer()
 				setCentralTrickOverlay(completedTrick)
 				let previewWinner = r.winner
 				if (!previewWinner) {
@@ -1147,15 +1305,7 @@ export default function Player() {
 					winner: previewWinner,
 					cards: completedTrick,
 				})
-				setTimeout(() => {
-					// Clear the central overlay and append to the completed trick list
-					setCentralTrickOverlay(null)
-					setCompletedTrickList((lst) => {
-						const entry = makeEntry(lst)
-						setLastTrickPreview(entry)
-						return [...lst, entry]
-					})
-				}, 1000)
+				completedPreviewRef.current = makeEntry([])
 			}
 			if (hideDefenders && isDefender(seat, effDeclarer)) {
 				setLastAutoSeat(seat)
@@ -1176,7 +1326,8 @@ export default function Player() {
 			hideDefenders,
 			playStarted,
 			openingLeader,
-		]
+			clearTrickOverlayTimer,
+		],
 	)
 
 	// Simple auto-play for hidden defenders
@@ -1214,7 +1365,7 @@ export default function Player() {
 					;(groups[c.suit] ||= []).push(c)
 				})
 				let entries = Object.entries(groups).sort(
-					(a, b) => b[1].length - a[1].length
+					(a, b) => b[1].length - a[1].length,
 				)
 				if (effTrump) {
 					const non = entries.filter((e) => e[0] !== effTrump)
@@ -1242,7 +1393,7 @@ export default function Player() {
 			}
 			return { card: playable[0], reason: 'Random' }
 		},
-		[remaining, trick, effTrump]
+		[remaining, trick, effTrump],
 	)
 
 	const autoPlayRef = useRef(false)
@@ -1295,13 +1446,16 @@ export default function Player() {
 			effContract,
 			effDeclarer,
 			isSeatVul(effDeclarer, current?.vul),
-			tricksDecl
+			tricksDecl,
 		)
 	}, [effContract, effDeclarer, tricksDecl, current?.vul])
 
 	// Reset Start button (playStarted) once 13 tricks are completed
 	useEffect(() => {
-		if (completedTricks >= 13) setPlayStarted(false)
+		if (completedTricks >= 13) {
+			setPlayStarted(false)
+			setTeacherFocus(false)
+		}
 	}, [completedTricks])
 
 	// Celebration when contract is made at end of hand
@@ -1341,7 +1495,7 @@ export default function Player() {
 			}
 			return false
 		},
-		[visibilityMode, effDeclarer, history.length, hideDefenders]
+		[visibilityMode, effDeclarer, history.length, hideDefenders],
 	)
 
 	const onFile = (e) => {
@@ -1387,11 +1541,33 @@ export default function Player() {
 	const rebuildFromHistory = useCallback(
 		(to) => {
 			if (!hands) return
+			clearTrickOverlayTimer()
 			const leader = openingLeader
 			let st = createInitialManualState(hands, leader, effTrump, effDeclarer)
+			const rebuiltTricks = []
 			for (const mv of history.slice(0, to)) {
+				const trickBefore = st.trick
 				const r = playCardManual(st, mv.seat, mv.cardId)
 				if (!r.ok) break
+				if (r.winner) {
+					const [, suitFromId, rankFromId] = String(mv.cardId).split('-')
+					const rankNorm = rankFromId === 'T' ? '10' : rankFromId
+					rebuiltTricks.push({
+						no: rebuiltTricks.length + 1,
+						winner: r.winner,
+						cards: [
+							...trickBefore,
+							{
+								seat: mv.seat,
+								card: {
+									id: mv.cardId,
+									suit: mv.suit || suitFromId,
+									rank: mv.rank || rankNorm,
+								},
+							},
+						],
+					})
+				}
 				st = r.state
 			}
 			setRemaining(st.remaining)
@@ -1401,6 +1577,18 @@ export default function Player() {
 			setTricksDef(st.tricksDef)
 			setCompletedTricks(st.completed)
 			setTrickComplete(st.trickComplete)
+			setCompletedTrickList(rebuiltTricks)
+			setLastTrickPreview(rebuiltTricks[rebuiltTricks.length - 1] || null)
+			setCentralTrickOverlay(null)
+			completedPreviewRef.current = null
+			setFlashWinner(null)
+			setManualMoves(
+				history.slice(0, to).map((mv) => ({
+					seat: mv.seat,
+					suit: mv.suit,
+					rank: mv.rank,
+				})),
+			)
 			setPlayIdx(to)
 			playIdxRef.current = to
 		},
@@ -1412,34 +1600,70 @@ export default function Player() {
 			current?.playLeader,
 			current?.dealer,
 			openingLeader,
-		]
+			clearTrickOverlayTimer,
+		],
 	)
+
+	const resetToOpeningState = useCallback(() => {
+		if (!hands) return
+		clearTrickOverlayTimer()
+		const init = createInitialManualState(
+			hands,
+			openingLeader,
+			effTrump,
+			effDeclarer,
+		)
+		setRemaining(init.remaining)
+		setTrick(init.trick)
+		setTurnSeat(init.turnSeat)
+		setTricksDecl(init.tricksDecl)
+		setTricksDef(init.tricksDef)
+		setCompletedTricks(init.completed)
+		setTrickComplete(init.trickComplete || false)
+		setHistory([])
+		setManualMoves([])
+		setPlayIdx(0)
+		playIdxRef.current = 0
+		setFlashWinner(null)
+		setCompletedTrickList([])
+		setLastTrickPreview(null)
+		setCentralTrickOverlay(null)
+		completedPreviewRef.current = null
+		setLastAutoSeat(null)
+		setLastAutoPlay(null)
+		setPlayStarted(false)
+	}, [hands, openingLeader, effTrump, effDeclarer, clearTrickOverlayTimer])
+
 	const onPrevStep = () =>
 		rebuildFromHistory(Math.max(0, playIdxRef.current - 1))
 	const onNextStep = () =>
 		rebuildFromHistory(Math.min(history.length, playIdxRef.current + 1))
+	const onBackOneTrick = () => {
+		const mod = playIdxRef.current % 4
+		const back = mod === 0 ? 4 : mod
+		rebuildFromHistory(Math.max(0, playIdxRef.current - back))
+	}
+	const onForwardOneTrick = () => {
+		const mod = playIdxRef.current % 4
+		const fwd = mod === 0 ? 4 : 4 - mod
+		rebuildFromHistory(Math.min(history.length, playIdxRef.current + fwd))
+	}
+	const onReplayHand = () => resetToOpeningState()
 	const prev = () => setIndex((i) => Math.max(0, i - 1))
 	const next = () => setIndex((i) => Math.min(deals.length - 1, i + 1))
 	const reset = () => {
+		clearTrickOverlayTimer()
 		setDeals([])
 		setIndex(0)
 		setSelectedName('')
 		setVisibilityMode('mimic')
 		setHideDefenders(true)
 		setLastTrickPreview(null)
+		setCentralTrickOverlay(null)
+		completedPreviewRef.current = null
 		setShowCompletedTricks(true)
 		if (fileRef.current) fileRef.current.value = ''
 	}
-
-	// Escape key exits teacher focus mode
-	useEffect(() => {
-		if (!teacherFocus) return
-		const handler = (e) => {
-			if (e.key === 'Escape') setTeacherFocus(false)
-		}
-		window.addEventListener('keydown', handler)
-		return () => window.removeEventListener('keydown', handler)
-	}, [teacherFocus])
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 flex relative">
@@ -1467,25 +1691,6 @@ export default function Player() {
 			{teacherFocus && (
 				<>
 					<div className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-10 pointer-events-none" />
-					<button
-						onClick={() => setTeacherFocus(false)}
-						className="fixed top-2 left-2 z-30 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-semibold px-3 py-1 rounded shadow">
-						Exit Focus (Esc)
-					</button>
-					<button
-						onClick={() => setPlayStarted((v) => !v)}
-						disabled={!playStarted && (!effContract || !effDeclarer)}
-						className={`fixed top-2 right-2 z-30 px-3 py-1 rounded text-white text-xs font-semibold shadow ${
-							playStarted
-								? 'bg-rose-600 hover:bg-rose-700'
-								: 'bg-emerald-600 hover:bg-emerald-700'
-						} ${
-							!playStarted && (!effContract || !effDeclarer)
-								? 'opacity-50 cursor-not-allowed'
-								: ''
-						}`}>
-						{playStarted ? 'Stop' : 'Start Play'}
-					</button>
 				</>
 			)}
 
@@ -1530,7 +1735,7 @@ export default function Player() {
 						{deals.length
 							? `Board ${current?.board || index + 1} — ${index + 1}/${
 									deals.length
-							  }`
+								}`
 							: 'No file loaded'}
 					</div>
 					{effContract ? (
@@ -1603,6 +1808,14 @@ export default function Player() {
 						/>{' '}
 						<span>Show completed tricks</span>
 					</label>
+					<label className="flex items-center gap-1">
+						<input
+							type="checkbox"
+							checked={handInfoOpen}
+							onChange={(e) => setHandInfoOpen(e.target.checked)}
+						/>{' '}
+						<span>Show Hand Info</span>
+					</label>
 					<div className="mt-1 border-t pt-2">
 						<div className="font-semibold text-[11px] text-gray-700 mb-1">
 							Audio
@@ -1616,13 +1829,6 @@ export default function Player() {
 							<span>Enable sounds</span>
 						</label>
 					</div>
-					{!teacherFocus && (
-						<button
-							onClick={() => setTeacherFocus(true)}
-							className="mt-1 w-full px-2 py-1 rounded bg-yellow-500 hover:bg-yellow-600 text-white font-semibold shadow">
-							Teacher focus
-						</button>
-					)}
 				</div>
 
 				{!current?.contract && (
@@ -1710,12 +1916,7 @@ export default function Player() {
 						▶
 					</button>
 					<button
-						onClick={() => {
-							const mod = playIdx % 4
-							const back = mod === 0 ? 4 : mod
-							const target = Math.max(0, playIdx - back)
-							rebuildFromHistory(target)
-						}}
+						onClick={onBackOneTrick}
 						disabled={playIdx <= 0}
 						className="px-2 py-0.5 border rounded disabled:opacity-40">
 						Undo Trick
@@ -1739,59 +1940,19 @@ export default function Player() {
 				{collapseSidebar ? '›' : '‹'}
 			</button>
 
-			<div className="flex-1 p-3 md:p-4 flex flex-col gap-3 md:gap-4 relative">
-				{/* Last trick mini preview - pinned to main area */}
-				{current && hands && lastTrickPreview && (
-					<div
-						className={`${teacherFocus ? 'fixed z-50' : 'absolute z-0'} top-2 left-2 pointer-events-none`}>
-						<div className="text-[10px] text-gray-600 mb-1">Last trick</div>
-						<div
-							className={`relative rounded-2xl border bg-white/40 ${
-								teacherFocus ? '' : 'backdrop-blur-sm'
-							} p-2`}>
-							<div className="w-[260px] h-[260px]">
-								<CrossTrick
-									trick={lastTrickPreview.cards}
-									winner={lastTrickPreview.winner}
-									turnSeat={null}
-									lastAutoPlay={null}
-									highlight={false}
-									openingLeader={null}
-									showStatus={false}
-								/>
-							</div>
-						</div>
-					</div>
-				)}
+			<div className="flex-1 p-2 md:p-2 flex flex-col gap-1 md:gap-2 relative">
 				{!current && deals.length === 0 && (
 					<PreUpload onChooseFile={() => fileRef.current?.click()} />
 				)}
 				{current && hands && (
 					<div
 						className={`flex flex-col ${
-							compactPlay ? 'gap-3' : 'gap-4'
+							compactPlay ? 'gap-1.5' : 'gap-2'
 						} items-center`}>
 						<div
-							className={`w-full max-w-3xl mx-auto ${
-								compactPlay ? '-mt-4' : '-mt-2'
+							className={`w-full max-w-5xl mx-auto ${
+								compactPlay ? '-mt-5' : '-mt-3'
 							}`}>
-							<div className="flex items-center justify-end gap-2 mb-1">
-								<button
-									disabled={!playStarted && (!effContract || !effDeclarer)}
-									onClick={() => setPlayStarted((v) => !v)}
-									className={`px-2 py-1 rounded text-white text-[12px] disabled:opacity-50 ${
-										playStarted ? 'bg-rose-600' : 'bg-emerald-600'
-									}`}>
-									{playStarted ? 'Stop' : 'Start Play'}
-								</button>
-								{!compactPlay && (
-									<button
-										onClick={() => setHandInfoOpen((v) => !v)}
-										className="px-2 py-1 rounded border bg-white text-[12px]">
-										{handInfoOpen ? 'Hide Hand Info' : 'Show Hand Info'}
-									</button>
-								)}
-							</div>
 							{handInfoOpen && (
 								<div className="rounded-lg border bg-white/80 backdrop-blur p-3 text-[12px] shadow-sm">
 									<div className="flex items-center justify-between mb-2">
@@ -1904,15 +2065,40 @@ export default function Player() {
 							)}
 						</div>
 
-						<div className="flex items-start gap-4">
+						<div className="flex items-start gap-2 md:gap-3 -mt-2 md:-mt-3">
 							<div
 								className={`grid grid-cols-3 grid-rows-3 relative ${
 									teacherFocus ? 'z-20' : ''
-								} ${compactPlay ? 'gap-2.5' : 'gap-3'} ${
+								} ${compactPlay ? 'gap-1.5' : 'gap-2'} ${
 									collapseSidebar ? '' : '-ml-2'
 								}`}>
+								<div className="col-start-1 row-start-1 flex justify-end">
+									<div className="w-[236px] h-[324px] rounded-2xl border-2 border-indigo-200 bg-white/80 shadow-md p-3">
+										<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-2 text-center">
+											LAST TRICK
+										</div>
+										{lastTrickPreview ? (
+											<div className="w-[208px] h-[268px] mx-auto">
+												<CrossTrick
+													trick={lastTrickPreview.cards}
+													winner={lastTrickPreview.winner}
+													turnSeat={null}
+													lastAutoPlay={null}
+													highlight={false}
+													openingLeader={null}
+													showStatus={false}
+													dissolveCards={false}
+												/>
+											</div>
+										) : (
+											<div className="w-[208px] h-[268px] mx-auto rounded-2xl border border-dashed border-slate-300 bg-white/50 flex items-center justify-center text-[13px] font-medium text-slate-600">
+												No previous trick yet
+											</div>
+										)}
+									</div>
+								</div>
 								<div className="col-start-2 row-start-1 flex justify-center">
-									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
+									<div className="w-[272px] h-[324px] md:w-[292px] md:h-[344px]">
 										<SeatPanel
 											id="N"
 											highlight={teacherFocus}
@@ -1936,39 +2122,84 @@ export default function Player() {
 											openingLeadPulse={
 												openingLeadPulse && openingLeader === 'N'
 											}
+											trumpSuit={effTrump}
+											trumpSide={getDummyTrumpSide('N')}
+											displaySuitOrder={getDisplaySuitOrder('N')}
+											isDummy={dummySeat === 'N'}
 											compact={compactPlay}
 										/>
 									</div>
 								</div>
-								<div className="col-start-3 row-start-1 flex flex-col items-start gap-2">
-									{effContract || current?.auction?.length ? (
-										compactPlay ? (
-											<ContractBadge
-												contract={effContract}
-												declarer={effDeclarer}
-											/>
-										) : (
+								<div className="col-start-3 row-start-1 flex justify-start">
+									<div className="w-[392px] h-[324px] grid grid-cols-2 grid-rows-2 gap-2">
+										{effContract || current?.auction?.length ? (
 											<AuctionGraphic
 												auction={current?.auction || []}
 												dealer={current?.auctionDealer || current?.dealer}
 												contract={effContract}
 												declarer={effDeclarer}
 											/>
-										)
-									) : (
-										<div className="rounded-2xl border-2 border-indigo-200 bg-white/70 px-4 py-3 text-[12px] text-gray-600">
-											No auction provided
+										) : (
+											<div className="rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-sky-50 via-white to-indigo-50 shadow-md w-full h-full p-3 flex items-center justify-center text-[12px] text-gray-600 text-center font-medium">
+												No auction provided
+											</div>
+										)}
+										<ContractBadge
+											contract={effContract}
+											declarer={effDeclarer}
+										/>
+										<TrickCounter
+											tricksDecl={tricksDecl}
+											tricksDef={tricksDef}
+											contract={effContract}
+										/>
+										<div className="rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-sky-50 via-white to-indigo-50 shadow-md p-3 w-full h-full flex flex-col items-center justify-center">
+											<div className="text-[11px] tracking-wider text-indigo-700 font-semibold mb-2">
+												STEP
+											</div>
+											<button
+												onClick={onStartStopPlay}
+												disabled={
+													!playStarted && (!effContract || !effDeclarer)
+												}
+												className={`w-full mb-1.5 px-2 py-2 rounded-xl border-2 text-[11px] font-extrabold tracking-wide shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+													playStarted
+														? 'border-rose-500 bg-rose-600 text-white shadow-rose-200'
+														: 'border-emerald-500 bg-emerald-600 text-white shadow-emerald-200'
+												}`}>
+												{playStarted ? 'STOP PLAY' : 'START PLAY'}
+											</button>
+											<div className="grid grid-cols-2 gap-1.5 w-full">
+												<button
+													onClick={onPrevStep}
+													disabled={playIdx <= 0}
+													className="px-1.5 py-1.5 rounded-xl border-2 border-rose-200 bg-rose-50/80 text-rose-800 text-[10px] leading-tight font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+													Back One Card
+												</button>
+												<button
+													onClick={onNextStep}
+													disabled={playIdx >= history.length}
+													className="px-1.5 py-1.5 rounded-xl border-2 border-emerald-200 bg-emerald-50/80 text-emerald-800 text-[10px] leading-tight font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+													Forward One Card
+												</button>
+												<button
+													onClick={onBackOneTrick}
+													disabled={playIdx <= 0}
+													className="px-1.5 py-1.5 rounded-xl border-2 border-rose-300 bg-rose-100/80 text-rose-900 text-[10px] leading-tight font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+													Back One Trick
+												</button>
+												<button
+													onClick={onForwardOneTrick}
+													disabled={playIdx >= history.length}
+													className="px-1.5 py-1.5 rounded-xl border-2 border-emerald-300 bg-emerald-100/80 text-emerald-900 text-[10px] leading-tight font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+													Forward One Trick
+												</button>
+											</div>
 										</div>
-									)}
-									{/* Trick badge placed just below auction/contract and visible immediately */}
-									<TrickCounter
-										tricksDecl={tricksDecl}
-										tricksDef={tricksDef}
-										contract={effContract}
-									/>
+									</div>
 								</div>
 								<div className="col-start-1 row-start-2 flex justify-center items-center">
-									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
+									<div className="w-[272px] h-[324px] md:w-[292px] md:h-[344px]">
 										<SeatPanel
 											id="W"
 											highlight={teacherFocus}
@@ -1992,11 +2223,16 @@ export default function Player() {
 											openingLeadPulse={
 												openingLeadPulse && openingLeader === 'W'
 											}
+											trumpSuit={effTrump}
+											trumpSide={getDummyTrumpSide('W')}
+											displaySuitOrder={getDisplaySuitOrder('W')}
+											isDummy={dummySeat === 'W'}
+											compact={compactPlay}
 										/>
 									</div>
 								</div>
 								<div className="col-start-3 row-start-2 flex justify-center items-center">
-									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
+									<div className="w-[272px] h-[324px] md:w-[292px] md:h-[344px]">
 										<SeatPanel
 											id="E"
 											highlight={teacherFocus}
@@ -2020,11 +2256,16 @@ export default function Player() {
 											openingLeadPulse={
 												openingLeadPulse && openingLeader === 'E'
 											}
+											trumpSuit={effTrump}
+											trumpSide={getDummyTrumpSide('E')}
+											displaySuitOrder={getDisplaySuitOrder('E')}
+											isDummy={dummySeat === 'E'}
+											compact={compactPlay}
 										/>
 									</div>
 								</div>
-								<div className="col-start-2 row-start-3 flex flex-col items-center justify-start gap-2">
-									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
+								<div className="col-start-2 row-start-3 -mt-6 md:-mt-7 flex flex-col items-center justify-start gap-2">
+									<div className="w-[272px] h-[324px] md:w-[292px] md:h-[344px]">
 										<SeatPanel
 											id="S"
 											highlight={teacherFocus}
@@ -2048,12 +2289,16 @@ export default function Player() {
 											openingLeadPulse={
 												openingLeadPulse && openingLeader === 'S'
 											}
+											trumpSuit={effTrump}
+											trumpSide={getDummyTrumpSide('S')}
+											displaySuitOrder={getDisplaySuitOrder('S')}
+											isDummy={dummySeat === 'S'}
 											compact={compactPlay}
 										/>
 									</div>
 								</div>
 								<div className="col-start-2 row-start-2 flex items-center justify-center">
-									<div className="w-[240px] h-[240px] md:w-[260px] md:h-[260px]">
+									<div className="w-[220px] h-[220px] md:w-[236px] md:h-[236px]">
 										{/* Central trick overlay: when present, show the completed trick briefly */}
 										{centralTrickOverlay ? (
 											<CrossTrick
@@ -2063,10 +2308,11 @@ export default function Player() {
 												lastAutoPlay={lastAutoPlay}
 												highlight={teacherFocus}
 												openingLeader={null}
+												dissolveCards={false}
 											/>
 										) : (
 											<CrossTrick
-												trick={trick}
+												trick={centerLiveTrick}
 												winner={flashWinner}
 												turnSeat={turnSeat}
 												lastAutoPlay={lastAutoPlay}
@@ -2074,12 +2320,14 @@ export default function Player() {
 												openingLeader={
 													history.length === 0 ? openingLeader : null
 												}
+												dissolveCards={false}
 											/>
 										)}
 									</div>
 								</div>
 							</div>
 						</div>
+
 						{/* South trick pile removed */}
 					</div>
 				)}
