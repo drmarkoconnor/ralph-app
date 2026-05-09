@@ -48,11 +48,10 @@ export default function Instructions() {
 				<section id="player" className="mb-8">
 					<h2 className="text-2xl font-semibold text-gray-800 mb-2">Player</h2>
 					<p className="text-sm text-gray-700 leading-6 mb-3">
-						Load PBN boards, reveal the auction when ready, and step through
-						tricks with a classroom-friendly layout. The Player supports
-						Extended PBN tags, validates auctions, and derives opening leader as
-						right-hand opponent of declarer when needed. Auctions are sanitized
-						to remove annotations (e.g., =1=, $1) and map AP to triple pass.
+						Load PBN boards, teach the auction one call at a time, then play the
+						hand on a large-card classroom table. The Player validates bidding,
+						derives the final contract and opening leader, and lets the teacher
+						reveal hands selectively for discussion.
 					</p>
 					<div className="space-y-3">
 						<div>
@@ -61,29 +60,39 @@ export default function Instructions() {
 							</h3>
 							<ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
 								<li>
-									Use “Choose PBN…” to load. Use Prev/Next for board navigation.
+									Use Load PBN to load a file. The app reads board, dealer,
+									vulnerability, deal and auction.
 								</li>
 								<li>
-									If contract/declarer are missing, set them manually. Opening
-									lead defaults to RHO of declarer (unless Play explicitly
-									specifies a leader).
+									If the auction is legal, the contract and declarer are set
+									automatically. If needed, the teacher can set a manual contract.
 								</li>
 								<li>
-									Keyboard: Left/Right arrow keys step through the timeline
-									(when Play or PlayScript is present).
+									Opening lead defaults to right-hand opponent of declarer unless
+									the lesson is later adjusted to use another contract.
 								</li>
 							</ul>
 						</div>
 						<div>
-							<h3 className="text-lg font-semibold text-gray-800">Auction</h3>
+							<h3 className="text-lg font-semibold text-gray-800">
+								Bidding classroom
+							</h3>
 							<ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
 								<li>
-									Toggle “Reveal Auction” to hide/reveal bidding. In Teacher
-									Focus, auction starts hidden.
+									The auction begins with the dealer hand visible, matching normal
+									bridge perspective.
 								</li>
 								<li>
-									Auctions are sanitized (annotations removed) and shown
-									cleanly; “AP” (All Pass) appears as three passes.
+									Use the N E S W toggles to show or hide any hand while discussing
+									what a call promises.
+								</li>
+								<li>
+									Step through the auction one call at a time, replay it, or show
+									all calls at once.
+								</li>
+								<li>
+									Rewind to a call and continue differently to explore what should
+									happen after an alternative legal bid.
 								</li>
 							</ul>
 						</div>
@@ -91,48 +100,56 @@ export default function Instructions() {
 							<h3 className="text-lg font-semibold text-gray-800">Play</h3>
 							<ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
 								<li>
-									Follow-suit is enforced after the lead. Legal cards highlight
-									accordingly.
+									After Start Play, the table switches to large hands on a green
+									background with the current trick in the centre.
 								</li>
 								<li>
-									On trick completion, the winner briefly flashes before the
-									center clears. Winner leads next.
+									Declarer is visible first; dummy appears after the opening lead.
+									Hidden defenders auto-play unless their hand is revealed.
 								</li>
 								<li>
-									Card Tally lists the played cards in order; the winning card
-									is bold.
-								</li>
-							</ul>
-						</div>
-						<div>
-							<h3 className="text-lg font-semibold text-gray-800">
-								Scoreboard
-							</h3>
-							<ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
-								<li>
-									Declarer/defender trick counts are derived from trick history.
+									Follow-suit is enforced. Only legal cards can be selected when a
+									hand is being played manually.
 								</li>
 								<li>
-									If PBN includes Result/Score, those are displayed even if play
-									is partial.
-								</li>
-								<li>
-									“Defenders to defeat” shows how many tricks are needed to set.
+									The winning card is highlighted in the central trick display, and
+									the previous trick remains visible in the Last Trick panel.
 								</li>
 							</ul>
 						</div>
 						<div>
 							<h3 className="text-lg font-semibold text-gray-800">
-								Teacher Focus
+								Keyboard controls
 							</h3>
 							<ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
 								<li>
-									Dims everything except hands and the current trick. The trick
-									panel moves above North.
+									Right Arrow steps forward through bidding or play.
 								</li>
 								<li>
-									Metadata, auction, and controls above the cards are hidden.
-									Use the floating “Exit Focus” to leave.
+									Left Arrow steps back through bidding or undoes one card in play.
+								</li>
+								<li>
+									Space reveals the whole auction before play, and toggles all
+									hands visible during play.
+								</li>
+								<li>
+									R replays the auction before play, or restarts the hand during
+									play.
+								</li>
+							</ul>
+						</div>
+						<div>
+							<h3 className="text-lg font-semibold text-gray-800">
+								Current limits
+							</h3>
+							<ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
+								<li>
+									Changed auctions are temporary for the lesson; export of edited
+									auctions is planned for a later version.
+								</li>
+								<li>
+									ACOL convention settings are planned, but the current priority is
+									a clear classroom visual workflow.
 								</li>
 							</ul>
 						</div>
@@ -278,26 +295,17 @@ export default function Instructions() {
 						<li>
 							If buttons are disabled, check that a selection exists (for Send)
 							or that at least one hand is saved (for PBN).
-							<li>
-								For deterministic boards, place all 52 cards manually before
-								saving.
-							</li>
-							<li>
-								Handout PDF includes a Makeable Contracts grid computed via a
-								WASM double-dummy solver.
-							</li>
 						</li>
 						<li>
 							For deterministic boards, place all 52 cards manually before
 							saving.
 						</li>
 						<li>
-							Player supports keyboard stepping with ←/→ when a timeline (Play
-							or PlayScript) is available.
+							Handout PDF includes a Makeable Contracts grid computed via a WASM
+							double-dummy solver.
 						</li>
 						<li>
-							In Teacher Focus, use the floating “Exit Focus” control to leave
-							focus mode quickly.
+							Player supports keyboard stepping with ←/→ for auction and play.
 						</li>
 					</ul>
 				</section>
@@ -322,4 +330,3 @@ export default function Instructions() {
 		</div>
 	)
 }
-

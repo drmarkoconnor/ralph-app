@@ -31,7 +31,7 @@ export default function Home() {
 						</Link>
 						<Link
 							to="/player"
-							className="px-5 py-3 rounded-xl bg-fuchsia-600 text-white shadow hover:bg-fuchsia-700">
+							className="px-5 py-3 rounded-xl bg-emerald-700 text-white shadow hover:bg-emerald-800">
 							PBN Player
 						</Link>
 						<Link
@@ -49,4 +49,3 @@ export default function Home() {
 		</div>
 	)
 }
-
