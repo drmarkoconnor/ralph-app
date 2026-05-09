@@ -1,196 +1,132 @@
-import React from 'react'
 import { Link } from 'react-router-dom'
 
 export default function PlayerHelp() {
 	return (
-		<div className="max-w-4xl mx-auto p-6 space-y-6 text-sm">
-			<div className="flex justify-between items-center">
-				<h1 className="text-2xl font-semibold">Player Page Guide</h1>
-				<Link to="/player" className="text-sky-600 hover:underline text-sm">
-					← Back to Player
+		<div className="mx-auto max-w-4xl space-y-6 p-6 text-sm">
+			<div className="flex items-center justify-between gap-4">
+				<h1 className="text-2xl font-semibold">Ralph Player Guide</h1>
+				<Link to="/player" className="text-sm text-sky-600 hover:underline">
+					Back to Player
 				</Link>
 			</div>
-			<p className="text-gray-700">
-				Quick tour of how the player works: load a deal, plan, then play with
-				friendly guidance.
+
+			<p className="leading-6 text-gray-700">
+				The Player is designed for a bridge teacher presenting to a room. It
+				loads a PBN, lets you teach the auction one call at a time, then moves
+				into a large-card play table with simple keyboard stepping.
 			</p>
+
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">1. Loading a Deal</h2>
-				<ul className="list-disc ml-5 space-y-1">
-					<li>Pick a PBN file. We read the board info, hands, and auction.</li>
+				<h2 className="text-lg font-semibold">1. Load A PBN</h2>
+				<ul className="ml-5 list-disc space-y-1 text-gray-700">
+					<li>Use Load PBN to choose a local .pbn file.</li>
+					<li>The player reads board, dealer, vulnerability, deal and auction.</li>
 					<li>
-						If the auction is legal we set the contract + declarer
-						automatically. If not, you can type a contract.
+						If the auction is legal, the contract and declarer are derived
+						automatically.
 					</li>
 					<li>
-						If no play record is present you play it out manually (that’s the
-						main mode).
-					</li>
-					<li>We set who leads and clear the first trick area.</li>
-				</ul>
-			</section>
-			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">2. Pre‑Play Planning</h2>
-				<p>
-					Shows up after we know declarer + dummy and before the first card. You
-					must fill it out before playing.
-				</p>
-				<ul className="list-disc ml-5 space-y-1">
-					<li>
-						<strong>Sure winners</strong>: Aces count. A king usually counts if
-						you have at least two cards there. A queen sometimes counts if you
-						have length + a higher honor.
-					</li>
-					<li>
-						<strong>Likely losers</strong>: Look at the top 3 cards in a suit;
-						any spot without A/K/Q usually risks a loser.
-					</li>
-					<li>
-						Your numbers are checked vs a simple reference. Close = “good”,
-						kinda close = “neutral”, way off = “bad”.
-					</li>
-					<li>
-						You also get a <strong>Partnership Snapshot</strong>: HCP, shapes,
-						trump fit, longest side suits, problem suits, entry hints.
-					</li>
-					<li>
-						The goal: know how many tricks you already own and which suits need
-						work.
+						If you change the auction, the app warns that the resulting
+						contract, trump suit, declarer and opening leader will be updated.
 					</li>
 				</ul>
 			</section>
+
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">3. Table Layout</h2>
-				<ul className="list-disc ml-5 space-y-1">
+				<h2 className="text-lg font-semibold">2. Bidding Classroom</h2>
+				<ul className="ml-5 list-disc space-y-1 text-gray-700">
+					<li>The auction starts with the dealer hand visible by default.</li>
 					<li>
-						Hands shown in a cross: North top, South bottom, West left, East
-						right; center panel shows current trick.
+						Use the N E S W buttons to reveal or hide any hand. Each button is a
+						true toggle.
 					</li>
 					<li>
-						Auction and contract stay visible during play, with the final
-						auction call highlighted and declarer always shown.
+						Step through the PBN auction one call at a time, or show the whole
+						auction when the class is ready.
 					</li>
 					<li>
-						North/South headers tinted to emphasize the partnership vertically.
+						To explore alternatives, rewind to a call and continue with a
+						different legal call.
 					</li>
 					<li>
-						Legal play enforcement: When following suit is possible, only those
-						suit buttons are enabled.
+						The bidding editor enforces bridge legality while still allowing
+						poor judgement bids for teaching.
 					</li>
 				</ul>
 			</section>
+
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">4. Auto Defenders (if Hidden)</h2>
-				<ul className="list-disc ml-5 space-y-1">
+				<h2 className="text-lg font-semibold">3. Moving Into Play</h2>
+				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>
-						If defenders are hidden, their plays are chosen automatically using
-						a light heuristic:
+						Confirm the auction when Ralph is happy with the final teaching
+						contract.
 					</li>
 					<li>
-						<em>Lead / No lead yet</em>: Prefer length suit (non-trump) and lead
-						lowest spot (Basic), or slightly more distribution aware
-						(Intermediate).
+						Start Play moves to a green table with all four hand positions in
+						view.
 					</li>
 					<li>
-						<em>Following suit</em>: Lowest card normally unless a cheap winning
-						attempt exists.
+						The default classroom view shows declarer first; dummy appears after
+						the opening lead.
 					</li>
 					<li>
-						<em>Partner winning</em>: Usually play lowest card to encourage
-						(variant depends on signal mode).
+						Defenders remain hidden and auto-play unless Ralph reveals their
+						hand and chooses a card manually.
 					</li>
 				</ul>
 			</section>
+
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">5. Declarer Advice</h2>
-				<p>
-					The advice panel reacts to each card you (declarer or dummy) play:
-				</p>
-				<ul className="list-disc ml-5 space-y-1">
+				<h2 className="text-lg font-semibold">4. Card Play Display</h2>
+				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>
-						<strong>Quality</strong>: good / neutral / bad — judged on ruffs,
-						trump control, and timing.
+						The centre of the table shows the current trick as four physical
+						cards on felt.
 					</li>
 					<li>
-						<strong>Why</strong>: Short reason (we rotate phrases so it doesn’t
-						get stale).
+						The winning card is highlighted when a trick completes; dimmed cards
+						make the losing plays easy to read.
 					</li>
 					<li>
-						<strong>Next</strong>: What to think about now (draw trumps? build a
-						long suit? count entries?).
+						The Last Trick panel keeps the previous completed trick visible for
+						reference without covering the hands.
 					</li>
 					<li>
-						<strong>Principle</strong>: Tiny reminder (like remaining trumps or
-						“short-hand ruff”).
-					</li>
-				</ul>
-				<h3 className="font-semibold">What Triggers Messages?</h3>
-				<ul className="list-disc ml-5 space-y-1">
-					<li>Ruffing in the short trump hand = usually good.</li>
-					<li>Pulling enemy trumps early (when safe) = good.</li>
-					<li>
-						Playing more trumps when they have almost none left = neutral.
-					</li>
-					<li>Switching to a side suit too early = bad.</li>
-					<li>Random discard instead of a useful ruff or plan move = bad.</li>
-				</ul>
-			</section>
-			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">6. Trick History</h2>
-				<ul className="list-disc ml-5 space-y-1">
-					<li>
-						Each completed trick stores seat → card mapping and the winner.
-					</li>
-					<li>
-						Large teaching controls let you go Back One Card, Forward One Card,
-						Back One Trick, and Replay Hand after completion.
-					</li>
-					<li>
-						Navigation rebuilds state deterministically from history so review
-						and step-back stay reliable.
+						Declarer and defence trick counts update from the actual trick
+						history.
 					</li>
 				</ul>
 			</section>
+
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">7. Scoring</h2>
-				<ul className="list-disc ml-5 space-y-1">
+				<h2 className="text-lg font-semibold">5. Keyboard Controls</h2>
+				<ul className="ml-5 list-disc space-y-1 text-gray-700">
+					<li>Right Arrow: next auction call, or auto-play the next card.</li>
+					<li>Left Arrow: previous auction call, or undo one card in play.</li>
+					<li>Up Arrow: reveal or hide the partner of the current teaching hand.</li>
 					<li>
-						Shows declarer, contract, trick counts, and a computed duplicate
-						score once contract & tricks align.
+						Space: show all auction calls before play; during play, toggle all
+						hands visible.
 					</li>
+					<li>R: replay bidding, or restart play from the first trick.</li>
 				</ul>
 			</section>
+
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">8. Roadmap (Planned)</h2>
-				<ul className="list-disc ml-5 space-y-1">
-					<li>Deeper LOSER → CONVERTED tracking.</li>
-					<li>No-trump specific planning adjustments.</li>
-					<li>Probabilistic finesse guidance (low priority).</li>
-					<li>Dark theme toggle & accessibility contrast options.</li>
-				</ul>
-			</section>
-			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">9. Quick Glossary</h2>
-				<ul className="list-disc ml-5 space-y-1">
+				<h2 className="text-lg font-semibold">6. Current Limits</h2>
+				<ul className="ml-5 list-disc space-y-1 text-gray-700">
+					<li>Edited auctions are temporary for the lesson and are not yet exported.</li>
 					<li>
-						<strong>Sure Winner</strong>: Trick you expect to win right now
-						(ace, sometimes supported K/Q).
+						ACOL convention settings are planned for a later version; the
+						current player focuses on visual classroom flow.
 					</li>
 					<li>
-						<strong>Loser</strong>: Trick you’ll probably drop unless you fix it
-						(ruff, finesse, discard).
-					</li>
-					<li>
-						<strong>Ruff</strong>: Win with a trump after you run out of the led
-						suit.
-					</li>
-					<li>
-						<strong>Entry</strong>: Card that lets you reach the other hand’s
-						winners.
+						Player 1 still exists in the codebase as a fallback, but normal app
+						links now open this classroom player.
 					</li>
 				</ul>
 			</section>
 		</div>
 	)
 }
-

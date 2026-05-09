@@ -19,8 +19,9 @@ Ralph lets you:
     (macOS‑reliable), NESW cross layout, and a centered mini makeables grid
   - A Pages handout (.rtf) designed for Apple Pages (one board per page) with
     full metadata
-- Teach and replay deals interactively in the Player screen (step through the
-  auction you set, then play out the cards)
+- Teach and replay deals interactively in the Player screen: step through the
+  auction, reveal hands selectively, then play the hand with large classroom
+  card visuals
 
 Its goal is to reduce prep time and give consistent, well‑explained examples for
 club teaching.
@@ -48,6 +49,8 @@ auction advice applies to PDF if enabled.
    - Assemble, annotate, and save boards.
 2. Player
    - Load boards and walk through auction + play for teaching or self‑study.
+     The current Player is the V2 classroom player; the previous implementation
+     remains in the codebase as an unlinked fallback.
 
 You can prepare at home, then use only the Player view in class.
 
@@ -112,22 +115,33 @@ still discuss the differences if the automated suggestion diverges.)
 
 ## 7. Using the Player for Teaching
 
-1. Load or navigate to the board.
-2. (If you entered an auction) Step through the calls verbally: ask students
-   “Why this bid?”
-3. Reveal hands progressively (optional, depending on your teaching style) or
-   show all to focus on planning.
-4. After the auction, identify declarer and discuss opening lead reasoning.
-5. Play out tricks: encourage planning (count winners / losers) referencing the
-   auction inferences.
+1. Load a PBN file in the Player.
+2. Begin in the Bidding Classroom. The dealer hand is visible by default, and
+   Ralph can toggle N, E, S, and W independently.
+3. Step through the auction one call at a time. Pause after important calls and
+   ask what the call promises before revealing partner or all hands.
+4. If the class wants to explore a different route, rewind the auction and
+   continue with another legal call. The final contract, declarer, trump suit
+   and opening leader update from the edited auction.
+5. Start Play when the contract is settled. The table switches to large card
+   positions, a central current-trick display, and a Last Trick reference panel.
+6. Hidden defenders auto-play. Revealed hands can be played manually, so Ralph
+   can ask the room “What would you play?” before choosing the card.
+
+Keyboard controls:
+
+- Right Arrow: next call or next automatic card.
+- Left Arrow: previous call or undo one card.
+- Up Arrow: reveal/hide partner of the current teaching hand.
+- Space: show all auction calls before play; during play, toggle all hands.
+- R: replay auction or restart play.
 
 Linking auction to play:
 
-- If the auction suggests a major fit: Ask “How does that decide our trump
-  management?”
-- If 1NT sequences: Count sure winners; discuss finesse choices.
-- If partscore: Evaluate whether pushing to game was realistic (using the
-  alternative line probabilities in the PDF handout).
+- If the auction suggests a major fit, ask how that affects trump management.
+- If the sequence suggests no-trumps, count sure winners and discuss entries.
+- If an edited auction changes the contract, compare the opening lead and play
+  priorities against the original PBN line.
 
 ---
 
@@ -226,8 +240,9 @@ extend in spoken teaching if needed.
 
 ## 13. Future Ideas (You Can Request)
 
+- Save/export an edited classroom auction back to PBN
+- Player convention settings such as weak twos, Stayman, transfers and splinters
 - Optional stronger / weaker style toggles for the advisor
-- Convention layer (Stayman / Transfers) as a switch
 - Export to alternate teaching formats (HTML slide deck)
 - In‑app replay of recommended line of play with commentary
 
@@ -293,4 +308,3 @@ Examples that work:
 
 If an Auction is entirely absent, you can set Declarer/Level/Strain manually in
 the sidebar before starting play.
-
