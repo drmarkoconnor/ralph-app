@@ -4,9 +4,11 @@ import { parsePBN, sanitizePBN } from '../lib/pbn'
 import {
 	SEATS,
 	auctionRows,
+	computeDuplicateScore,
 	groupHand,
 	handHcp,
 	isDefender,
+	isSeatVul,
 	partnerOf,
 	selectSimpleDefenderCard,
 	seatName,
@@ -55,24 +57,38 @@ function SeatVisibilityToggles({ visibleSeats, dispatch }) {
 	)
 }
 
-function CardButton({ card, disabled, onClick, overlap = false, stack = false }) {
+function CardButton({
+	card,
+	disabled,
+	onClick,
+	overlap = false,
+	stack = false,
+	playable = false,
+	playableMotion = '',
+}) {
 	const red = card.suit === 'Hearts' || card.suit === 'Diamonds'
 	return (
 		<button
 			disabled={disabled}
 			onClick={onClick}
-			className={`relative flex h-[104px] w-[76px] shrink-0 flex-col items-start justify-between rounded-md border-2 bg-white px-1.5 py-1.5 text-[24px] font-black shadow-[0_10px_18px_rgba(0,0,0,0.44)] ring-1 ring-white/70 transition ${
+			className={`relative flex h-[130px] w-[92px] shrink-0 transform-gpu flex-col items-start justify-between overflow-hidden rounded-lg border-2 bg-[#fffdf7] px-2 py-2 text-[27px] font-black shadow-[0_14px_24px_rgba(0,0,0,0.44)] ring-1 ring-white/70 transition-[transform,box-shadow,filter] duration-150 will-change-transform ${
 				red ? 'border-rose-300 text-rose-700' : 'border-slate-400 text-slate-950'
-			} ${overlap ? '-ml-[39px] first:ml-0' : ''} ${
-				stack ? '-mt-[49px] first:mt-0' : ''
+			} ${overlap ? '-ml-[45px] first:ml-0' : ''} ${
+				stack ? '-mt-[61px] first:mt-0' : ''
 			} ${
-				disabled ? 'opacity-70' : 'hover:-translate-y-1 hover:shadow-xl'
+				playable
+					? `z-40 scale-[1.38] cursor-pointer ring-4 ring-amber-300 shadow-[0_24px_36px_rgba(0,0,0,0.48)] hover:scale-[1.43] ${playableMotion}`
+					: disabled
+						? 'z-10 cursor-default brightness-[0.97] saturate-95'
+						: 'z-20 cursor-pointer hover:-translate-y-2 hover:scale-105 hover:shadow-2xl'
 			}`}>
 			<span className="flex flex-col items-center leading-none">
 				<span>{card.rank}</span>
-				<span className="text-[22px] leading-none">{suitSymbol(card.suit)}</span>
+				<span className="text-[24px] leading-none">{suitSymbol(card.suit)}</span>
 			</span>
-			<span className="self-end text-[38px] leading-none">{suitSymbol(card.suit)}</span>
+			<span className="self-end text-[20px] leading-none opacity-90">
+				{suitSymbol(card.suit)}
+			</span>
 		</button>
 	)
 }
@@ -80,21 +96,46 @@ function CardButton({ card, disabled, onClick, overlap = false, stack = false })
 function CardBack({ overlap = false, side = false }) {
 	return (
 		<div
-			className={`h-[104px] w-[76px] shrink-0 rounded-md border border-slate-400 bg-[repeating-linear-gradient(135deg,#111827_0,#111827_4px,#374151_4px,#374151_8px)] shadow-[0_8px_15px_rgba(0,0,0,0.35)] ring-1 ring-white/35 ${
-				overlap ? (side ? '-mt-[55px] first:mt-0' : '-ml-[39px] first:ml-0') : ''
+			className={`h-[130px] w-[92px] shrink-0 rounded-lg border border-slate-400 bg-[repeating-linear-gradient(135deg,#111827_0,#111827_4px,#374151_4px,#374151_8px)] shadow-[0_10px_20px_rgba(0,0,0,0.38)] ring-1 ring-white/35 ${
+				overlap ? (side ? '-mt-[68px] first:mt-0' : '-ml-[45px] first:ml-0') : ''
 			}`}>
-			<div className="m-1.5 h-[90px] rounded border border-white/30" />
+			<div className="m-2 h-[112px] rounded-md border border-white/30" />
 		</div>
 	)
 }
 
-function HiddenHand({ count = 13 }) {
+function HiddenHand({ count = 13, split = false }) {
+	const indexes = Array.from({ length: count }, (_, index) => index)
+	const rows = split ? [indexes.slice(0, 6), indexes.slice(6)] : [indexes]
 	return (
-		<div className="flex justify-center">
-			{Array.from({ length: count }).map((_, index) => (
-				<CardBack key={index} overlap />
+		<div className={`flex items-center justify-center ${split ? 'flex-col gap-2' : ''}`}>
+			{rows.map((row, rowIndex) => (
+				<div key={rowIndex} className="flex justify-center">
+					{row.map((index) => (
+						<CardBack key={index} overlap />
+					))}
+				</div>
 			))}
 		</div>
+	)
+}
+
+const playableMotionBySeat = {
+	N: 'origin-top translate-y-4 hover:translate-y-5',
+	E: 'origin-right -translate-x-4 hover:-translate-x-5',
+	S: 'origin-bottom -translate-y-4 hover:-translate-y-5',
+	W: 'origin-left translate-x-4 hover:translate-x-5',
+}
+
+function countTricksBySide(tricks, declarer) {
+	return (tricks || []).reduce(
+		(counts, trick) => {
+			if (!trick?.winner || !declarer) return counts
+			if (isDefender(trick.winner, declarer)) counts.defence += 1
+			else counts.declarer += 1
+			return counts
+		},
+		{ declarer: 0, defence: 0 },
 	)
 }
 
@@ -140,6 +181,11 @@ function HandPanel({
 	const isTurn = play?.turnSeat === seat
 	const isPartnership = declarer && (seat === declarer || seat === dummy)
 	const role = seat === declarer ? 'Declarer' : seat === dummy ? 'Dummy' : 'Defender'
+	const isSideSeat = position === 'E' || position === 'W'
+	const cardRows = isSideSeat
+		? [sortedCards.slice(0, 6), sortedCards.slice(6)]
+		: [sortedCards]
+	const playableMotion = playableMotionBySeat[seat] || ''
 
 	return (
 		<section
@@ -162,23 +208,29 @@ function HandPanel({
 			</div>
 			<div className="flex items-center">
 				{visible ? (
-					<div className="flex justify-center">
-						{sortedCards.map((card) => {
-							const legal =
-								isTurn && (!mustFollow || card.suit === leadSuit) && !!onPlay
-							return (
-								<CardButton
-									key={card.id}
-									card={card}
-									disabled={!legal}
-									onClick={() => onPlay(seat, card.id)}
-									overlap
-								/>
-							)
-						})}
+					<div className={`flex items-center justify-center ${isSideSeat ? 'flex-col gap-3' : ''}`}>
+						{cardRows.map((row, rowIndex) => (
+							<div key={rowIndex} className="flex justify-center">
+								{row.map((card) => {
+									const legal =
+										isTurn && (!mustFollow || card.suit === leadSuit) && !!onPlay
+									return (
+										<CardButton
+											key={card.id}
+											card={card}
+											disabled={!legal}
+											onClick={() => onPlay(seat, card.id)}
+											overlap
+											playable={legal}
+											playableMotion={playableMotion}
+										/>
+									)
+								})}
+							</div>
+						))}
 					</div>
 				) : (
-					<HiddenHand count={(cards || []).length || 13} position={position} />
+					<HiddenHand count={(cards || []).length || 13} split={isSideSeat} />
 				)}
 			</div>
 			<footer className="mt-1 rounded bg-slate-950/75 px-2 py-0.5 text-[11px] font-black text-white">
@@ -298,17 +350,9 @@ function BiddingEditor({ dispatch }) {
 	)
 }
 
-function StagePanel({ state, derived, dispatch }) {
+function StagePanel({ state, derived, dispatch, visualPlay }) {
 	if (state.phase === 'play') {
-		return (
-			<TrickPanel
-				play={state.play}
-				completedTricks={state.completedTricks}
-				contract={derived.contract}
-				score={derived.score}
-				declarer={derived.declarer}
-			/>
-		)
+		return <TrickPanel play={visualPlay || state.play} />
 	}
 
 	return (
@@ -366,14 +410,14 @@ function TrickCardSlot({ seat, trick, winner, size = 'md' }) {
 	const dims =
 		size === 'sm'
 			? {
-					card: 'h-[70px] w-[50px]',
-					rank: 'text-xl',
-					suit: 'text-[10px]',
+					card: 'h-[78px] w-[54px]',
+					rank: 'text-2xl',
+					suit: 'text-[11px]',
 					radius: 'rounded-lg',
 				}
 			: {
-					card: 'h-[96px] w-[66px]',
-					rank: 'text-3xl',
+					card: 'h-[108px] w-[74px]',
+					rank: 'text-4xl',
 					suit: 'text-xs',
 					radius: 'rounded-xl',
 				}
@@ -421,7 +465,15 @@ function TrickCardSlot({ seat, trick, winner, size = 'md' }) {
 	)
 }
 
-function CrossTrick({ trick, winner, turnSeat, contract, size = 'md', showStatus = true }) {
+function CrossTrick({
+	trick,
+	winner,
+	turnSeat,
+	contract,
+	size = 'md',
+	showStatus = true,
+	showContract = true,
+}) {
 	const played = (trick || []).length
 	return (
 		<div
@@ -437,7 +489,7 @@ function CrossTrick({ trick, winner, turnSeat, contract, size = 'md', showStatus
 						'repeating-linear-gradient(145deg, rgba(255,255,255,0.65) 0px, rgba(255,255,255,0.65) 1px, transparent 1px, transparent 8px)',
 				}}
 			/>
-			{contract && (
+			{showContract && contract && (
 				<div className="absolute right-2 top-2 rounded-md bg-white/14 px-2 py-0.5 text-xs font-black text-white">
 					{contract}
 				</div>
@@ -463,75 +515,36 @@ function CrossTrick({ trick, winner, turnSeat, contract, size = 'md', showStatus
 	)
 }
 
-function TrickPanel({ play, completedTricks, contract, score, declarer }) {
+function TrickPanel({ play }) {
 	const trick = play?.trick || []
-	const winner =
-		play?.trickComplete && trick.length === 4
-			? completedTricks[completedTricks.length - 1]?.winner
-			: null
+	const winner = play?.visualWinner || null
 	return (
-		<section className="flex w-[310px] flex-col rounded-xl border-2 border-amber-500/70 bg-emerald-950/70 p-2 text-white shadow-[0_18px_40px_rgba(0,0,0,0.34)]">
-			<div className="mb-1 flex items-center justify-between">
-				<div>
-					<h2 className="text-sm font-black">Current Trick</h2>
-					<p className="text-xs font-bold text-emerald-100">
-						{winner ? `Won by ${winner}` : `Turn ${play?.turnSeat || '-'}`}
-					</p>
-				</div>
-				<div className="rounded-md bg-white/15 px-2 py-0.5 text-xs font-black">
-					{contract || '-'}
-				</div>
-			</div>
-
-			<div className="mx-auto h-[270px] w-[270px]">
+		<section className="flex w-[328px] flex-col rounded-2xl border-2 border-amber-500/70 bg-emerald-950/62 p-2 text-white shadow-[0_18px_40px_rgba(0,0,0,0.34)]">
+			<div className="mx-auto h-[306px] w-[306px]">
 				<CrossTrick
 					trick={trick}
 					winner={winner}
 					turnSeat={play?.turnSeat}
-					contract={contract}
+					contract={null}
+					showContract={false}
 				/>
 			</div>
-
-			<div className="mt-1 grid grid-cols-3 gap-1 text-center text-[10px]">
-				<div className="rounded-md bg-white/10 p-1 shadow-inner">
-					<div className="text-emerald-100">Declarer</div>
-					<div className="text-lg font-black">{play?.tricksDecl || 0}</div>
-				</div>
-				<div className="rounded-md bg-white/10 p-1 shadow-inner">
-					<div className="text-emerald-100">Defence</div>
-					<div className="text-lg font-black">{play?.tricksDef || 0}</div>
-				</div>
-				<div className="rounded-md bg-white/10 p-1 shadow-inner">
-					<div className="text-emerald-100">Done</div>
-					<div className="text-lg font-black">{completedTricks.length}</div>
-				</div>
-			</div>
-			{score && !score.partial && (
-				<div className="mt-1 rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-semibold">
-					Score {score.score} ({score.resultText})
-				</div>
-			)}
-			{declarer && (
-				<div className="mt-1 text-center text-[10px] font-semibold text-emerald-100">
-					Declarer {declarer}
-				</div>
-			)}
 		</section>
 	)
 }
 
 function LastTrickPanel({ trick }) {
 	return (
-		<aside className="w-[198px] rounded-xl border border-white/55 bg-white/88 p-2 shadow-2xl backdrop-blur">
+		<aside className="w-[238px] rounded-2xl border-2 border-amber-400/70 bg-emerald-950/82 p-2 text-white shadow-2xl backdrop-blur">
 			<div className="mb-1 flex items-center justify-between">
-				<h2 className="text-xs font-black uppercase tracking-wide text-slate-700">
+				<h2 className="text-xs font-black uppercase tracking-wide text-amber-100">
 					Last Trick
 				</h2>
-				<div className="rounded-md bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white">
+				<div className="rounded-md bg-amber-300 px-2 py-0.5 text-[10px] font-black text-slate-950">
 					{trick?.winner ? `To ${trick.winner}` : '-'}
 				</div>
 			</div>
-			<div className="h-[170px] w-full">
+			<div className="h-[198px] w-full">
 				{trick ? (
 					<CrossTrick
 						trick={trick.cards}
@@ -541,10 +554,69 @@ function LastTrickPanel({ trick }) {
 						showStatus={false}
 					/>
 				) : (
-					<div className="flex h-full items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 text-center text-xs font-bold text-slate-500">
+					<div className="flex h-full items-center justify-center rounded-2xl border-2 border-dashed border-white/28 bg-white/8 text-center text-xs font-bold text-emerald-100">
 						No previous trick
 					</div>
 				)}
+			</div>
+		</aside>
+	)
+}
+
+function PlayStatusPanel({ state, derived, settledTrickCount }) {
+	const shownTricks = (state.completedTricks || []).slice(0, settledTrickCount)
+	const counts = countTricksBySide(shownTricks, derived.declarer)
+	const liveScore =
+		derived.contract && derived.declarer
+			? computeDuplicateScore(
+					derived.contract,
+					derived.declarer,
+					isSeatVul(derived.declarer, state.board?.vul),
+					counts.declarer,
+				)
+			: null
+	return (
+		<aside className="w-[238px] rounded-2xl border-2 border-amber-400/70 bg-emerald-950/82 p-3 text-white shadow-2xl backdrop-blur">
+			<div className="flex items-start justify-between gap-2">
+				<div>
+					<div className="text-xs font-black uppercase tracking-wide text-amber-100">
+						Contract
+					</div>
+					<div className="text-[44px] font-black leading-none text-white">
+						{derived.contract || '-'}
+					</div>
+					<div className="mt-1 text-xs font-bold text-emerald-100">
+						Declarer {derived.declarer || '-'}
+					</div>
+				</div>
+				<div className="rounded-xl bg-amber-300 px-2 py-1 text-center text-slate-950">
+					<div className="text-[10px] font-black uppercase tracking-wide">Done</div>
+					<div className="text-2xl font-black leading-none">{settledTrickCount}</div>
+				</div>
+			</div>
+
+			<div className="mt-3 grid grid-cols-2 gap-2 text-center">
+				<div className="rounded-xl bg-white/10 p-2 shadow-inner">
+					<div className="text-[10px] font-black uppercase tracking-wide text-emerald-100">
+						Decl
+					</div>
+					<div className="text-3xl font-black leading-none">{counts.declarer}</div>
+				</div>
+				<div className="rounded-xl bg-white/10 p-2 shadow-inner">
+					<div className="text-[10px] font-black uppercase tracking-wide text-emerald-100">
+						Def
+					</div>
+					<div className="text-3xl font-black leading-none">{counts.defence}</div>
+				</div>
+			</div>
+
+			<div className="mt-2 rounded-xl bg-white/10 px-3 py-2 shadow-inner">
+				<div className="text-[10px] font-black uppercase tracking-wide text-emerald-100">
+					Live Result
+				</div>
+				<div className="text-2xl font-black leading-tight">
+					{liveScore && !liveScore.partial ? liveScore.resultText : '-'}
+				</div>
 			</div>
 		</aside>
 	)
@@ -719,12 +791,48 @@ function TableSurface({
 	onPlay,
 	dispatch,
 }) {
-	const lastTrickIndex =
-		state.phase === 'play' && state.play?.trickComplete
-			? state.completedTricks.length - 2
-			: state.completedTricks.length - 1
+	const completedCount = state.completedTricks.length
+	const [settledTrickCount, setSettledTrickCount] = useState(0)
+	useEffect(() => {
+		if (state.phase !== 'play' || completedCount === 0) {
+			setSettledTrickCount(0)
+			return undefined
+		}
+		if (completedCount < settledTrickCount) {
+			setSettledTrickCount(completedCount)
+			return undefined
+		}
+		if (state.play?.trickComplete && completedCount > settledTrickCount) {
+			const timer = window.setTimeout(() => {
+				setSettledTrickCount(completedCount)
+			}, 500)
+			return () => window.clearTimeout(timer)
+		}
+		if (!state.play?.trickComplete && completedCount > settledTrickCount) {
+			setSettledTrickCount(completedCount)
+		}
+		return undefined
+	}, [state.phase, state.play?.trickComplete, completedCount, settledTrickCount])
+	const visibleSettledTrickCount = Math.min(settledTrickCount, completedCount)
 	const lastTrick =
-		lastTrickIndex >= 0 ? state.completedTricks[lastTrickIndex] : null
+		visibleSettledTrickCount > 0
+			? state.completedTricks[visibleSettledTrickCount - 1]
+			: null
+	const latestWinner =
+		state.play?.trickComplete && completedCount > 0
+			? state.completedTricks[completedCount - 1]?.winner
+			: null
+	const showClearedTrick =
+		state.phase === 'play' &&
+		state.play?.trickComplete &&
+		completedCount > 0 &&
+		visibleSettledTrickCount >= completedCount
+	const visualPlay =
+		state.play && showClearedTrick
+			? { ...state.play, trick: [], trickComplete: false, visualWinner: null }
+			: state.play
+				? { ...state.play, visualWinner: latestWinner }
+				: null
 	const common = (seat) => ({
 		seat,
 		position: seat,
@@ -762,11 +870,25 @@ function TableSurface({
 					<HandPanel {...common('S')} />
 				</div>
 				<div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
-					<StagePanel state={state} derived={derived} dispatch={dispatch} />
+					<StagePanel
+						state={state}
+						derived={derived}
+						dispatch={dispatch}
+						visualPlay={visualPlay}
+					/>
 				</div>
 				{state.phase === 'play' && (
-					<div className="absolute left-4 top-[18%] z-10 origin-top-left scale-90 lg:left-[calc(50%-540px)] lg:scale-100">
+					<div className="absolute left-0 top-0 z-10">
 						<LastTrickPanel trick={lastTrick} />
+					</div>
+				)}
+				{state.phase === 'play' && (
+					<div className="absolute right-0 top-0 z-10">
+						<PlayStatusPanel
+							state={state}
+							derived={derived}
+							settledTrickCount={visibleSettledTrickCount}
+						/>
 					</div>
 				)}
 			</div>
