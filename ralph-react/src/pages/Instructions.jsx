@@ -321,8 +321,8 @@ export default function Instructions() {
 						Enhancement requests:{' '}
 						<a
 							className="text-sky-600 hover:underline"
-							href="mailto:dr.mark.oconnor@googlemail.com">
-							dr.mark.oconnor@googlemail.com
+							href="mailto:bridge@markoconnor.ai">
+							bridge@markoconnor.ai
 						</a>
 					</div>
 				</footer>

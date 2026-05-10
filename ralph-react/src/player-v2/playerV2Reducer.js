@@ -211,6 +211,8 @@ export function playerV2Reducer(state, action) {
 		}
 		case 'RESET':
 			return initialPlayerV2State
+		case 'SET_STATUS':
+			return { ...state, status: action.status || '' }
 		case 'GO_BOARD': {
 			const index = Math.max(0, Math.min(state.deals.length - 1, action.index))
 			return {

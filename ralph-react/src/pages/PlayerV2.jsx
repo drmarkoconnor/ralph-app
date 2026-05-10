@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { parsePBN, sanitizePBN } from '../lib/pbn'
+import { BoardZ } from '../schemas/board'
+import { exportBoardPBN } from '../pbn/export'
 import {
 	SEATS,
 	auctionRows,
@@ -20,10 +22,112 @@ import {
 	playerV2Reducer,
 } from '../player-v2/playerV2Reducer'
 
+const PLAYER_HANDOFF_KEY = 'ralph-player-handoff-v1'
+
+function todayPbnDate() {
+	const now = new Date()
+	const yyyy = now.getFullYear()
+	const mm = String(now.getMonth() + 1).padStart(2, '0')
+	const dd = String(now.getDate()).padStart(2, '0')
+	return `${yyyy}.${mm}.${dd}`
+}
+
+function todayFileDate() {
+	const now = new Date()
+	const yyyy = now.getFullYear()
+	const mm = String(now.getMonth() + 1).padStart(2, '0')
+	const dd = String(now.getDate()).padStart(2, '0')
+	return `${yyyy}${mm}${dd}`
+}
+
+function downloadText(content, filename, type = 'text/plain') {
+	const blob = new Blob([content], { type })
+	const url = URL.createObjectURL(blob)
+	const a = document.createElement('a')
+	a.href = url
+	a.download = filename
+	a.click()
+	URL.revokeObjectURL(url)
+}
+
+function normalizePbnDate(value) {
+	const text = String(value || '').trim()
+	if (/^\d{4}\.\d{2}\.\d{2}$/.test(text)) return text
+	if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text.replace(/-/g, '.')
+	return todayPbnDate()
+}
+
+function suitKeyFromName(suit) {
+	if (suit === 'Spades') return 'S'
+	if (suit === 'Hearts') return 'H'
+	if (suit === 'Diamonds') return 'D'
+	return 'C'
+}
+
+function rankToPbn(rank) {
+	return rank === '10' ? 'T' : String(rank || '').toUpperCase()
+}
+
+function handsToBoardShapeHands(hands) {
+	const empty = { S: [], H: [], D: [], C: [] }
+	const order = { A: 0, K: 1, Q: 2, J: 3, T: 4, 9: 5, 8: 6, 7: 7, 6: 8, 5: 9, 4: 10, 3: 11, 2: 12 }
+	return Object.fromEntries(
+		SEATS.map((seat) => {
+			const bySuit = { S: [], H: [], D: [], C: [] }
+			for (const card of hands?.[seat] || []) {
+				bySuit[suitKeyFromName(card.suit)].push(rankToPbn(card.rank))
+			}
+			for (const suit of Object.keys(bySuit)) {
+				bySuit[suit].sort((a, b) => order[a] - order[b])
+			}
+			return [seat, hands?.[seat] ? bySuit : empty]
+		}),
+	)
+}
+
+function contractShape(contract) {
+	const match = String(contract || '').toUpperCase().match(/^([1-7])(C|D|H|S|NT)(XX|X)?$/)
+	if (!match) return undefined
+	return {
+		level: Number(match[1]),
+		strain: match[2],
+		dbl: match[3] || '',
+	}
+}
+
+function playerStateToBoardShape(state, derived) {
+	const contract = contractShape(derived.contract)
+	const declarer = SEATS.includes(derived.declarer) ? derived.declarer : undefined
+	const auction = state.auction?.calls?.length
+		? state.auction.calls.map((call) => String(call).toUpperCase())
+		: undefined
+	const ext = state.board?.ext || {}
+	return {
+		event: ext.Event || state.selectedName || 'Bridge Hand Player',
+		site: ext.Site || 'Bristol Bridge Club',
+		date: normalizePbnDate(ext.Date),
+		board: Number(state.board?.board) || state.index + 1,
+		dealer: state.board?.dealer || 'N',
+		vul: state.board?.vul || 'None',
+		dealPrefix: String(state.board?.deal || '').match(/^([NESW]):/)?.[1] || state.board?.dealer || 'N',
+		hands: handsToBoardShapeHands(state.hands),
+		contract,
+		declarer,
+		auctionStart: auction?.length ? state.auction?.dealer || state.board?.auctionDealer || state.board?.dealer || 'N' : undefined,
+		auction,
+		notes: ext.Note ? [ext.Note] : [],
+		ext: {
+			system: ext.System || '',
+			theme: ext.Theme || '',
+			scoring: ext.Scoring === 'IMPs' ? 'IMPs' : ext.Scoring === 'MPs' ? 'MPs' : undefined,
+		},
+	}
+}
+
 function FilePrompt({ onPick }) {
 	return (
 		<div className="mx-auto mt-16 w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 text-center shadow-sm">
-			<h1 className="text-xl font-semibold text-slate-900">Ralph Player</h1>
+			<h1 className="text-xl font-semibold text-slate-900">Bridge Hand Player</h1>
 			<p className="mt-2 text-sm text-slate-600">
 				Load a PBN to step through the auction, confirm the contract, then play
 				the hand.
@@ -63,6 +167,7 @@ function CardButton({
 	onClick,
 	overlap = false,
 	stack = false,
+	spreadHand = false,
 	playable = false,
 	playableMotion = '',
 }) {
@@ -73,11 +178,11 @@ function CardButton({
 			onClick={onClick}
 			className={`relative flex h-[130px] w-[92px] shrink-0 transform-gpu flex-col items-start justify-between overflow-hidden rounded-lg border-2 bg-[#fffdf7] px-2 py-2 text-[27px] font-black shadow-[0_14px_24px_rgba(0,0,0,0.44)] ring-1 ring-white/70 transition-[transform,box-shadow,filter] duration-150 will-change-transform ${
 				red ? 'border-rose-300 text-rose-700' : 'border-slate-400 text-slate-950'
-			} ${overlap ? '-ml-[45px] first:ml-0' : ''} ${
-				stack ? '-mt-[61px] first:mt-0' : ''
+			} ${overlap ? `${spreadHand ? '-ml-[28px]' : '-ml-[45px]'} first:ml-0` : ''} ${
+				stack ? `${spreadHand ? '-mt-[34px]' : '-mt-[61px]'} first:mt-0` : ''
 			} ${
 				playable
-					? `z-40 scale-[1.38] cursor-pointer ring-4 ring-amber-300 shadow-[0_24px_36px_rgba(0,0,0,0.48)] hover:scale-[1.43] ${playableMotion}`
+					? `z-40 scale-[1.14] cursor-pointer ring-4 ring-amber-300 shadow-[0_24px_36px_rgba(0,0,0,0.48)] hover:scale-[1.2] ${playableMotion}`
 					: disabled
 						? 'z-10 cursor-default brightness-[0.97] saturate-95'
 						: 'z-20 cursor-pointer hover:-translate-y-2 hover:scale-105 hover:shadow-2xl'
@@ -237,6 +342,7 @@ function HandPanel({
 		[grouped],
 	)
 	const isTurn = play?.turnSeat === seat
+	const spreadHand = visible && isTurn
 	const isPartnership = declarer && (seat === declarer || seat === dummy)
 	const role = seat === declarer ? 'Declarer' : seat === dummy ? 'Dummy' : 'Defender'
 	const isSideSeat = position === 'E' || position === 'W'
@@ -284,6 +390,7 @@ function HandPanel({
 											overlap
 											playable={legal}
 											playableMotion={playableMotion}
+											spreadHand={spreadHand}
 										/>
 									)
 								})}
@@ -733,16 +840,34 @@ function ManualContractControls({ manual, dispatch }) {
 	)
 }
 
-function Controls({ state, derived, dispatch, onPick }) {
+function Controls({
+	state,
+	derived,
+	dispatch,
+	onPick,
+	onSavePbn,
+	returnPath,
+}) {
 	const hasAuction = derived.auctionCalls.length > 0
 	return (
 		<aside className="mx-auto flex h-16 w-full max-w-[1420px] items-center gap-4 overflow-visible rounded-xl border border-white/50 bg-white/90 p-2 shadow-2xl backdrop-blur">
-			<div className="flex w-[140px] shrink-0 items-center justify-between gap-2">
+			<div className="flex w-[258px] shrink-0 items-center justify-between gap-2">
 				<Link to="/player/help" className="text-xs font-semibold text-sky-700 hover:underline">
 					Guide
 				</Link>
+				{returnPath && (
+					<Link to={returnPath} className="rounded-md bg-white px-2 py-1 text-xs font-semibold shadow-sm">
+						Back
+					</Link>
+				)}
 				<button onClick={onPick} className="rounded-md bg-white px-2 py-1 text-xs font-semibold shadow-sm">
 					Load PBN
+				</button>
+				<button
+					onClick={onSavePbn}
+					disabled={!state.board}
+					className="rounded-md bg-white px-2 py-1 text-xs font-semibold shadow-sm disabled:opacity-40">
+					Save PBN
 				</button>
 			</div>
 			<div className="w-[150px] shrink-0">
@@ -1021,6 +1146,8 @@ export default function PlayerV2() {
 	const [state, dispatch] = useReducer(playerV2Reducer, initialPlayerV2State)
 	const [dismissedEndKey, setDismissedEndKey] = useState('')
 	const [visibleEndKey, setVisibleEndKey] = useState('')
+	const [returnPath, setReturnPath] = useState('')
+	const [isFullscreen, setIsFullscreen] = useState(false)
 	const fileRef = useRef(null)
 	const audioProgressRef = useRef({ historyLength: 0, completedLength: 0 })
 	const derived = getPlayerV2Derived(state)
@@ -1050,15 +1177,67 @@ export default function PlayerV2() {
 		reader.onload = () => {
 			const parsed = parsePBN(sanitizePBN(String(reader.result)))
 			dispatch({ type: 'LOAD_DEALS', deals: parsed, name: file.name })
+			setReturnPath('')
 			if (fileRef.current) fileRef.current.value = ''
 		}
 		reader.readAsText(file)
+	}
+
+	const saveCurrentBoardPbn = async () => {
+		if (!state.board || !state.hands) return
+		try {
+			const parsed = BoardZ.parse(playerStateToBoardShape(state, derived))
+			const pbn = await exportBoardPBN(parsed, { dealer4Mode: false })
+			const boardNo = parsed.board || state.index + 1
+			downloadText(pbn, `ralph-player-board-${boardNo}-${todayFileDate()}.pbn`)
+			dispatch({ type: 'SET_STATUS', status: `Downloaded board ${boardNo} as PBN.` })
+		} catch (error) {
+			console.error('Player PBN export failed', error)
+			dispatch({ type: 'SET_STATUS', status: 'PBN export failed. Check the current auction and contract.' })
+		}
+	}
+
+	const toggleFullscreen = async () => {
+		try {
+			if (document.fullscreenElement) {
+				await document.exitFullscreen()
+				return
+			}
+			await document.documentElement.requestFullscreen()
+		} catch (error) {
+			console.error('Fullscreen request failed', error)
+			dispatch({ type: 'SET_STATUS', status: 'Fullscreen is not available in this browser window.' })
+		}
 	}
 
 	const seatIsVisible = useCallback(
 		(seat) => (state.visibleSeats || []).includes(seat),
 		[state.visibleSeats],
 	)
+
+	useEffect(() => {
+		const raw = window.sessionStorage.getItem(PLAYER_HANDOFF_KEY)
+		if (!raw) return
+		try {
+			const payload = JSON.parse(raw)
+			const parsed = parsePBN(sanitizePBN(payload.pbn || ''))
+			if (parsed.length) {
+				dispatch({ type: 'LOAD_DEALS', deals: parsed, name: payload.name || 'Generator handoff' })
+				setReturnPath(payload.sourcePath || '')
+			}
+		} catch (error) {
+			console.error('Player handoff failed', error)
+		} finally {
+		window.sessionStorage.removeItem(PLAYER_HANDOFF_KEY)
+		}
+	}, [])
+
+	useEffect(() => {
+		const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement)
+		onFullscreenChange()
+		document.addEventListener('fullscreenchange', onFullscreenChange)
+		return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+	}, [])
 
 	useEffect(() => {
 		if (!endResultKey) {
@@ -1240,15 +1419,25 @@ export default function PlayerV2() {
 			<header className="h-10 border-b border-emerald-900/40 bg-white/95">
 				<div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4">
 					<div>
-						<div className="text-base font-black">Ralph Player</div>
+						<div className="text-base font-black">Bridge Hand Player</div>
 						<div className="text-xs font-medium text-slate-500">
 							{state.selectedName || 'No file loaded'}
 						</div>
 					</div>
 					<div className="flex items-center gap-2">
+						{returnPath && (
+							<Link to={returnPath} className="text-sm font-semibold text-sky-700 hover:underline">
+								Back to Generator
+							</Link>
+						)}
 						<Link to="/" className="text-sm font-semibold text-sky-700 hover:underline">
 							Home
 						</Link>
+						<button
+							onClick={toggleFullscreen}
+							className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold">
+							{isFullscreen ? 'Window' : 'Fullscreen'}
+						</button>
 						<button
 							onClick={() => dispatch({ type: 'RESET' })}
 							className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold">
@@ -1268,6 +1457,8 @@ export default function PlayerV2() {
 							derived={derived}
 							dispatch={dispatch}
 							onPick={() => fileRef.current?.click()}
+							onSavePbn={saveCurrentBoardPbn}
+							returnPath={returnPath}
 						/>
 					</div>
 					<TableSurface

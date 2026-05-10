@@ -4,7 +4,7 @@ export default function PlayerHelp() {
 	return (
 		<div className="mx-auto max-w-4xl space-y-6 p-6 text-sm">
 			<div className="flex items-center justify-between gap-4">
-				<h1 className="text-2xl font-semibold">Ralph Player Guide</h1>
+				<h1 className="text-2xl font-semibold">Bridge Hand Player Guide</h1>
 				<Link to="/player" className="text-sm text-sky-600 hover:underline">
 					Back to Player
 				</Link>
