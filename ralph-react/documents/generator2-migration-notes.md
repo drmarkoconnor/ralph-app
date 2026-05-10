@@ -18,6 +18,6 @@ The old generator should not be copied feature-for-feature unless there is a spe
 
 ## Current Direction
 
-- Keep Generator 2 focused on board generation, review, quick manual entry, optional auction suggestions, PBN export, PDF aide memoire export, and direct handoff to Player 2.
+- Keep Generator 2 focused on board generation, review, quick manual entry, optional auction suggestions, PBN export, PDF aide memoire export, and direct handoff to Bridge Hand Player.
 - Prefer simple controls and reversible choices.
-- Let Player 2 remain the place for auction correction and play-through decisions.
+- Let Bridge Hand Player remain the place for auction correction and play-through decisions.
