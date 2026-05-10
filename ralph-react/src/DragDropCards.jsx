@@ -1608,7 +1608,7 @@ export default function DragDropCards({ meta, setMeta }) {
 				"PBN hands from Bristol Bridge Club's PBN Picker",
 			)
 			const body = encodeURIComponent(pbn)
-			window.location.href = `mailto:dr.mark.oconnor@googlemail.com?subject=${subject}&body=${body}`
+			window.location.href = `mailto:bridge@markoconnor.ai?subject=${subject}&body=${body}`
 		} catch (e) {
 			console.error('Email export failed', e)
 		}
@@ -3140,4 +3140,3 @@ export default function DragDropCards({ meta, setMeta }) {
 
 // Confirmation Modal for delete (restored)
 // Keep outside main return to avoid accidental duplication; rendered where state lives above.
-
