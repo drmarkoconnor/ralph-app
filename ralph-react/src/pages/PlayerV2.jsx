@@ -158,6 +158,50 @@ function rankFromKey(event) {
 	return ''
 }
 
+let bridgeAudioContext = null
+
+function primeBridgeAudio() {
+	if (typeof window === 'undefined') return null
+	const AudioContextCtor = window.AudioContext || window.webkitAudioContext
+	if (!AudioContextCtor) return null
+	if (!bridgeAudioContext) bridgeAudioContext = new AudioContextCtor()
+	if (bridgeAudioContext.state === 'suspended') {
+		bridgeAudioContext.resume().catch(() => {})
+	}
+	return bridgeAudioContext
+}
+
+function playBridgeNotes(notes, { type = 'sine', duration = 0.1, gap = 0.035, gain = 0.035 } = {}) {
+	const context = primeBridgeAudio()
+	if (!context) return
+	const now = context.currentTime
+	notes.forEach((frequency, index) => {
+		const start = now + index * (duration + gap)
+		const oscillator = context.createOscillator()
+		const gainNode = context.createGain()
+		oscillator.type = type
+		oscillator.frequency.setValueAtTime(frequency, start)
+		gainNode.gain.setValueAtTime(0.0001, start)
+		gainNode.gain.exponentialRampToValueAtTime(gain, start + 0.012)
+		gainNode.gain.exponentialRampToValueAtTime(0.0001, start + duration)
+		oscillator.connect(gainNode).connect(context.destination)
+		oscillator.start(start)
+		oscillator.stop(start + duration + 0.02)
+	})
+}
+
+function playCardSound() {
+	playBridgeNotes([220], { type: 'triangle', duration: 0.065, gain: 0.025 })
+}
+
+function playTrickResultSound(declarerWon) {
+	if (declarerWon) {
+		playBridgeNotes([523, 659, 784], { duration: 0.09, gap: 0.025, gain: 0.035 })
+		return
+	}
+	playBridgeNotes([392, 330, 262], { type: 'sine', duration: 0.12, gap: 0.03, gain: 0.03 })
+}
+
 function SeatLabel({ seat, dealer, vul, role, active }) {
 	return (
 		<div
@@ -769,7 +813,10 @@ function Controls({ state, derived, dispatch, onPick }) {
 				</button>
 				<button
 					disabled={!derived.contract || !derived.declarer || state.phase === 'play'}
-					onClick={() => dispatch({ type: 'START_PLAY' })}
+					onClick={() => {
+						primeBridgeAudio()
+						dispatch({ type: 'START_PLAY' })
+					}}
 					className="rounded-md bg-emerald-700 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
 					Start Play
 				</button>
@@ -795,6 +842,63 @@ function ContractNotice({ notice, dispatch }) {
 					className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white">
 					OK
 				</button>
+			</div>
+		</div>
+	)
+}
+
+function EndResultModal({ result, onBack, onPick }) {
+	if (!result) return null
+	const positive = result.score >= 0
+	const signedScore = result.score > 0 ? `+${result.score}` : String(result.score)
+	return (
+		<div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/72 p-6">
+			<div className="w-full max-w-2xl rounded-3xl border-4 border-amber-300 bg-emerald-950 p-7 text-center text-white shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
+				<div className="text-sm font-black uppercase tracking-[0.24em] text-amber-200">
+					Hand Complete
+				</div>
+				<h2 className="mt-2 text-5xl font-black leading-tight">
+					{positive ? 'Congratulations' : 'Commiserations'}
+				</h2>
+				<div
+					className={`mx-auto mt-5 w-fit rounded-2xl px-8 py-4 text-6xl font-black shadow-inner ${
+						positive ? 'bg-emerald-300 text-emerald-950' : 'bg-rose-200 text-rose-950'
+					}`}>
+					{signedScore}
+				</div>
+				<p className="mt-4 text-lg font-bold text-emerald-50">
+					{positive ? 'Declarer side scores' : 'Declarer side is deducted'}{' '}
+					{Math.abs(result.score)} points.
+				</p>
+				<div className="mx-auto mt-4 grid max-w-lg grid-cols-3 gap-2 text-sm font-black">
+					<div className="rounded-xl bg-white/10 p-3">
+						<div className="text-[10px] uppercase tracking-wide text-emerald-100">Contract</div>
+						<div className="text-xl">{result.contract}</div>
+					</div>
+					<div className="rounded-xl bg-white/10 p-3">
+						<div className="text-[10px] uppercase tracking-wide text-emerald-100">Declarer</div>
+						<div className="text-xl">{result.declarer}</div>
+					</div>
+					<div className="rounded-xl bg-white/10 p-3">
+						<div className="text-[10px] uppercase tracking-wide text-emerald-100">Result</div>
+						<div className="text-xl">{result.resultText}</div>
+					</div>
+				</div>
+				<div className="mt-7 flex flex-wrap justify-center gap-3">
+					<button
+						onClick={onBack}
+						className="rounded-xl bg-white px-5 py-3 text-sm font-black text-emerald-950 shadow-lg hover:bg-emerald-50">
+						Back To Board
+					</button>
+					<button
+						onClick={() => {
+							onBack()
+							onPick()
+						}}
+						className="rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-amber-200">
+						Choose New PBN
+					</button>
+				</div>
 			</div>
 		</div>
 	)
@@ -915,9 +1019,29 @@ function TableSurface({
 
 export default function PlayerV2() {
 	const [state, dispatch] = useReducer(playerV2Reducer, initialPlayerV2State)
+	const [dismissedEndKey, setDismissedEndKey] = useState('')
+	const [visibleEndKey, setVisibleEndKey] = useState('')
 	const fileRef = useRef(null)
+	const audioProgressRef = useRef({ historyLength: 0, completedLength: 0 })
 	const derived = getPlayerV2Derived(state)
 	const dummy = derived.declarer ? partnerOf(derived.declarer) : ''
+	const endResult =
+		state.phase === 'play' &&
+		state.completedTricks.length >= 13 &&
+		derived.score &&
+		!derived.score.partial
+			? {
+					score: derived.score.score,
+					resultText: derived.score.resultText,
+					contract: derived.contract,
+					declarer: derived.declarer,
+				}
+			: null
+	const endResultKey = endResult
+		? `${state.index}:${state.history.length}:${endResult.contract}:${endResult.declarer}:${endResult.score}:${endResult.resultText}`
+		: ''
+	const showEndResult =
+		!!endResult && visibleEndKey === endResultKey && dismissedEndKey !== endResultKey
 
 	const onFile = (event) => {
 		const file = event.target.files?.[0]
@@ -935,6 +1059,47 @@ export default function PlayerV2() {
 		(seat) => (state.visibleSeats || []).includes(seat),
 		[state.visibleSeats],
 	)
+
+	useEffect(() => {
+		if (!endResultKey) {
+			setVisibleEndKey('')
+			setDismissedEndKey('')
+			return undefined
+		}
+		setVisibleEndKey('')
+		const timer = window.setTimeout(() => setVisibleEndKey(endResultKey), 900)
+		return () => window.clearTimeout(timer)
+	}, [endResultKey])
+
+	useEffect(() => {
+		const progress = audioProgressRef.current
+		const historyLength = state.history.length
+		const completedLength = state.completedTricks.length
+		if (state.phase !== 'play') {
+			audioProgressRef.current = { historyLength, completedLength }
+			return undefined
+		}
+
+		let resultTimer
+		if (historyLength > progress.historyLength) playCardSound()
+		if (completedLength > progress.completedLength) {
+			const trick = state.completedTricks[completedLength - 1]
+			const declarerWon =
+				!!trick?.winner && !!derived.declarer && !isDefender(trick.winner, derived.declarer)
+			resultTimer = window.setTimeout(() => {
+				playTrickResultSound(declarerWon)
+			}, 180)
+		}
+		audioProgressRef.current = { historyLength, completedLength }
+		return () => {
+			if (resultTimer) window.clearTimeout(resultTimer)
+		}
+	}, [
+		state.phase,
+		state.history.length,
+		state.completedTricks,
+		derived.declarer,
+	])
 
 	useEffect(() => {
 		if (state.phase !== 'play') return
@@ -981,7 +1146,10 @@ export default function PlayerV2() {
 		seatIsVisible,
 	])
 
-	const onPlay = (seat, cardId) => dispatch({ type: 'PLAY_CARD', seat, cardId })
+	const onPlay = (seat, cardId) => {
+		primeBridgeAudio()
+		dispatch({ type: 'PLAY_CARD', seat, cardId })
+	}
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
@@ -1003,6 +1171,7 @@ export default function PlayerV2() {
 							)
 						: null
 					if (turnSeat && card) {
+						primeBridgeAudio()
 						dispatch({ type: 'PLAY_CARD', seat: turnSeat, cardId: card.id })
 					}
 				}
@@ -1017,6 +1186,7 @@ export default function PlayerV2() {
 				const matchingCards = legalCards.filter((card) => card.rank === rank)
 				if (turnSeat && matchingCards.length === 1) {
 					event.preventDefault()
+					primeBridgeAudio()
 					dispatch({ type: 'PLAY_CARD', seat: turnSeat, cardId: matchingCards[0].id })
 				}
 			}
@@ -1061,6 +1231,11 @@ export default function PlayerV2() {
 	return (
 		<div className="h-screen overflow-hidden bg-[radial-gradient(circle_at_center,#11683f_0,#064329_48%,#032418_100%)] text-slate-900">
 			<ContractNotice notice={state.contractNotice} dispatch={dispatch} />
+			<EndResultModal
+				result={showEndResult ? endResult : null}
+				onBack={() => setDismissedEndKey(endResultKey)}
+				onPick={() => fileRef.current?.click()}
+			/>
 			<input ref={fileRef} type="file" accept=".pbn,text/plain" onChange={onFile} className="hidden" />
 			<header className="h-10 border-b border-emerald-900/40 bg-white/95">
 				<div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4">
