@@ -139,6 +139,25 @@ function countTricksBySide(tricks, declarer) {
 	)
 }
 
+function legalCardsForTurn(play, seat) {
+	if (!play || !seat || play.turnSeat !== seat) return []
+	const hand = play.remaining?.[seat] || []
+	if (!hand.length) return []
+	const trick = play.trickComplete ? [] : play.trick || []
+	const leadSuit = trick.length > 0 && trick.length < 4 ? trick[0].card.suit : null
+	if (!leadSuit) return hand
+	const following = hand.filter((card) => card.suit === leadSuit)
+	return following.length ? following : hand
+}
+
+function rankFromKey(event) {
+	const key = event.key.toUpperCase()
+	if (['A', 'K', 'Q', 'J'].includes(key)) return key
+	if (key === 'T' || key === '0') return '10'
+	if (/^[2-9]$/.test(key)) return key
+	return ''
+}
+
 function SeatLabel({ seat, dealer, vul, role, active }) {
 	return (
 		<div
@@ -173,11 +192,6 @@ function HandPanel({
 		() => Object.values(grouped).flat(),
 		[grouped],
 	)
-	const leadSuit =
-		play?.trick?.length > 0 && play.trick.length < 4 && !play.trickComplete
-			? play.trick[0].card.suit
-			: null
-	const mustFollow = leadSuit && (cards || []).some((card) => card.suit === leadSuit)
 	const isTurn = play?.turnSeat === seat
 	const isPartnership = declarer && (seat === declarer || seat === dummy)
 	const role = seat === declarer ? 'Declarer' : seat === dummy ? 'Dummy' : 'Defender'
@@ -186,6 +200,10 @@ function HandPanel({
 		? [sortedCards.slice(0, 6), sortedCards.slice(6)]
 		: [sortedCards]
 	const playableMotion = playableMotionBySeat[seat] || ''
+	const legalCardIds = useMemo(
+		() => new Set(legalCardsForTurn(play, seat).map((card) => card.id)),
+		[play, seat],
+	)
 
 	return (
 		<section
@@ -212,8 +230,7 @@ function HandPanel({
 						{cardRows.map((row, rowIndex) => (
 							<div key={rowIndex} className="flex justify-center">
 								{row.map((card) => {
-									const legal =
-										isTurn && (!mustFollow || card.suit === leadSuit) && !!onPlay
+									const legal = !!onPlay && isTurn && legalCardIds.has(card.id)
 									return (
 										<CardButton
 											key={card.id}
@@ -924,24 +941,43 @@ export default function PlayerV2() {
 		const turnSeat = state.play?.turnSeat
 		if (!turnSeat || !derived.declarer || !isDefender(turnSeat, derived.declarer)) return
 		if (seatIsVisible(turnSeat)) return
+		const trickForChoice = state.play.trickComplete ? [] : state.play.trick
 		const card = selectSimpleDefenderCard(
 			state.play.remaining,
-			state.play.trick,
+			trickForChoice,
 			turnSeat,
 			derived.trump,
 		)
 		if (!card) return
 		const timer = setTimeout(() => {
 			dispatch({ type: 'PLAY_CARD', seat: turnSeat, cardId: card.id })
-		}, 450)
+		}, state.play.trickComplete ? 750 : 450)
 		return () => clearTimeout(timer)
 	}, [
 		state.phase,
 		state.play?.turnSeat,
 		state.play?.trick,
 		state.play?.remaining,
+		state.play?.trickComplete,
 		derived.declarer,
 		derived.trump,
+		seatIsVisible,
+	])
+
+	useEffect(() => {
+		if (state.phase !== 'play') return
+		const turnSeat = state.play?.turnSeat
+		if (!turnSeat || !seatIsVisible(turnSeat)) return
+		const legalCards = legalCardsForTurn(state.play, turnSeat)
+		if (legalCards.length !== 1) return
+		const [card] = legalCards
+		const timer = setTimeout(() => {
+			dispatch({ type: 'PLAY_CARD', seat: turnSeat, cardId: card.id })
+		}, state.play.trickComplete ? 750 : 350)
+		return () => clearTimeout(timer)
+	}, [
+		state.phase,
+		state.play,
 		seatIsVisible,
 	])
 
@@ -957,10 +993,11 @@ export default function PlayerV2() {
 				if (state.phase !== 'play') dispatch({ type: 'AUCTION_NEXT' })
 				else {
 					const turnSeat = state.play?.turnSeat
+					const trickForChoice = state.play?.trickComplete ? [] : state.play?.trick
 					const card = turnSeat
 						? selectSimpleDefenderCard(
 								state.play.remaining,
-								state.play.trick,
+								trickForChoice,
 								turnSeat,
 								derived.trump,
 							)
@@ -968,6 +1005,19 @@ export default function PlayerV2() {
 					if (turnSeat && card) {
 						dispatch({ type: 'PLAY_CARD', seat: turnSeat, cardId: card.id })
 					}
+				}
+			}
+			const rank = rankFromKey(event)
+			if (state.phase === 'play' && rank) {
+				const turnSeat = state.play?.turnSeat
+				const legalCards =
+					turnSeat && seatIsVisible(turnSeat)
+						? legalCardsForTurn(state.play, turnSeat)
+						: []
+				const matchingCards = legalCards.filter((card) => card.rank === rank)
+				if (turnSeat && matchingCards.length === 1) {
+					event.preventDefault()
+					dispatch({ type: 'PLAY_CARD', seat: turnSeat, cardId: matchingCards[0].id })
 				}
 			}
 			if (event.key === 'ArrowLeft') {
@@ -1005,6 +1055,7 @@ export default function PlayerV2() {
 		dummy,
 		derived.declarer,
 		derived.trump,
+		seatIsVisible,
 	])
 
 	return (
