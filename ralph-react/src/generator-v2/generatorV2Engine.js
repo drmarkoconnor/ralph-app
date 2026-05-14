@@ -52,6 +52,16 @@ export const SYLLABUS_GROUPS = [
 				description: 'Responder has a five-card major and transfers opener.',
 			},
 			{
+				id: 'two_nt_opening',
+				title: '2NT Openings',
+				description: 'Balanced 20-22 HCP openings with simple game decisions.',
+			},
+			{
+				id: 'strong_two_club',
+				title: 'Strong 2C Openings',
+				description: 'Strong 23+ HCP openings starting with the artificial 2C bid.',
+			},
+			{
 				id: 'weak_twos',
 				title: 'Weak Twos',
 				description: 'Six-card major openings with limited high-card strength.',
@@ -71,15 +81,45 @@ export const SYLLABUS_GROUPS = [
 				title: 'Takeout Doubles',
 				description: 'Opening bid, shortness, and support for the unbid suits.',
 			},
+			{
+				id: 'negative_double',
+				title: 'Negative Doubles',
+				description: 'Responder doubles after an overcall to show the unbid major.',
+			},
 		],
 	},
 	{
 		level: 'Intermediate',
 		topics: [
 			{
+				id: 'two_nt_stayman',
+				title: 'Stayman After 2NT',
+				description: 'Responder uses 3C to ask for a four-card major after 2NT.',
+			},
+			{
+				id: 'two_nt_transfers',
+				title: 'Transfers After 2NT',
+				description: 'Responder transfers to a five-card major after a strong 2NT.',
+			},
+			{
 				id: 'slam_teaching',
 				title: 'Slam Exploration',
 				description: 'Clean high-card and control hands suitable for slam teaching.',
+			},
+			{
+				id: 'gerber_ace_asking',
+				title: 'Gerber Ace Asking',
+				description: '4C ace asking after 1NT, with responses matched to opener aces.',
+			},
+			{
+				id: 'blackwood_ace_asking',
+				title: 'Blackwood Ace Asking',
+				description: '4NT ace asking after a major fit and slam values.',
+			},
+			{
+				id: 'fourth_suit_forcing',
+				title: 'Fourth-Suit Forcing',
+				description: 'Responder bids the fourth suit to force and find the best game.',
 			},
 			{
 				id: 'splinter',
@@ -257,6 +297,72 @@ function leftOf(seat) {
 
 function rightOf(seat) {
 	return SEATS[(SEATS.indexOf(seat) + 3) % 4]
+}
+
+const BID_STRAIN_ORDER = { C: 0, D: 1, H: 2, S: 3, NT: 4 }
+
+function bidParts(call) {
+	const match = String(call || '').match(/^([1-7])(C|D|H|S|NT)$/)
+	if (!match) return null
+	return { level: Number(match[1]), strain: match[2] }
+}
+
+function bidValue(call) {
+	const parts = bidParts(call)
+	if (!parts) return null
+	return parts.level * 5 + BID_STRAIN_ORDER[parts.strain]
+}
+
+function cheapestBidForSuit(suit, overBid) {
+	const overValue = bidValue(overBid)
+	if (overValue === null) return `1${suit}`
+	for (let level = 1; level <= 7; level++) {
+		const bid = `${level}${suit}`
+		if (bidValue(bid) > overValue) return bid
+	}
+	return null
+}
+
+function oneLevelSuitOpening(cards, settings) {
+	const opener = openingBidForHand(cards, settings)
+	return /^1[CDHS]$/.test(opener) ? opener : null
+}
+
+function bestSuit(lengths, suits, options = {}) {
+	const { requireLength = 0, preferMajors = true } = options
+	const candidates = suits.filter((suit) => lengths[suit] >= requireLength)
+	if (!candidates.length) return ''
+	const rankSuit = (suit) => {
+		if (!preferMajors) return 0
+		if (suit === 'S') return 3
+		if (suit === 'H') return 2
+		if (suit === 'D') return 1
+		return 0
+	}
+	return [...candidates].sort((a, b) => {
+		if (lengths[b] !== lengths[a]) return lengths[b] - lengths[a]
+		return rankSuit(b) - rankSuit(a)
+	})[0]
+}
+
+function aceCount(cards) {
+	return (cards || []).filter((card) => card.rank === 'A').length
+}
+
+function gerberResponse(cards) {
+	const aces = aceCount(cards)
+	if (aces === 1) return '4H'
+	if (aces === 2) return '4S'
+	if (aces === 3) return '4NT'
+	return '4D'
+}
+
+function blackwoodResponse(cards) {
+	const aces = aceCount(cards)
+	if (aces === 1) return '5D'
+	if (aces === 2) return '5H'
+	if (aces === 3) return '5S'
+	return '5C'
 }
 
 function shuffle(items) {
@@ -450,6 +556,31 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 			(partnerLengths.S >= 5 || partnerLengths.H >= 5)
 		)
 	}
+	if (presetId === 'two_nt_opening') {
+		return dealerHcp >= 20 && dealerHcp <= 22 && isBalanced(dealerLengths)
+	}
+	if (presetId === 'strong_two_club') {
+		return dealerHcp >= 23 && isBalanced(dealerLengths)
+	}
+	if (presetId === 'two_nt_stayman') {
+		return (
+			dealerHcp >= 20 &&
+			dealerHcp <= 22 &&
+			isBalanced(dealerLengths) &&
+			partnerHcp >= 4 &&
+			(partnerLengths.S === 4 || partnerLengths.H === 4) &&
+			partnerLengths.S <= 4 &&
+			partnerLengths.H <= 4
+		)
+	}
+	if (presetId === 'two_nt_transfers') {
+		return (
+			dealerHcp >= 20 &&
+			dealerHcp <= 22 &&
+			isBalanced(dealerLengths) &&
+			(partnerLengths.S >= 5 || partnerLengths.H >= 5)
+		)
+	}
 	if (presetId === 'game_ns') {
 		return nsHcp >= 25 && (nsMajorFit || nsHcp >= 26)
 	}
@@ -472,21 +603,56 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 		)
 	}
 	if (presetId === 'overcalls') {
+		const opener = oneLevelSuitOpening(hands[dealer], settings)
+		if (!opener) return false
+		const openerSuit = opener.slice(1)
 		const overcaller = leftOf(dealer)
 		const overHcp = hcp(hands[overcaller])
 		const overLens = suitLengths(hands[overcaller])
-		return dealerHcp >= 12 && overHcp >= 8 && overHcp <= 16 && longestSuit(overLens) && overLens[longestSuit(overLens)] >= 5
+		const overSuit = bestSuit(overLens, ['S', 'H', 'D', 'C'].filter((suit) => suit !== openerSuit), { requireLength: 5 })
+		const overcall = overSuit ? cheapestBidForSuit(overSuit, opener) : null
+		const minHcp = overcall && overcall[0] === '2' ? 10 : 8
+		return (
+			dealerHcp >= 12 &&
+			!!overcall &&
+			Number(overcall[0]) <= 2 &&
+			overHcp >= minHcp &&
+			overHcp <= 16
+		)
 	}
 	if (presetId === 'takeout_double') {
+		const opener = oneLevelSuitOpening(hands[dealer], settings)
+		if (!opener) return false
 		const doubler = leftOf(dealer)
-		const openerSuit = longestSuit(dealerLengths)
+		const advancer = partnerOf(doubler)
+		const openerSuit = opener.slice(1)
 		const doublerLens = suitLengths(hands[doubler])
 		const otherSuits = ['S', 'H', 'D', 'C'].filter((suit) => suit !== openerSuit)
+		const advancerLens = suitLengths(hands[advancer])
 		return (
 			dealerHcp >= 12 &&
 			hcp(hands[doubler]) >= 12 &&
 			doublerLens[openerSuit] <= 2 &&
-			otherSuits.filter((suit) => doublerLens[suit] >= 3).length >= 3
+			otherSuits.filter((suit) => doublerLens[suit] >= 3).length >= 3 &&
+			otherSuits.some((suit) => advancerLens[suit] >= 4)
+		)
+	}
+	if (presetId === 'negative_double') {
+		const opener = oneLevelSuitOpening(hands[dealer], settings)
+		if (opener !== '1C' && opener !== '1D') return false
+		const overcaller = leftOf(dealer)
+		const responder = partnerOf(dealer)
+		const overLens = suitLengths(hands[overcaller])
+		const responderLens = suitLengths(hands[responder])
+		return (
+			dealerHcp >= 12 &&
+			dealerHcp <= 19 &&
+			dealerLengths.H >= 3 &&
+			hcp(hands[overcaller]) >= 8 &&
+			hcp(hands[overcaller]) <= 16 &&
+			overLens.S >= 5 &&
+			hcp(hands[responder]) >= 6 &&
+			responderLens.H >= 4
 		)
 	}
 	if (presetId === 'slam_teaching') {
@@ -495,6 +661,37 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 		return (
 			partnershipHcp(hands, side) >= 32 &&
 			controls(hands[seats[0]]) + controls(hands[seats[1]]) >= 8
+		)
+	}
+	if (presetId === 'gerber_ace_asking') {
+		return (
+			oneNtOpenerOk(hands, dealer, settings) &&
+			partnerHcp >= 18 &&
+			dealerHcp + partnerHcp >= 31 &&
+			aceCount(hands[dealer]) >= 1
+		)
+	}
+	if (presetId === 'blackwood_ace_asking') {
+		const trump = dealerLengths.S >= 5 ? 'S' : dealerLengths.H >= 5 ? 'H' : ''
+		return (
+			!!trump &&
+			dealerHcp >= 16 &&
+			partnerHcp >= 12 &&
+			dealerHcp + partnerHcp >= 30 &&
+			partnerLengths[trump] >= 4 &&
+			aceCount(hands[dealer]) + aceCount(hands[partner]) >= 3
+		)
+	}
+	if (presetId === 'fourth_suit_forcing') {
+		return (
+			dealerHcp >= 15 &&
+			dealerHcp <= 19 &&
+			partnerHcp >= 10 &&
+			dealerHcp + partnerHcp >= 25 &&
+			dealerLengths.D >= 4 &&
+			dealerLengths.S >= 4 &&
+			dealerLengths.H <= 3 &&
+			partnerLengths.H >= 4
 		)
 	}
 	if (presetId === 'splinter') {
@@ -559,11 +756,122 @@ function finishAuction(calls) {
 	return result
 }
 
+function twoNtOpeningAuction(hands, dealer) {
+	const partnerPoints = hcp(hands[partnerOf(dealer)])
+	if (partnerPoints >= 12) return finishAuction(['2NT', 'P', '6NT'])
+	if (partnerPoints >= 5) return finishAuction(['2NT', 'P', '3NT'])
+	return finishAuction(['2NT'])
+}
+
+function strongTwoClubAuction(hands, dealer) {
+	const partnerPoints = hcp(hands[partnerOf(dealer)])
+	const finalBid = partnerPoints >= 9 ? '6NT' : partnerPoints >= 2 ? '3NT' : ''
+	const start = ['2C', 'P', '2D', 'P', '2NT']
+	return finalBid ? finishAuction([...start, 'P', finalBid]) : finishAuction(start)
+}
+
+function twoNtStaymanAuction(hands, dealer) {
+	const openerLens = suitLengths(hands[dealer])
+	const responderLens = suitLengths(hands[partnerOf(dealer)])
+	const response = openerLens.H >= 4 ? '3H' : openerLens.S >= 4 ? '3S' : '3D'
+	const fit =
+		response === '3H' && responderLens.H >= 4
+			? 'H'
+			: response === '3S' && responderLens.S >= 4
+				? 'S'
+				: ''
+	const finalBid = fit ? `4${fit}` : '3NT'
+	return finishAuction(['2NT', 'P', '3C', 'P', response, 'P', finalBid])
+}
+
+function twoNtTransferAuction(hands, dealer) {
+	const responder = partnerOf(dealer)
+	const openerLens = suitLengths(hands[dealer])
+	const responderLens = suitLengths(hands[responder])
+	const target = responderLens.H >= 5 ? 'H' : 'S'
+	const transfer = target === 'H' ? '3D' : '3H'
+	const partnerPoints = hcp(hands[responder])
+	const fit = responderLens[target] >= 6 || openerLens[target] >= 3
+	const finalBid = partnerPoints >= 4 ? (fit ? `4${target}` : '3NT') : ''
+	const start = ['2NT', 'P', transfer, 'P', `3${target}`]
+	return finalBid ? finishAuction([...start, 'P', finalBid]) : finishAuction(start)
+}
+
+function overcallAuction(hands, dealer, settings) {
+	const opener = oneLevelSuitOpening(hands[dealer], settings)
+	if (!opener) return null
+	const openerSuit = opener.slice(1)
+	const overcaller = leftOf(dealer)
+	const overLens = suitLengths(hands[overcaller])
+	const overSuit = bestSuit(overLens, ['S', 'H', 'D', 'C'].filter((suit) => suit !== openerSuit), { requireLength: 5 })
+	const overcall = overSuit ? cheapestBidForSuit(overSuit, opener) : null
+	return overcall ? finishAuction([opener, overcall]) : null
+}
+
+function takeoutDoubleAuction(hands, dealer, settings) {
+	const opener = oneLevelSuitOpening(hands[dealer], settings)
+	if (!opener) return null
+	const openerSuit = opener.slice(1)
+	const doubler = leftOf(dealer)
+	const advancer = partnerOf(doubler)
+	const advancerLens = suitLengths(hands[advancer])
+	const advanceSuit = bestSuit(
+		advancerLens,
+		['S', 'H', 'D', 'C'].filter((suit) => suit !== openerSuit),
+		{ requireLength: 4 },
+	)
+	const advanceBid = advanceSuit ? cheapestBidForSuit(advanceSuit, opener) : null
+	return advanceBid ? finishAuction([opener, 'X', 'P', advanceBid]) : null
+}
+
+function negativeDoubleAuction(hands, dealer, settings) {
+	const opener = oneLevelSuitOpening(hands[dealer], settings)
+	if (opener !== '1C' && opener !== '1D') return null
+	return finishAuction([opener, '1S', 'X', 'P', '2H'])
+}
+
+function gerberAuction(hands, dealer) {
+	const response = gerberResponse(hands[dealer])
+	return finishAuction(['1NT', 'P', '4C', 'P', response, 'P', '6NT'])
+}
+
+function blackwoodAuction(hands, dealer) {
+	const partner = partnerOf(dealer)
+	const dealerLens = suitLengths(hands[dealer])
+	const trump = dealerLens.S >= 5 ? 'S' : 'H'
+	const response = blackwoodResponse(hands[partner])
+	return finishAuction([`1${trump}`, 'P', `3${trump}`, 'P', '4NT', 'P', response, 'P', `6${trump}`])
+}
+
+function fourthSuitForcingAuction() {
+	return finishAuction(['1D', 'P', '1H', 'P', '1S', 'P', '2C', 'P', '2NT', 'P', '3NT'])
+}
+
 function basicAuction(presetId, hands, dealer, settings) {
 	const partner = partnerOf(dealer)
 	const partnerPoints = hcp(hands[partner])
 	const partnerLens = suitLengths(hands[partner])
 	const dealerLens = suitLengths(hands[dealer])
+
+	if (presetId === 'two_nt_opening') return twoNtOpeningAuction(hands, dealer)
+	if (presetId === 'strong_two_club') return strongTwoClubAuction(hands, dealer)
+	if (presetId === 'two_nt_stayman') return twoNtStaymanAuction(hands, dealer)
+	if (presetId === 'two_nt_transfers') return twoNtTransferAuction(hands, dealer)
+	if (presetId === 'overcalls') {
+		const auction = overcallAuction(hands, dealer, settings)
+		if (auction) return auction
+	}
+	if (presetId === 'takeout_double') {
+		const auction = takeoutDoubleAuction(hands, dealer, settings)
+		if (auction) return auction
+	}
+	if (presetId === 'negative_double') {
+		const auction = negativeDoubleAuction(hands, dealer, settings)
+		if (auction) return auction
+	}
+	if (presetId === 'gerber_ace_asking') return gerberAuction(hands, dealer)
+	if (presetId === 'blackwood_ace_asking') return blackwoodAuction(hands, dealer)
+	if (presetId === 'fourth_suit_forcing') return fourthSuitForcingAuction()
 
 	if (presetId === 'weak_twos') {
 		const suit = longestOfSuits(dealerLens, ['S', 'H'])
@@ -636,11 +944,41 @@ function lessonNote(presetId, hands, dealer, settings) {
 	if (presetId.includes('one_nt') || presetId === 'stayman' || presetId === 'transfers') {
 		return `${topic.title}: ${dealer} has ${dealerPoints} HCP and a balanced ${settings.oneNtMin}-${settings.oneNtMax} 1NT opening. Partner ${partner} has ${hcp(hands[partner])} HCP.`
 	}
+	if (presetId === 'two_nt_opening') {
+		return `${topic.title}: ${dealer} has ${dealerPoints} HCP and a balanced 20-22 2NT opening. Partner ${partner} has ${hcp(hands[partner])} HCP.`
+	}
+	if (presetId === 'strong_two_club') {
+		return `${topic.title}: ${dealer} has ${dealerPoints} HCP and opens 2C, then rebids 2NT after the 2D response. Partner ${partner} has ${hcp(hands[partner])} HCP.`
+	}
+	if (presetId === 'two_nt_stayman') {
+		return `${topic.title}: ${dealer} has a balanced 20-22 HCP 2NT opening. ${partner} uses 3C Stayman with a four-card major.`
+	}
+	if (presetId === 'two_nt_transfers') {
+		return `${topic.title}: ${dealer} has a balanced 20-22 HCP 2NT opening. ${partner} transfers to a five-card major.`
+	}
 	if (presetId === 'game_ns') {
 		return `N/S game-values hand. N/S have ${ns} combined HCP; review whether the class reaches a sensible game.`
 	}
+	if (presetId === 'overcalls') {
+		return `${topic.title}: ${leftOf(dealer)} has a good five-card suit to overcall after ${dealer} opens. HCP: N/S ${ns}, E/W ${ew}.`
+	}
+	if (presetId === 'takeout_double') {
+		return `${topic.title}: ${leftOf(dealer)} has opening values, shortness in opener's suit and support for the other suits. HCP: N/S ${ns}, E/W ${ew}.`
+	}
+	if (presetId === 'negative_double') {
+		return `${topic.title}: ${partner} shows hearts with a negative double after ${leftOf(dealer)} overcalls 1S. HCP: N/S ${ns}, E/W ${ew}.`
+	}
 	if (presetId === 'slam_teaching') {
 		return `Slam exploration hand. N/S ${ns} HCP, E/W ${ew} HCP; focus on controls, fit and whether slam is sensible.`
+	}
+	if (presetId === 'gerber_ace_asking') {
+		return `${topic.title}: ${dealer} opens 1NT and ${partner} uses 4C Gerber. The response matches opener's ace count.`
+	}
+	if (presetId === 'blackwood_ace_asking') {
+		return `${topic.title}: ${dealer} opens a major, the partnership finds a fit, then uses 4NT Blackwood before bidding slam.`
+	}
+	if (presetId === 'fourth_suit_forcing') {
+		return `${topic.title}: ${partner} bids the fourth suit after 1D-1H-1S to force and investigate the best game.`
 	}
 	if (presetId === 'weak_twos' || presetId === 'weak_threes') {
 		return `${topic.title}. ${dealer} has ${dealerPoints} HCP and the long suit for the pre-empt. HCP: N/S ${ns}, E/W ${ew}.`
@@ -670,7 +1008,22 @@ export function generateGenerator2Boards({
 		const boardNo = firstBoard + index
 		const dealer = dealerMode === 'fixed' ? dealerSeat : dealerForBoard(boardNo)
 		let accepted = null
-		const maxAttempts = presetId === 'custom_hcp' ? 400 : 10000
+		const maxAttempts =
+			presetId === 'custom_hcp'
+				? 400
+				: [
+						'two_nt_opening',
+						'strong_two_club',
+						'two_nt_stayman',
+						'two_nt_transfers',
+						'takeout_double',
+						'negative_double',
+						'gerber_ace_asking',
+						'blackwood_ace_asking',
+						'fourth_suit_forcing',
+					].includes(presetId)
+					? 40000
+					: 10000
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			totalAttempts += 1
 			const hands =
@@ -691,26 +1044,26 @@ export function generateGenerator2Boards({
 		}
 		seen.add(accepted.signature)
 		const topic = topicById(presetId)
-			const suggestedAuction = auctionMode === 'blank'
-				? []
-				: basicAuction(presetId, accepted.hands, dealer, settings)
-			const auction = auctionMode === 'auto' ? suggestedAuction : []
-			boards.push({
-				id: `${Date.now()}-${boardNo}-${index}-${Math.random().toString(16).slice(2)}`,
-				keep: true,
+		const suggestedAuction = auctionMode === 'blank'
+			? []
+			: basicAuction(presetId, accepted.hands, dealer, settings)
+		const auction = auctionMode === 'auto' ? suggestedAuction : []
+		boards.push({
+			id: `${Date.now()}-${boardNo}-${index}-${Math.random().toString(16).slice(2)}`,
+			keep: true,
 			number: boardNo,
 			dealer,
 			vul: vulnerabilityForBoard(boardNo),
 			topicId: presetId,
 			topicTitle: topic.title,
-				hands: accepted.hands,
-				auction,
-				auctionText: auction.join(' '),
-				suggestedAuction,
-				suggestedAuctionText: suggestedAuction.join(' '),
-				notes: lessonNote(presetId, accepted.hands, dealer, settings),
-				quality: presetOk(presetId, accepted.hands, dealer, settings, constraints) ? 'matched' : 'fallback',
-			})
+			hands: accepted.hands,
+			auction,
+			auctionText: auction.join(' '),
+			suggestedAuction,
+			suggestedAuctionText: suggestedAuction.join(' '),
+			notes: lessonNote(presetId, accepted.hands, dealer, settings),
+			quality: presetOk(presetId, accepted.hands, dealer, settings, constraints) ? 'matched' : 'fallback',
+		})
 	}
 
 	return { boards, warnings, attempts: totalAttempts }

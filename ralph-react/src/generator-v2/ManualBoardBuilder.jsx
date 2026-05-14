@@ -108,15 +108,21 @@ function findAndRemove(layout, cardId) {
 	return { found, next }
 }
 
-function CardChip({ card, compact = false, onDoubleClick }) {
+function CardChip({ card, compact = false, selected = false, onClick, onDoubleClick }) {
 	return (
 		<button
 			type="button"
 			draggable
+			aria-pressed={onClick ? selected : undefined}
+			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onDragStart={(event) => event.dataTransfer.setData('text/plain', String(card.id))}
-			className={`shrink-0 rounded-md border border-slate-300 bg-white text-center font-black shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+			className={`shrink-0 rounded-md border text-center font-black shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
 				compact ? 'h-8 min-w-9 px-1 text-sm' : 'h-9 min-w-10 px-1.5 text-base'
+			} ${
+				selected
+					? 'border-sky-500 bg-sky-50 ring-2 ring-sky-200'
+					: 'border-slate-300 bg-white'
 			} ${suitText[card.suitKey]}`}
 			title={cardCode(card)}>
 			{cardCode(card)}
@@ -128,17 +134,21 @@ function DropZone({ seat, cards, active, vul, onDropCard, onSelectSeat }) {
 	const lengths = suitLengths(cards)
 	return (
 		<section
+			onClick={() => onSelectSeat(seat)}
 			onDragOver={(event) => event.preventDefault()}
 			onDrop={(event) => {
 				event.preventDefault()
 				const cardId = Number(event.dataTransfer.getData('text/plain'))
 				if (cardId) onDropCard(cardId, seat)
 			}}
-			className={`min-h-[164px] rounded-lg border p-3 shadow-sm ${vulnerabilityTone(vul, seat, active)}`}>
+			className={`min-h-[164px] cursor-pointer rounded-lg border p-3 shadow-sm ${vulnerabilityTone(vul, seat, active)}`}>
 			<header className="mb-2 flex flex-wrap items-center justify-between gap-2">
 				<button
 					type="button"
-					onClick={() => onSelectSeat(seat)}
+					onClick={(event) => {
+						event.stopPropagation()
+						onSelectSeat(seat)
+					}}
 					className={`grid h-8 w-8 place-items-center rounded-md text-sm font-black ${
 						active ? 'bg-sky-700 text-white' : 'bg-slate-900 text-white'
 					}`}>
@@ -167,6 +177,7 @@ function DropZone({ seat, cards, active, vul, onDropCard, onSelectSeat }) {
 export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStatus }) {
 	const [layout, setLayout] = useState(freshLayout)
 	const [targetSeat, setTargetSeat] = useState('N')
+	const [selectedCards, setSelectedCards] = useState(() => new Set())
 	const [cardEntry, setCardEntry] = useState('')
 	const [auctionText, setAuctionText] = useState('')
 	const [notes, setNotes] = useState('')
@@ -175,11 +186,21 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 	const vul = vulnerabilityForBoard(nextBoardNumber)
 	const complete = completeLayout(layout.hands, layout.deck)
 	const totalCards = SEATS.reduce((sum, seat) => sum + layout.hands[seat].length, 0)
+	const selectedDeckCards = useMemo(
+		() => layout.deck.filter((card) => selectedCards.has(card.id)),
+		[layout.deck, selectedCards],
+	)
 	const liveSummary = useMemo(() => {
 		return SEATS.map((seat) => `${seat} ${hcp(layout.hands[seat])} HCP (${shapeText(layout.hands[seat])})`).join('; ')
 	}, [layout.hands])
 
 	const moveCard = (cardId, toSeat) => {
+		setSelectedCards((current) => {
+			if (!current.has(cardId)) return current
+			const next = new Set(current)
+			next.delete(cardId)
+			return next
+		})
 		setLayout((current) => {
 			const { found, next } = findAndRemove(current, cardId)
 			if (!found) return current
@@ -201,6 +222,44 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 		})
 	}
 
+	const toggleDeckCard = (cardId) => {
+		setSelectedCards((current) => {
+			const next = new Set(current)
+			if (next.has(cardId)) next.delete(cardId)
+			else next.add(cardId)
+			return next
+		})
+	}
+
+	const clearSelection = () => setSelectedCards(new Set())
+
+	const sendSelectedTo = (seat) => {
+		const cardsToMove = sortCards(selectedDeckCards)
+		if (!cardsToMove.length) {
+			onStatus?.('Select one or more deck cards first.')
+			return
+		}
+		const capacity = 13 - layout.hands[seat].length
+		if (cardsToMove.length > capacity) {
+			onStatus?.(`${seat} has room for ${capacity} more card${capacity === 1 ? '' : 's'}.`)
+			return
+		}
+		const movedIds = new Set(cardsToMove.map((card) => card.id))
+		setLayout((current) => {
+			const currentCards = sortCards(current.deck.filter((card) => movedIds.has(card.id)))
+			if (!currentCards.length || currentCards.length > 13 - current.hands[seat].length) return current
+			return {
+				deck: sortCards(current.deck.filter((card) => !movedIds.has(card.id))),
+				hands: {
+					...current.hands,
+					[seat]: sortCards([...current.hands[seat], ...currentCards]),
+				},
+			}
+		})
+		clearSelection()
+		onStatus?.(`Sent ${cardsToMove.length} card${cardsToMove.length === 1 ? '' : 's'} to ${seat}.`)
+	}
+
 	const addKeyboardCard = () => {
 		const parsed = parseCardCode(cardEntry)
 		if (!parsed) {
@@ -219,6 +278,7 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 
 	const resetBuilder = (quiet = false) => {
 		setLayout(freshLayout())
+		clearSelection()
 		setAuctionText('')
 		setNotes('')
 		if (!quiet) onStatus?.('Manual board builder cleared.')
@@ -226,6 +286,7 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 
 	const fillRandom = () => {
 		setLayout({ deck: [], hands: dealRandomHands() })
+		clearSelection()
 		setNotes('')
 		onStatus?.('Random deal filled into the manual builder.')
 	}
@@ -325,6 +386,30 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 								{layout.deck.length} unassigned
 							</div>
 						</div>
+						<div className="mb-2 rounded-md border border-slate-200 bg-white p-2">
+							<div className="mb-2 flex items-center justify-between gap-2 text-xs font-black uppercase tracking-wide text-slate-500">
+								<span>{selectedDeckCards.length} selected</span>
+								<button
+									type="button"
+									disabled={!selectedDeckCards.length}
+									onClick={clearSelection}
+									className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-black text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+									Clear
+								</button>
+							</div>
+							<div className="grid grid-cols-4 gap-1.5">
+								{SEATS.map((seat) => (
+									<button
+										key={seat}
+										type="button"
+										disabled={!selectedDeckCards.length}
+										onClick={() => sendSelectedTo(seat)}
+										className="rounded-md bg-sky-700 px-2 py-1.5 text-xs font-black text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-40">
+										Send {seat}
+									</button>
+								))}
+							</div>
+						</div>
 						<div
 							onDragOver={(event) => event.preventDefault()}
 							onDrop={(event) => {
@@ -344,6 +429,8 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 													key={card.id}
 													card={card}
 													compact
+													selected={selectedCards.has(card.id)}
+													onClick={() => toggleDeckCard(card.id)}
 													onDoubleClick={() => moveCard(card.id, targetSeat)}
 												/>
 											))}
