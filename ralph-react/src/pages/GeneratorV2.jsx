@@ -4,15 +4,19 @@ import { BoardZ } from '../schemas/board'
 import { exportBoardPBN } from '../pbn/export'
 import ManualBoardBuilder from '../generator-v2/ManualBoardBuilder'
 import {
+	ACOL_PROFILE_OPTIONS,
 	DEFAULT_ACOL_SETTINGS,
 	SEATS,
 	SUITS,
 	SYLLABUS_GROUPS,
+	acolSettingsSummary,
 	boardToExportShape,
 	createGenerator2SessionSnapshot,
 	generateGenerator2Boards,
 	hcp,
+	normalizeAcolSettings,
 	partnershipHcp,
+	settingsForAcolProfile,
 	suitLengths,
 } from '../generator-v2/generatorV2Engine'
 
@@ -317,6 +321,119 @@ function Select(props) {
 	)
 }
 
+function MiniField({ label, children }) {
+	return (
+		<label className="block">
+			<span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-500">
+				{label}
+			</span>
+			{children}
+		</label>
+	)
+}
+
+function MiniNumberInput(props) {
+	return (
+		<input
+			type="number"
+			className="h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-xs font-black text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+			{...props}
+		/>
+	)
+}
+
+function MiniSelect(props) {
+	return (
+		<select
+			className="h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-xs font-black text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+			{...props}
+		/>
+	)
+}
+
+function MiniToggle({ label, checked, onChange, disabled = false }) {
+	return (
+		<label className={`flex h-7 items-center justify-between gap-2 rounded-md bg-slate-50 px-2 text-xs font-black text-slate-800 ${
+			disabled ? 'opacity-45' : ''
+		}`}>
+			<span className="truncate">{label}</span>
+			<input
+				type="checkbox"
+				checked={!!checked}
+				disabled={disabled}
+				onChange={(event) => onChange(event.target.checked)}
+			/>
+		</label>
+	)
+}
+
+function MiniRange({ label, minLabel, maxLabel, minValue, maxValue, min, max, disabled = false, onMinChange, onMaxChange }) {
+	return (
+		<div className={`grid grid-cols-[4.2rem_1fr_1fr] items-center gap-1 ${disabled ? 'opacity-45' : ''}`}>
+			<div className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</div>
+			<MiniNumberInput
+				aria-label={minLabel}
+				min={min}
+				max={max}
+				value={minValue}
+				disabled={disabled}
+				onChange={(event) => onMinChange(Number(event.target.value))}
+			/>
+			<MiniNumberInput
+				aria-label={maxLabel}
+				min={min}
+				max={max}
+				value={maxValue}
+				disabled={disabled}
+				onChange={(event) => onMaxChange(Number(event.target.value))}
+			/>
+		</div>
+	)
+}
+
+function MiniSingleNumber({ label, inputLabel, value, min, max, disabled = false, onChange }) {
+	return (
+		<div className={`grid grid-cols-[4.2rem_1fr] items-center gap-1 ${disabled ? 'opacity-45' : ''}`}>
+			<div className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</div>
+			<MiniNumberInput
+				aria-label={inputLabel}
+				min={min}
+				max={max}
+				value={value}
+				disabled={disabled}
+				onChange={(event) => onChange(Number(event.target.value))}
+			/>
+		</div>
+	)
+}
+
+function AcolInfoTooltip({ settings }) {
+	const lines = acolSettingsSummary(settings)
+	return (
+		<div className="group relative">
+			<button
+				type="button"
+				aria-label="Active ACOL conventions"
+				className="grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-slate-50 text-xs font-black text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-100">
+				i
+			</button>
+			<div className="pointer-events-none absolute right-0 top-9 z-20 hidden w-80 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xl group-hover:block group-focus-within:block">
+				<div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
+					Active Conventions
+				</div>
+				<div className="space-y-1 text-xs font-semibold leading-snug text-slate-700">
+					{lines.map((line) => (
+						<p key={line}>{line}</p>
+					))}
+					<p className="pt-1 font-black text-slate-900">
+						Change these in ACOL Defaults.
+					</p>
+				</div>
+			</div>
+		</div>
+	)
+}
+
 export default function GeneratorV2() {
 	const navigate = useNavigate()
 	const restored = useMemo(() => readGeneratorState(), [])
@@ -329,7 +446,7 @@ export default function GeneratorV2() {
 	const [auctionMode, setAuctionMode] = useState(restored.auctionMode || 'suggest')
 	const [dealer4Mode, setDealer4Mode] = useState(restored.dealer4Mode ?? true)
 	const [meta, setMeta] = useState(restored.meta || { ...DEFAULT_META, date: todayPbnDate() })
-	const [acolSettings, setAcolSettings] = useState(restored.acolSettings || DEFAULT_ACOL_SETTINGS)
+	const [acolSettings, setAcolSettings] = useState(() => normalizeAcolSettings(restored.acolSettings || DEFAULT_ACOL_SETTINGS))
 	const [constraints, setConstraints] = useState(restored.constraints || {
 		hcpRanges: {
 			N: { min: 0, max: 37 },
@@ -404,6 +521,18 @@ export default function GeneratorV2() {
 				},
 			},
 		}))
+	}
+
+	const updateAcolSetting = (key, value) => {
+		setAcolSettings((current) => normalizeAcolSettings({
+			...current,
+			profile: 'custom',
+			[key]: value,
+		}))
+	}
+
+	const updateAcolProfile = (profile) => {
+		setAcolSettings(normalizeAcolSettings(settingsForAcolProfile(profile)))
 	}
 
 	const addManualBoard = (board) => {
@@ -609,31 +738,104 @@ export default function GeneratorV2() {
 					</section>
 
 					<section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<h2 className="mb-3 text-lg font-black text-slate-950">ACOL Defaults</h2>
-						<div className="grid grid-cols-2 gap-2">
-							<Field label="1NT Min">
-								<NumberInput min="10" max="18" value={acolSettings.oneNtMin} onChange={(event) => setAcolSettings((current) => ({ ...current, oneNtMin: Number(event.target.value) }))} />
-							</Field>
-							<Field label="1NT Max">
-								<NumberInput min="10" max="18" value={acolSettings.oneNtMax} onChange={(event) => setAcolSettings((current) => ({ ...current, oneNtMax: Number(event.target.value) }))} />
-							</Field>
+						<div className="mb-3 flex items-center justify-between gap-3">
+							<h2 className="text-lg font-black text-slate-950">ACOL Defaults</h2>
+							<AcolInfoTooltip settings={acolSettings} />
 						</div>
-						<div className="mt-3 grid gap-2">
-							{[
-								['stayman', 'Stayman'],
-								['transfers', 'Transfers'],
-								['weakTwos', 'Weak Twos'],
-								['weakThrees', 'Weak Threes'],
-							].map(([key, label]) => (
-								<label key={key} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">
-									<span>{label}</span>
-									<input
-										type="checkbox"
-										checked={!!acolSettings[key]}
-										onChange={(event) => setAcolSettings((current) => ({ ...current, [key]: event.target.checked }))}
-									/>
-								</label>
-							))}
+						<div className="grid gap-2">
+							<MiniField label="Profile">
+								<MiniSelect value={acolSettings.profile} onChange={(event) => updateAcolProfile(event.target.value)}>
+									{ACOL_PROFILE_OPTIONS.map((profile) => (
+										<option key={profile.id} value={profile.id}>
+											{profile.label}
+										</option>
+									))}
+								</MiniSelect>
+							</MiniField>
+							<MiniRange
+								label="1NT"
+								minLabel="1NT Min"
+								maxLabel="1NT Max"
+								min="10"
+								max="18"
+								minValue={acolSettings.oneNtMin}
+								maxValue={acolSettings.oneNtMax}
+								onMinChange={(value) => updateAcolSetting('oneNtMin', value)}
+								onMaxChange={(value) => updateAcolSetting('oneNtMax', value)}
+							/>
+							<MiniRange
+								label="2NT"
+								minLabel="2NT Min"
+								maxLabel="2NT Max"
+								min="18"
+								max="24"
+								minValue={acolSettings.twoNtMin}
+								maxValue={acolSettings.twoNtMax}
+								onMinChange={(value) => updateAcolSetting('twoNtMin', value)}
+								onMaxChange={(value) => updateAcolSetting('twoNtMax', value)}
+							/>
+							<div className="grid grid-cols-2 gap-2">
+								<MiniField label="Majors">
+									<MiniSelect value={acolSettings.majorStyle} onChange={(event) => updateAcolSetting('majorStyle', event.target.value)}>
+										<option value="five_card">5-card</option>
+										<option value="four_card">4-card</option>
+									</MiniSelect>
+								</MiniField>
+								<MiniField label="2C Style">
+									<MiniSelect value={acolSettings.strongTwoStyle} onChange={(event) => updateAcolSetting('strongTwoStyle', event.target.value)}>
+										<option value="strong_2c">Strong 2C</option>
+										<option value="benjaminised">Benjaminised</option>
+										<option value="off">Off</option>
+									</MiniSelect>
+								</MiniField>
+							</div>
+							<MiniSingleNumber
+								label="2C Min"
+								inputLabel="2C Min"
+								min="16"
+								max="30"
+								value={acolSettings.strongTwoClubMin}
+								disabled={acolSettings.strongTwoStyle !== 'strong_2c'}
+								onChange={(value) => updateAcolSetting('strongTwoClubMin', value)}
+							/>
+							<MiniRange
+								label="Weak 2"
+								minLabel="Weak Two Min"
+								maxLabel="Weak Two Max"
+								min="0"
+								max="15"
+								minValue={acolSettings.weakTwoMin}
+								maxValue={acolSettings.weakTwoMax}
+								disabled={!acolSettings.weakTwos}
+								onMinChange={(value) => updateAcolSetting('weakTwoMin', value)}
+								onMaxChange={(value) => updateAcolSetting('weakTwoMax', value)}
+							/>
+							<MiniRange
+								label="Weak 3"
+								minLabel="Weak Three Min"
+								maxLabel="Weak Three Max"
+								min="0"
+								max="15"
+								minValue={acolSettings.weakThreeMin}
+								maxValue={acolSettings.weakThreeMax}
+								disabled={!acolSettings.weakThrees}
+								onMinChange={(value) => updateAcolSetting('weakThreeMin', value)}
+								onMaxChange={(value) => updateAcolSetting('weakThreeMax', value)}
+							/>
+							<div className="grid grid-cols-2 gap-1.5">
+								<MiniToggle label="1NT Stayman" checked={acolSettings.oneNtStayman} onChange={(value) => updateAcolSetting('oneNtStayman', value)} />
+								<MiniToggle label="1NT Transfers" checked={acolSettings.oneNtTransfers} onChange={(value) => updateAcolSetting('oneNtTransfers', value)} />
+								<MiniToggle label="2NT Stayman" checked={acolSettings.twoNtStayman} onChange={(value) => updateAcolSetting('twoNtStayman', value)} />
+								<MiniToggle label="2NT Transfers" checked={acolSettings.twoNtTransfers} onChange={(value) => updateAcolSetting('twoNtTransfers', value)} />
+								<MiniToggle label="Weak Twos" checked={acolSettings.weakTwos} onChange={(value) => updateAcolSetting('weakTwos', value)} />
+								<MiniToggle label="Weak Threes" checked={acolSettings.weakThrees} onChange={(value) => updateAcolSetting('weakThrees', value)} />
+								<MiniToggle label="Overcalls" checked={acolSettings.overcalls} onChange={(value) => updateAcolSetting('overcalls', value)} />
+								<MiniToggle label="Takeout X" checked={acolSettings.takeoutDoubles} onChange={(value) => updateAcolSetting('takeoutDoubles', value)} />
+								<MiniToggle label="Negative X" checked={acolSettings.negativeDoubles} onChange={(value) => updateAcolSetting('negativeDoubles', value)} />
+								<MiniToggle label="Gerber" checked={acolSettings.gerber} onChange={(value) => updateAcolSetting('gerber', value)} />
+								<MiniToggle label="Blackwood" checked={acolSettings.blackwood} onChange={(value) => updateAcolSetting('blackwood', value)} />
+								<MiniToggle label="4SF" checked={acolSettings.fourthSuitForcing} onChange={(value) => updateAcolSetting('fourthSuitForcing', value)} />
+							</div>
 						</div>
 					</section>
 

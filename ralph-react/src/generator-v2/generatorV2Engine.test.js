@@ -3,9 +3,14 @@ import assert from 'node:assert/strict'
 import {
 	DEFAULT_ACOL_SETTINGS,
 	SEATS,
+	acolSettingsSummary,
+	acolTopicAvailability,
 	createGenerator2SessionSnapshot,
 	generateGenerator2Boards,
 	hcp,
+	normalizeAcolSettings,
+	openingBidForHand,
+	settingsForAcolProfile,
 	suitLengths,
 } from './generatorV2Engine.js'
 import { validateAuction } from '../lib/bridgeCore.js'
@@ -48,12 +53,26 @@ function blackwoodResponse(cards) {
 	return '5C'
 }
 
-function generatePreset(presetId, count = 12) {
+function cardsFromCodes(codes) {
+	return codes.map((code, index) => {
+		const suitKey = code.slice(-1)
+		const rankRaw = code.slice(0, -1)
+		return {
+			id: index + 1,
+			suitKey,
+			suit: { S: 'Spades', H: 'Hearts', D: 'Diamonds', C: 'Clubs' }[suitKey],
+			rank: rankRaw === 'T' ? '10' : rankRaw,
+			label: code,
+		}
+	})
+}
+
+function generatePreset(presetId, count = 12, acolSettings = DEFAULT_ACOL_SETTINGS) {
 	const result = generateGenerator2Boards({
 		presetId,
 		count,
 		auctionMode: 'auto',
-		acolSettings: DEFAULT_ACOL_SETTINGS,
+		acolSettings,
 		seen: new Set(),
 	})
 	assert.equal(result.warnings.length, 0, `${presetId} should not fall back`)
@@ -276,6 +295,110 @@ test('fourth-suit forcing boards follow the 1D-1H-1S-2C structure', () => {
 		assert.ok(dealerLengths.H <= 3)
 		assert.ok(responderLengths.H >= 4)
 	}
+})
+
+test('ACOL settings normalize ranges, aliases and active summary', () => {
+	const settings = normalizeAcolSettings({
+		profile: 'custom',
+		oneNtMin: 16,
+		oneNtMax: 14,
+		twoNtMin: 23,
+		twoNtMax: 19,
+		weakTwoMin: 11,
+		weakTwoMax: 8,
+		stayman: false,
+	})
+	assert.equal(settings.profile, 'custom')
+	assert.deepEqual([settings.oneNtMin, settings.oneNtMax], [14, 16])
+	assert.deepEqual([settings.twoNtMin, settings.twoNtMax], [19, 23])
+	assert.deepEqual([settings.weakTwoMin, settings.weakTwoMax], [8, 11])
+	assert.equal(settings.oneNtStayman, false)
+	assert.equal(settings.stayman, false)
+	assert.ok(acolSettingsSummary(settings).some((line) => line.includes('1NT 14-16')))
+})
+
+test('custom ACOL point ranges shape generated topic output', () => {
+	const oneNtSettings = normalizeAcolSettings({
+		...DEFAULT_ACOL_SETTINGS,
+		profile: 'custom',
+		oneNtMin: 14,
+		oneNtMax: 16,
+	})
+	for (const board of generatePreset('one_nt_mixed', 12, oneNtSettings)) {
+		assert.equal(board.auction[0], '1NT')
+		assert.ok(hcp(board.hands[board.dealer]) >= 14)
+		assert.ok(hcp(board.hands[board.dealer]) <= 16)
+		assert.ok(balanced(board.hands[board.dealer]))
+	}
+
+	const twoNtSettings = normalizeAcolSettings({
+		...DEFAULT_ACOL_SETTINGS,
+		profile: 'custom',
+		twoNtMin: 19,
+		twoNtMax: 21,
+	})
+	for (const board of generatePreset('two_nt_opening', 12, twoNtSettings)) {
+		assert.equal(board.auction[0], '2NT')
+		assert.ok(hcp(board.hands[board.dealer]) >= 19)
+		assert.ok(hcp(board.hands[board.dealer]) <= 21)
+		assert.ok(balanced(board.hands[board.dealer]))
+	}
+})
+
+test('custom weak and strong two ranges are honoured exactly', () => {
+	const weakSettings = normalizeAcolSettings({
+		...DEFAULT_ACOL_SETTINGS,
+		profile: 'custom',
+		weakTwoMin: 8,
+		weakTwoMax: 9,
+	})
+	for (const board of generatePreset('weak_twos', 12, weakSettings)) {
+		assert.match(board.auction[0], /^2[HS]$/)
+		assert.ok(hcp(board.hands[board.dealer]) >= 8)
+		assert.ok(hcp(board.hands[board.dealer]) <= 9)
+	}
+
+	const strongSettings = normalizeAcolSettings({
+		...DEFAULT_ACOL_SETTINGS,
+		profile: 'custom',
+		strongTwoClubMin: 25,
+	})
+	for (const board of generatePreset('strong_two_club', 8, strongSettings)) {
+		assert.equal(board.auction[0], '2C')
+		assert.ok(hcp(board.hands[board.dealer]) >= 25)
+	}
+})
+
+test('major-opening style changes the selected opening bid without convention clashes', () => {
+	const hand = cardsFromCodes(['AS', 'QS', '9S', '7S', 'KH', '8H', '6H', '4H', 'AD', 'TD', '7D', '3D', '2C'])
+	assert.equal(openingBidForHand(hand, { ...DEFAULT_ACOL_SETTINGS, majorStyle: 'five_card' }), '1D')
+	assert.equal(openingBidForHand(hand, { ...DEFAULT_ACOL_SETTINGS, majorStyle: 'four_card' }), '1S')
+})
+
+test('disabled conventions do not produce fallback boards for matching topics', () => {
+	const disabledStayman = generateGenerator2Boards({
+		presetId: 'stayman',
+		count: 1,
+		auctionMode: 'auto',
+		acolSettings: { ...DEFAULT_ACOL_SETTINGS, oneNtStayman: false },
+		seen: new Set(),
+	})
+	assert.deepEqual(disabledStayman.boards, [])
+	assert.equal(disabledStayman.attempts, 0)
+	assert.match(disabledStayman.warnings[0], /Stayman after 1NT is off/)
+
+	const benjaminised = settingsForAcolProfile('benjaminised')
+	const strongTwo = generateGenerator2Boards({
+		presetId: 'strong_two_club',
+		count: 1,
+		auctionMode: 'auto',
+		acolSettings: benjaminised,
+		seen: new Set(),
+	})
+	assert.deepEqual(strongTwo.boards, [])
+	assert.equal(strongTwo.attempts, 0)
+	assert.match(strongTwo.warnings[0], /Benjaminised ACOL/)
+	assert.equal(acolTopicAvailability('strong_two_club', benjaminised).enabled, false)
 })
 
 test('string start board values are treated as numbers', () => {

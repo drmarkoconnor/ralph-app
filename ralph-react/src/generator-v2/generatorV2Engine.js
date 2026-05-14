@@ -171,12 +171,155 @@ export const SYLLABUS_GROUPS = [
 ]
 
 export const DEFAULT_ACOL_SETTINGS = {
+	profile: 'standard',
 	oneNtMin: 12,
 	oneNtMax: 14,
+	twoNtMin: 20,
+	twoNtMax: 22,
+	strongTwoClubMin: 23,
+	strongTwoStyle: 'strong_2c',
+	majorStyle: 'five_card',
+	oneNtStayman: true,
+	oneNtTransfers: true,
+	twoNtStayman: true,
+	twoNtTransfers: true,
+	weakTwos: true,
+	weakTwoMin: 6,
+	weakTwoMax: 10,
+	weakThrees: true,
+	weakThreeMin: 5,
+	weakThreeMax: 10,
+	overcalls: true,
+	takeoutDoubles: true,
+	negativeDoubles: true,
+	gerber: true,
+	blackwood: true,
+	fourthSuitForcing: true,
 	stayman: true,
 	transfers: true,
-	weakTwos: true,
-	weakThrees: true,
+}
+
+export const ACOL_PROFILE_OPTIONS = [
+	{ id: 'standard', label: 'Standard ACOL' },
+	{ id: 'benjaminised', label: 'Benjaminised ACOL' },
+	{ id: 'custom', label: 'Custom' },
+]
+
+const PROFILE_SETTINGS = {
+	standard: { ...DEFAULT_ACOL_SETTINGS },
+	benjaminised: {
+		...DEFAULT_ACOL_SETTINGS,
+		profile: 'benjaminised',
+		strongTwoStyle: 'benjaminised',
+	},
+	custom: {
+		...DEFAULT_ACOL_SETTINGS,
+		profile: 'custom',
+	},
+}
+
+function numberInRange(value, fallback, min, max) {
+	const n = Number(value)
+	if (!Number.isFinite(n)) return fallback
+	return Math.max(min, Math.min(max, Math.round(n)))
+}
+
+function normalizeRange(minValue, maxValue, fallbackMin, fallbackMax, hardMin, hardMax) {
+	let min = numberInRange(minValue, fallbackMin, hardMin, hardMax)
+	let max = numberInRange(maxValue, fallbackMax, hardMin, hardMax)
+	if (min > max) [min, max] = [max, min]
+	return [min, max]
+}
+
+function boolOrFallback(value, fallback) {
+	return typeof value === 'boolean' ? value : fallback
+}
+
+export function settingsForAcolProfile(profile) {
+	return { ...(PROFILE_SETTINGS[profile] || PROFILE_SETTINGS.standard) }
+}
+
+export function normalizeAcolSettings(input = {}) {
+	const requestedProfile = ['standard', 'benjaminised', 'custom'].includes(input?.profile)
+		? input.profile
+		: 'standard'
+	const base = requestedProfile === 'custom'
+		? DEFAULT_ACOL_SETTINGS
+		: settingsForAcolProfile(requestedProfile)
+	const merged = { ...base, ...input }
+	const [oneNtMin, oneNtMax] = normalizeRange(merged.oneNtMin, merged.oneNtMax, 12, 14, 10, 18)
+	const [twoNtMin, twoNtMax] = normalizeRange(merged.twoNtMin, merged.twoNtMax, 20, 22, 18, 24)
+	const [weakTwoMin, weakTwoMax] = normalizeRange(merged.weakTwoMin, merged.weakTwoMax, 6, 10, 0, 15)
+	const [weakThreeMin, weakThreeMax] = normalizeRange(merged.weakThreeMin, merged.weakThreeMax, 5, 10, 0, 15)
+	const oneNtStayman = boolOrFallback(
+		input.oneNtStayman !== undefined ? input.oneNtStayman : input.stayman !== undefined ? input.stayman : merged.oneNtStayman,
+		true,
+	)
+	const oneNtTransfers = boolOrFallback(
+		input.oneNtTransfers !== undefined ? input.oneNtTransfers : input.transfers !== undefined ? input.transfers : merged.oneNtTransfers,
+		true,
+	)
+	const normalized = {
+		...merged,
+		profile: requestedProfile,
+		oneNtMin,
+		oneNtMax,
+		twoNtMin,
+		twoNtMax,
+		strongTwoClubMin: numberInRange(merged.strongTwoClubMin, 23, 16, 30),
+		strongTwoStyle: ['strong_2c', 'benjaminised', 'off'].includes(merged.strongTwoStyle)
+			? merged.strongTwoStyle
+			: 'strong_2c',
+		majorStyle: merged.majorStyle === 'four_card' ? 'four_card' : 'five_card',
+		oneNtStayman,
+		oneNtTransfers,
+		twoNtStayman: boolOrFallback(merged.twoNtStayman, true),
+		twoNtTransfers: boolOrFallback(merged.twoNtTransfers, true),
+		weakTwos: boolOrFallback(merged.weakTwos, true),
+		weakTwoMin,
+		weakTwoMax,
+		weakThrees: boolOrFallback(merged.weakThrees, true),
+		weakThreeMin,
+		weakThreeMax,
+		overcalls: boolOrFallback(merged.overcalls, true),
+		takeoutDoubles: boolOrFallback(merged.takeoutDoubles, true),
+		negativeDoubles: boolOrFallback(merged.negativeDoubles, true),
+		gerber: boolOrFallback(merged.gerber, true),
+		blackwood: boolOrFallback(merged.blackwood, true),
+		fourthSuitForcing: boolOrFallback(merged.fourthSuitForcing, true),
+	}
+	return {
+		...normalized,
+		stayman: normalized.oneNtStayman,
+		transfers: normalized.oneNtTransfers,
+	}
+}
+
+function profileLabel(profile) {
+	return ACOL_PROFILE_OPTIONS.find((item) => item.id === profile)?.label || 'Standard ACOL'
+}
+
+function onOff(value) {
+	return value ? 'on' : 'off'
+}
+
+export function acolSettingsSummary(input = {}) {
+	const settings = normalizeAcolSettings(input)
+	const strongTwo =
+		settings.strongTwoStyle === 'strong_2c'
+			? `Strong 2C ${settings.strongTwoClubMin}+`
+			: settings.strongTwoStyle === 'benjaminised'
+				? 'Benjaminised twos'
+				: 'Strong twos off'
+	return [
+		`Profile: ${profileLabel(settings.profile)}`,
+		`1NT ${settings.oneNtMin}-${settings.oneNtMax}; 2NT ${settings.twoNtMin}-${settings.twoNtMax}`,
+		`Majors: ${settings.majorStyle === 'four_card' ? '4-card' : '5-card'}; ${strongTwo}`,
+		`Weak twos ${onOff(settings.weakTwos)} ${settings.weakTwoMin}-${settings.weakTwoMax}; weak threes ${onOff(settings.weakThrees)} ${settings.weakThreeMin}-${settings.weakThreeMax}`,
+		`1NT Stayman ${onOff(settings.oneNtStayman)}, transfers ${onOff(settings.oneNtTransfers)}; 2NT Stayman ${onOff(settings.twoNtStayman)}, transfers ${onOff(settings.twoNtTransfers)}`,
+		`Overcalls ${onOff(settings.overcalls)}; takeout X ${onOff(settings.takeoutDoubles)}; negative X ${onOff(settings.negativeDoubles)}`,
+		`Gerber ${onOff(settings.gerber)}; Blackwood ${onOff(settings.blackwood)}; 4SF ${onOff(settings.fourthSuitForcing)}`,
+	]
 }
 
 export function createGenerator2SessionSnapshot({
@@ -365,6 +508,37 @@ function blackwoodResponse(cards) {
 	return '5C'
 }
 
+function disabledConventionReason(presetId, settings) {
+	if (presetId === 'stayman' && !settings.oneNtStayman) return 'Stayman after 1NT is off'
+	if (presetId === 'transfers' && !settings.oneNtTransfers) return 'Transfers after 1NT are off'
+	if (presetId === 'two_nt_stayman' && !settings.twoNtStayman) return 'Stayman after 2NT is off'
+	if (presetId === 'two_nt_transfers' && !settings.twoNtTransfers) return 'Transfers after 2NT are off'
+	if (presetId === 'strong_two_club' && settings.strongTwoStyle !== 'strong_2c') {
+		return settings.strongTwoStyle === 'benjaminised'
+			? 'Benjaminised ACOL gives 2C/2D different meanings'
+			: 'Strong 2C openings are off'
+	}
+	if (presetId === 'weak_twos' && !settings.weakTwos) return 'Weak twos are off'
+	if (presetId === 'weak_threes' && !settings.weakThrees) return 'Weak threes are off'
+	if (presetId === 'overcalls' && !settings.overcalls) return 'Overcalls are off'
+	if (presetId === 'takeout_double' && !settings.takeoutDoubles) return 'Takeout doubles are off'
+	if (presetId === 'negative_double' && !settings.negativeDoubles) return 'Negative doubles are off'
+	if (presetId === 'gerber_ace_asking' && !settings.gerber) return 'Gerber is off'
+	if (presetId === 'blackwood_ace_asking' && !settings.blackwood) return 'Blackwood is off'
+	if (presetId === 'fourth_suit_forcing' && !settings.fourthSuitForcing) return 'Fourth-suit forcing is off'
+	return ''
+}
+
+export function acolTopicAvailability(presetId, settingsInput = DEFAULT_ACOL_SETTINGS) {
+	const settings = normalizeAcolSettings(settingsInput)
+	const reason = disabledConventionReason(presetId, settings)
+	return {
+		enabled: !reason,
+		reason,
+		settings,
+	}
+}
+
 function shuffle(items) {
 	const arr = [...items]
 	for (let i = arr.length - 1; i > 0; i--) {
@@ -542,7 +716,7 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 	}
 	if (presetId === 'stayman') {
 		return (
-			settings.stayman &&
+			settings.oneNtStayman &&
 			oneNtOpenerOk(hands, dealer, settings) &&
 			partnerHcp >= 8 &&
 			(partnerLengths.S === 4 || partnerLengths.H === 4)
@@ -550,22 +724,23 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 	}
 	if (presetId === 'transfers') {
 		return (
-			settings.transfers &&
+			settings.oneNtTransfers &&
 			oneNtOpenerOk(hands, dealer, settings) &&
 			partnerHcp >= 6 &&
 			(partnerLengths.S >= 5 || partnerLengths.H >= 5)
 		)
 	}
 	if (presetId === 'two_nt_opening') {
-		return dealerHcp >= 20 && dealerHcp <= 22 && isBalanced(dealerLengths)
+		return dealerHcp >= settings.twoNtMin && dealerHcp <= settings.twoNtMax && isBalanced(dealerLengths)
 	}
 	if (presetId === 'strong_two_club') {
-		return dealerHcp >= 23 && isBalanced(dealerLengths)
+		return settings.strongTwoStyle === 'strong_2c' && dealerHcp >= settings.strongTwoClubMin && isBalanced(dealerLengths)
 	}
 	if (presetId === 'two_nt_stayman') {
 		return (
-			dealerHcp >= 20 &&
-			dealerHcp <= 22 &&
+			settings.twoNtStayman &&
+			dealerHcp >= settings.twoNtMin &&
+			dealerHcp <= settings.twoNtMax &&
 			isBalanced(dealerLengths) &&
 			partnerHcp >= 4 &&
 			(partnerLengths.S === 4 || partnerLengths.H === 4) &&
@@ -575,8 +750,9 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 	}
 	if (presetId === 'two_nt_transfers') {
 		return (
-			dealerHcp >= 20 &&
-			dealerHcp <= 22 &&
+			settings.twoNtTransfers &&
+			dealerHcp >= settings.twoNtMin &&
+			dealerHcp <= settings.twoNtMax &&
 			isBalanced(dealerLengths) &&
 			(partnerLengths.S >= 5 || partnerLengths.H >= 5)
 		)
@@ -592,17 +768,18 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 	}
 	if (presetId === 'weak_twos') {
 		const major = dealerLengths.S >= 6 || dealerLengths.H >= 6
-		return settings.weakTwos && major && dealerHcp >= 6 && dealerHcp <= 10
+		return settings.weakTwos && major && dealerHcp >= settings.weakTwoMin && dealerHcp <= settings.weakTwoMax
 	}
 	if (presetId === 'weak_threes') {
 		return (
 			settings.weakThrees &&
 			Object.values(dealerLengths).some((len) => len >= 7) &&
-			dealerHcp >= 5 &&
-			dealerHcp <= 10
+			dealerHcp >= settings.weakThreeMin &&
+			dealerHcp <= settings.weakThreeMax
 		)
 	}
 	if (presetId === 'overcalls') {
+		if (!settings.overcalls) return false
 		const opener = oneLevelSuitOpening(hands[dealer], settings)
 		if (!opener) return false
 		const openerSuit = opener.slice(1)
@@ -621,6 +798,7 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 		)
 	}
 	if (presetId === 'takeout_double') {
+		if (!settings.takeoutDoubles) return false
 		const opener = oneLevelSuitOpening(hands[dealer], settings)
 		if (!opener) return false
 		const doubler = leftOf(dealer)
@@ -638,6 +816,7 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 		)
 	}
 	if (presetId === 'negative_double') {
+		if (!settings.negativeDoubles) return false
 		const opener = oneLevelSuitOpening(hands[dealer], settings)
 		if (opener !== '1C' && opener !== '1D') return false
 		const overcaller = leftOf(dealer)
@@ -665,6 +844,7 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 	}
 	if (presetId === 'gerber_ace_asking') {
 		return (
+			settings.gerber &&
 			oneNtOpenerOk(hands, dealer, settings) &&
 			partnerHcp >= 18 &&
 			dealerHcp + partnerHcp >= 31 &&
@@ -674,6 +854,7 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 	if (presetId === 'blackwood_ace_asking') {
 		const trump = dealerLengths.S >= 5 ? 'S' : dealerLengths.H >= 5 ? 'H' : ''
 		return (
+			settings.blackwood &&
 			!!trump &&
 			dealerHcp >= 16 &&
 			partnerHcp >= 12 &&
@@ -684,6 +865,7 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 	}
 	if (presetId === 'fourth_suit_forcing') {
 		return (
+			settings.fourthSuitForcing &&
 			dealerHcp >= 15 &&
 			dealerHcp <= 19 &&
 			partnerHcp >= 10 &&
@@ -726,14 +908,16 @@ function presetOk(presetId, hands, dealer, settings, constraints) {
 	return true
 }
 
-function openingBidForHand(cards, settings) {
+export function openingBidForHand(cards, settingsInput = DEFAULT_ACOL_SETTINGS) {
+	const settings = normalizeAcolSettings(settingsInput)
 	const points = hcp(cards)
 	const lengths = suitLengths(cards)
 	if (points < 12) return 'P'
 	if (isBalanced(lengths) && !hasFiveCardMajor(lengths) && points >= settings.oneNtMin && points <= settings.oneNtMax) {
 		return '1NT'
 	}
-	if (lengths.S >= 5 || lengths.H >= 5) return lengths.S >= lengths.H ? '1S' : '1H'
+	const majorMin = settings.majorStyle === 'four_card' ? 4 : 5
+	if (lengths.S >= majorMin || lengths.H >= majorMin) return lengths.S >= lengths.H ? '1S' : '1H'
 	if (lengths.D >= 4 && lengths.D >= lengths.C) return '1D'
 	return '1C'
 }
@@ -945,16 +1129,16 @@ function lessonNote(presetId, hands, dealer, settings) {
 		return `${topic.title}: ${dealer} has ${dealerPoints} HCP and a balanced ${settings.oneNtMin}-${settings.oneNtMax} 1NT opening. Partner ${partner} has ${hcp(hands[partner])} HCP.`
 	}
 	if (presetId === 'two_nt_opening') {
-		return `${topic.title}: ${dealer} has ${dealerPoints} HCP and a balanced 20-22 2NT opening. Partner ${partner} has ${hcp(hands[partner])} HCP.`
+		return `${topic.title}: ${dealer} has ${dealerPoints} HCP and a balanced ${settings.twoNtMin}-${settings.twoNtMax} 2NT opening. Partner ${partner} has ${hcp(hands[partner])} HCP.`
 	}
 	if (presetId === 'strong_two_club') {
-		return `${topic.title}: ${dealer} has ${dealerPoints} HCP and opens 2C, then rebids 2NT after the 2D response. Partner ${partner} has ${hcp(hands[partner])} HCP.`
+		return `${topic.title}: ${dealer} has ${dealerPoints} HCP and opens 2C (${settings.strongTwoClubMin}+ style), then rebids 2NT after the 2D response. Partner ${partner} has ${hcp(hands[partner])} HCP.`
 	}
 	if (presetId === 'two_nt_stayman') {
-		return `${topic.title}: ${dealer} has a balanced 20-22 HCP 2NT opening. ${partner} uses 3C Stayman with a four-card major.`
+		return `${topic.title}: ${dealer} has a balanced ${settings.twoNtMin}-${settings.twoNtMax} HCP 2NT opening. ${partner} uses 3C Stayman with a four-card major.`
 	}
 	if (presetId === 'two_nt_transfers') {
-		return `${topic.title}: ${dealer} has a balanced 20-22 HCP 2NT opening. ${partner} transfers to a five-card major.`
+		return `${topic.title}: ${dealer} has a balanced ${settings.twoNtMin}-${settings.twoNtMax} HCP 2NT opening. ${partner} transfers to a five-card major.`
 	}
 	if (presetId === 'game_ns') {
 		return `N/S game-values hand. N/S have ${ns} combined HCP; review whether the class reaches a sensible game.`
@@ -999,10 +1183,21 @@ export function generateGenerator2Boards({
 }) {
 	const boards = []
 	const warnings = []
-	const settings = { ...DEFAULT_ACOL_SETTINGS, ...acolSettings }
+	const settings = normalizeAcolSettings(acolSettings)
 	const requested = Math.max(1, Math.min(48, Number(count) || 1))
 	const firstBoard = Math.max(1, Number(startBoard) || 1)
 	let totalAttempts = 0
+	const topic = topicById(presetId)
+	const availability = acolTopicAvailability(presetId, settings)
+	if (!availability.enabled) {
+		return {
+			boards,
+			warnings: [
+				`${topic.title}: ${availability.reason}. Change ACOL Defaults or choose a different topic.`,
+			],
+			attempts: 0,
+		}
+	}
 
 	for (let index = 0; index < requested; index++) {
 		const boardNo = firstBoard + index
@@ -1043,7 +1238,6 @@ export function generateGenerator2Boards({
 			accepted = { hands: fallback, signature: handSignature(fallback) }
 		}
 		seen.add(accepted.signature)
-		const topic = topicById(presetId)
 		const suggestedAuction = auctionMode === 'blank'
 			? []
 			: basicAuction(presetId, accepted.hands, dealer, settings)
