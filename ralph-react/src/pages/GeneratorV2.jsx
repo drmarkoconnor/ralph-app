@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BoardZ } from '../schemas/board'
 import { exportBoardPBN } from '../pbn/export'
@@ -12,12 +12,15 @@ import {
 	acolSettingsSummary,
 	boardToExportShape,
 	createGenerator2SessionSnapshot,
+	formatAuctionTokenIssue,
 	generateGenerator2Boards,
 	hcp,
+	normalizeAuctionText,
 	normalizeAcolSettings,
 	partnershipHcp,
 	settingsForAcolProfile,
 	suitLengths,
+	validateBoardAuctionTokens,
 } from '../generator-v2/generatorV2Engine'
 
 const DEFAULT_COUNT = 8
@@ -29,6 +32,7 @@ const DEFAULT_META = {
 }
 const PLAYER_HANDOFF_KEY = 'ralph-player-handoff-v1'
 const GENERATOR_STATE_KEY = 'ralph-generator2-state-v1'
+const AUTOSAVE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 const suitTone = {
 	S: 'text-slate-950',
@@ -71,18 +75,6 @@ function downloadText(content, filename, type = 'text/plain') {
 	URL.revokeObjectURL(url)
 }
 
-function normalizeAuctionText(text) {
-	return String(text || '')
-		.trim()
-		.split(/\s+/)
-		.filter(Boolean)
-		.map((call) => {
-			const upper = call.toUpperCase()
-			if (upper === 'PASS') return 'P'
-			return upper
-		})
-}
-
 function topicFromId(id) {
 	for (const group of SYLLABUS_GROUPS) {
 		const topic = group.topics.find((item) => item.id === id)
@@ -93,11 +85,36 @@ function topicFromId(id) {
 
 function readGeneratorState() {
 	if (typeof window === 'undefined') return {}
+	const sessionState = readStoredJson(window.sessionStorage, GENERATOR_STATE_KEY)
+	if (isFreshAutosave(sessionState)) return sessionState
+	const localState = readStoredJson(window.localStorage, GENERATOR_STATE_KEY)
+	if (isFreshAutosave(localState)) return localState
+	return {}
+}
+
+function readStoredJson(storage, key) {
 	try {
-		return JSON.parse(window.sessionStorage.getItem(GENERATOR_STATE_KEY) || '{}')
+		return JSON.parse(storage.getItem(key) || '{}')
 	} catch {
 		return {}
 	}
+}
+
+function isFreshAutosave(value) {
+	if (!value || !Object.keys(value).length) return false
+	if (!value.savedAt) return true
+	return Date.now() - Number(value.savedAt) <= AUTOSAVE_MAX_AGE_MS
+}
+
+function createAuctionTokenValidationError(issues) {
+	const error = new Error(formatAuctionTokenIssue(issues[0]))
+	error.name = 'AuctionTokenValidationError'
+	error.issues = issues
+	return error
+}
+
+function isAuctionTokenValidationError(error) {
+	return error?.name === 'AuctionTokenValidationError' && Array.isArray(error.issues)
 }
 
 function rankOrder(rank) {
@@ -462,6 +479,36 @@ export default function GeneratorV2() {
 	const [boards, setBoards] = useState(restored.boards || [])
 	const [warnings, setWarnings] = useState(restored.warnings || [])
 	const [status, setStatus] = useState(restored.status || 'Choose a topic, then generate a set.')
+	const [pbnExportIssues, setPbnExportIssues] = useState([])
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		try {
+			const snapshot = {
+				...createGenerator2SessionSnapshot({
+					presetId,
+					count,
+					startBoard,
+					dealerMode,
+					dealerSeat,
+					auctionMode,
+					dealer4Mode,
+					meta,
+					acolSettings,
+					constraints,
+					boards,
+					warnings,
+					status,
+				}),
+				savedAt: Date.now(),
+			}
+			const serialized = JSON.stringify(snapshot)
+			window.sessionStorage.setItem(GENERATOR_STATE_KEY, serialized)
+			window.localStorage.setItem(GENERATOR_STATE_KEY, serialized)
+		} catch {
+			// Ignore private-browsing or quota failures; export still works.
+		}
+	}, [presetId, count, startBoard, dealerMode, dealerSeat, auctionMode, dealer4Mode, meta, acolSettings, constraints, boards, warnings, status])
 
 	const selectedTopic = useMemo(() => topicFromId(presetId), [presetId])
 	const keptBoards = boards.filter((board) => board.keep)
@@ -484,10 +531,12 @@ export default function GeneratorV2() {
 		})
 		setBoards(result.boards)
 		setWarnings(result.warnings)
+		setPbnExportIssues([])
 		setStatus(`Generated ${result.boards.length} boards after ${result.attempts.toLocaleString()} attempts.`)
 	}
 
 	const updateBoard = (id, patch) => {
+		if (pbnExportIssues.length) setPbnExportIssues([])
 		setBoards((items) =>
 			items.map((board) => (board.id === id ? { ...board, ...patch } : board)),
 		)
@@ -507,6 +556,7 @@ export default function GeneratorV2() {
 		})
 		setBoards((items) => items.map((item) => (item.id === board.id ? result.boards[0] : item)))
 		setWarnings(result.warnings)
+		setPbnExportIssues([])
 		setStatus(`Regenerated board ${board.number}.`)
 	}
 
@@ -538,17 +588,24 @@ export default function GeneratorV2() {
 	const addManualBoard = (board) => {
 		setBoards((items) => [...items, board])
 		setWarnings([])
+		setPbnExportIssues([])
 		setStatus(`Added board ${board.number}.`)
 	}
 
 	const buildPbnForBoards = async (items, options = {}) => {
+		if (!options.omitAuctions) {
+			const auctionIssues = validateBoardAuctionTokens(items)
+			if (auctionIssues.length) throw createAuctionTokenValidationError(auctionIssues)
+		}
 		const pbnParts = []
 		for (const board of items) {
 			const shape = boardToExportShape(
 				{
 					...board,
 					number: Number(board.number) || 1,
-					auctionText: normalizeAuctionText(board.auctionText).join(' '),
+					auctionText: options.omitAuctions
+						? ''
+						: normalizeAuctionText(board.auctionText).join(' '),
 				},
 				meta,
 			)
@@ -558,15 +615,22 @@ export default function GeneratorV2() {
 		return pbnParts.join('')
 	}
 
-	const exportPbn = async () => {
+	const exportPbn = async (options = {}) => {
 		if (!keptBoards.length) return
 		try {
-			const pbn = await buildPbnForBoards(keptBoards)
-			downloadText(pbn, `bbc-generator2-${todayFileDate()}.pbn`)
-			setStatus(`Downloaded ${keptBoards.length} boards as PBN.`)
+			const pbn = await buildPbnForBoards(keptBoards, options)
+			const filenameSuffix = options.omitAuctions ? '-no-auctions' : ''
+			downloadText(pbn, `bbc-generator2-${todayFileDate()}${filenameSuffix}.pbn`)
+			setPbnExportIssues([])
+			setStatus(`Downloaded ${keptBoards.length} boards as PBN${options.omitAuctions ? ' without auctions' : ''}.`)
 		} catch (error) {
 			console.error('Generator 2 PBN export failed', error)
-			setStatus('PBN export failed. Check the auction tokens and try again.')
+			if (isAuctionTokenValidationError(error)) {
+				setPbnExportIssues(error.issues)
+				setStatus(`PBN export stopped. ${formatAuctionTokenIssue(error.issues[0])}`)
+				return
+			}
+			setStatus('PBN export failed. Check the board details and try again.')
 		}
 	}
 
@@ -921,7 +985,7 @@ export default function GeneratorV2() {
 								<button
 									type="button"
 									disabled={!keptBoards.length}
-									onClick={exportPbn}
+									onClick={() => exportPbn()}
 									className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40">
 									Export PBN
 								</button>
@@ -946,6 +1010,29 @@ export default function GeneratorV2() {
 								{warnings.map((warning) => (
 									<p key={warning}>{warning}</p>
 								))}
+							</div>
+						)}
+						{pbnExportIssues.length > 0 && (
+							<div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-950">
+								<div className="flex flex-wrap items-start justify-between gap-3">
+									<div className="space-y-1">
+										<p className="font-black">PBN export needs an auction fix.</p>
+										{pbnExportIssues.slice(0, 3).map((issue) => (
+											<p key={`${issue.boardId || issue.boardNumber}-${issue.tokens.join('-')}`}>
+												{formatAuctionTokenIssue(issue)}
+											</p>
+										))}
+										{pbnExportIssues.length > 3 && (
+											<p>{pbnExportIssues.length - 3} more board{pbnExportIssues.length - 3 === 1 ? '' : 's'} need auction fixes.</p>
+										)}
+									</div>
+									<button
+										type="button"
+										onClick={() => exportPbn({ omitAuctions: true })}
+										className="rounded-md bg-rose-700 px-3 py-2 text-xs font-black text-white hover:bg-rose-800">
+										Export PBN Without Auctions
+									</button>
+								</div>
 							</div>
 						)}
 					</div>

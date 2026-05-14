@@ -11,6 +11,51 @@ export const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3
 const RANKS_LOW = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
 const HCP = { A: 4, K: 3, Q: 2, J: 1 }
 const RANK_SORT = Object.fromEntries(RANKS.map((rank, index) => [rank, index]))
+const VALID_PBN_AUCTION_TOKEN = /^(P|X|XX|[1-7](C|D|H|S|NT))$/
+
+export const PBN_AUCTION_TOKEN_HELP = 'Use P for Pass, X for Double, XX for Redouble, or bids like 1C, 1D, 1H, 1S, 1NT.'
+
+export function normalizeAuctionToken(token) {
+	const upper = String(token || '').trim().toUpperCase()
+	if (upper === 'PASS') return 'P'
+	return upper
+}
+
+export function normalizeAuctionText(text) {
+	return String(text || '')
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean)
+		.map(normalizeAuctionToken)
+}
+
+export function invalidAuctionTokens(text) {
+	return String(text || '')
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean)
+		.map((raw) => ({ raw, normalized: normalizeAuctionToken(raw) }))
+		.filter((token) => !VALID_PBN_AUCTION_TOKEN.test(token.normalized))
+}
+
+export function validateBoardAuctionTokens(boards = []) {
+	return boards
+		.map((board) => {
+			const invalid = invalidAuctionTokens(board.auctionText)
+			if (!invalid.length) return null
+			return {
+				boardId: board.id,
+				boardNumber: board.number,
+				tokens: [...new Set(invalid.map((token) => token.raw))],
+			}
+		})
+		.filter(Boolean)
+}
+
+export function formatAuctionTokenIssue(issue) {
+	const tokens = issue.tokens.map((token) => `"${token}"`).join(', ')
+	return `Board ${issue.boardNumber} has invalid auction token${issue.tokens.length === 1 ? '' : 's'}: ${tokens}. ${PBN_AUCTION_TOKEN_HELP}`
+}
 
 export const SYLLABUS_GROUPS = [
 	{

@@ -8,10 +8,14 @@ import {
 	createGenerator2SessionSnapshot,
 	generateGenerator2Boards,
 	hcp,
+	formatAuctionTokenIssue,
+	invalidAuctionTokens,
+	normalizeAuctionText,
 	normalizeAcolSettings,
 	openingBidForHand,
 	settingsForAcolProfile,
 	suitLengths,
+	validateBoardAuctionTokens,
 } from './generatorV2Engine.js'
 import { validateAuction } from '../lib/bridgeCore.js'
 
@@ -427,6 +431,21 @@ test('suggest mode offers an auction without forcing export auction text', () =>
 	assert.deepEqual(board.auction, [])
 	assert.deepEqual(board.suggestedAuction.slice(0, 3), ['1NT', 'P', '2C'])
 	assert.match(board.suggestedAuctionText, /^1NT P 2C/)
+})
+
+test('auction token validation reports board-specific PBN export issues', () => {
+	assert.deepEqual(normalizeAuctionText('1nt pass 3NT P P P'), ['1NT', 'P', '3NT', 'P', 'P', 'P'])
+	assert.deepEqual(invalidAuctionTokens('1NT AP 3NT, P').map((token) => token.raw), ['AP', '3NT,'])
+
+	const issues = validateBoardAuctionTokens([
+		{ id: 'board-1', number: 1, auctionText: '1NT P 3NT P P P' },
+		{ id: 'board-2', number: 2, auctionText: '1NT AP' },
+	])
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].boardNumber, 2)
+	assert.deepEqual(issues[0].tokens, ['AP'])
+	assert.match(formatAuctionTokenIssue(issues[0]), /Board 2/)
+	assert.match(formatAuctionTokenIssue(issues[0]), /"AP"/)
 })
 
 test('generator session snapshot preserves accepted auction edits for back navigation', () => {

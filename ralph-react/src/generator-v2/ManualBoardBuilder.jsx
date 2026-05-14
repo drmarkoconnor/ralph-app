@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
 	SEATS,
 	SUITS,
@@ -6,6 +6,7 @@ import {
 	dealRandomHands,
 	dealerForBoard,
 	hcp,
+	normalizeAuctionText,
 	partnershipHcp,
 	suitLengths,
 	vulnerabilityForBoard,
@@ -27,11 +28,40 @@ const RANK_VALUE = {
 	2: 2,
 }
 const SUIT_VALUE = { S: 0, H: 1, D: 2, C: 3 }
+const MANUAL_DRAFT_KEY = 'ralph-generator2-manual-draft-v1'
+const AUTOSAVE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const suitText = {
 	S: 'text-slate-950',
 	H: 'text-rose-700',
 	D: 'text-rose-700',
 	C: 'text-slate-950',
+}
+
+function hasSavedLayout(value) {
+	return !!value?.hands && Array.isArray(value.deck) && SEATS.every((seat) => Array.isArray(value.hands[seat]))
+}
+
+function readManualDraft() {
+	if (typeof window === 'undefined') return {}
+	const sessionDraft = readStoredJson(window.sessionStorage, MANUAL_DRAFT_KEY)
+	if (isFreshAutosave(sessionDraft)) return sessionDraft
+	const localDraft = readStoredJson(window.localStorage, MANUAL_DRAFT_KEY)
+	if (isFreshAutosave(localDraft)) return localDraft
+	return {}
+}
+
+function readStoredJson(storage, key) {
+	try {
+		return JSON.parse(storage.getItem(key) || '{}')
+	} catch {
+		return {}
+	}
+}
+
+function isFreshAutosave(value) {
+	if (!value || !Object.keys(value).length) return false
+	if (!value.savedAt) return true
+	return Date.now() - Number(value.savedAt) <= AUTOSAVE_MAX_AGE_MS
 }
 
 function vulnerabilityTone(vul, seat, active) {
@@ -175,12 +205,13 @@ function DropZone({ seat, cards, active, vul, onDropCard, onSelectSeat }) {
 }
 
 export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStatus }) {
-	const [layout, setLayout] = useState(freshLayout)
-	const [targetSeat, setTargetSeat] = useState('N')
-	const [selectedCards, setSelectedCards] = useState(() => new Set())
-	const [cardEntry, setCardEntry] = useState('')
-	const [auctionText, setAuctionText] = useState('')
-	const [notes, setNotes] = useState('')
+	const restoredDraft = useMemo(() => readManualDraft(), [])
+	const [layout, setLayout] = useState(() => hasSavedLayout(restoredDraft.layout) ? restoredDraft.layout : freshLayout())
+	const [targetSeat, setTargetSeat] = useState(restoredDraft.targetSeat || 'N')
+	const [selectedCards, setSelectedCards] = useState(() => new Set(restoredDraft.selectedCards || []))
+	const [cardEntry, setCardEntry] = useState(restoredDraft.cardEntry || '')
+	const [auctionText, setAuctionText] = useState(restoredDraft.auctionText || '')
+	const [notes, setNotes] = useState(restoredDraft.notes || '')
 
 	const dealer = dealerForBoard(nextBoardNumber)
 	const vul = vulnerabilityForBoard(nextBoardNumber)
@@ -193,6 +224,25 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 	const liveSummary = useMemo(() => {
 		return SEATS.map((seat) => `${seat} ${hcp(layout.hands[seat])} HCP (${shapeText(layout.hands[seat])})`).join('; ')
 	}, [layout.hands])
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		try {
+			const serialized = JSON.stringify({
+				layout,
+				targetSeat,
+				selectedCards: [...selectedCards],
+				cardEntry,
+				auctionText,
+				notes,
+				savedAt: Date.now(),
+			})
+			window.sessionStorage.setItem(MANUAL_DRAFT_KEY, serialized)
+			window.localStorage.setItem(MANUAL_DRAFT_KEY, serialized)
+		} catch {
+			// Ignore private-browsing or quota failures; completed boards still export.
+		}
+	}, [layout, targetSeat, selectedCards, cardEntry, auctionText, notes])
 
 	const moveCard = (cardId, toSeat) => {
 		setSelectedCards((current) => {
@@ -292,11 +342,7 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 	}
 
 	const boardFromHands = (hands, title = 'Manual Board') => {
-		const auction = auctionText
-			.trim()
-			.split(/\s+/)
-			.filter(Boolean)
-			.map((call) => (call.toUpperCase() === 'PASS' ? 'P' : call.toUpperCase()))
+		const auction = normalizeAuctionText(auctionText)
 		return {
 			id: `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`,
 			keep: true,
