@@ -27,6 +27,7 @@ export const initialPlayerV2State = {
 	play: null,
 	history: [],
 	completedTricks: [],
+	autoPlayPaused: false,
 	visibilityMode: 'mimic',
 	status: '',
 }
@@ -82,6 +83,7 @@ function hydrateBoard(deals, index, preferredVisibleSeat = '') {
 			play: null,
 			history: [],
 			completedTricks: [],
+			autoPlayPaused: false,
 			status: '',
 		}
 	}
@@ -101,6 +103,7 @@ function hydrateBoard(deals, index, preferredVisibleSeat = '') {
 		play: null,
 		history: [],
 		completedTricks: [],
+		autoPlayPaused: false,
 		status: '',
 	}
 }
@@ -247,6 +250,14 @@ export function playerV2Reducer(state, action) {
 			return { ...state, contractNotice: '' }
 		case 'SET_VISIBILITY_MODE':
 			return { ...state, visibilityMode: action.mode }
+		case 'SET_AUTO_PLAY_PAUSED':
+			return {
+				...state,
+				autoPlayPaused: !!action.paused,
+				status: action.paused
+					? 'Automatic play paused.'
+					: 'Automatic play resumed.',
+			}
 		case 'SET_MANUAL_CONTRACT':
 			return {
 				...state,
@@ -317,6 +328,7 @@ export function playerV2Reducer(state, action) {
 				),
 				history: [],
 				completedTricks: [],
+				autoPlayPaused: false,
 				status: `Opening lead: ${derived.openingLeader}.`,
 			}
 		}
@@ -339,7 +351,9 @@ export function playerV2Reducer(state, action) {
 				derived.declarer,
 			)
 			const status = result.winner
-				? `Trick ${completed.length} to ${result.winner}.`
+				? completed.length >= 13
+					? 'Play complete. Automatic play paused for review.'
+					: `Trick ${completed.length} to ${result.winner}.`
 				: `${result.state.turnSeat} to play.`
 			return {
 				...state,
@@ -347,6 +361,7 @@ export function playerV2Reducer(state, action) {
 				history,
 				completedTricks: completed,
 				visibleSeats,
+				autoPlayPaused: completed.length >= 13 ? true : state.autoPlayPaused,
 				status,
 			}
 		}

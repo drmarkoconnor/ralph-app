@@ -914,7 +914,7 @@ function Controls({
 				</div>
 			)}
 			{state.phase === 'play' && (
-				<div className="grid w-[156px] shrink-0 grid-cols-2 gap-1.5">
+				<div className="grid w-[218px] shrink-0 grid-cols-3 gap-1.5">
 					<button
 						onClick={() => dispatch({ type: 'UNDO_CARD' })}
 						disabled={!state.history.length}
@@ -926,6 +926,15 @@ function Controls({
 						disabled={!state.history.length}
 						className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold disabled:opacity-40">
 						Trick
+					</button>
+					<button
+						onClick={() => dispatch({ type: 'SET_AUTO_PLAY_PAUSED', paused: !state.autoPlayPaused })}
+						className={`rounded-md border px-2 py-2 text-xs font-semibold ${
+							state.autoPlayPaused
+								? 'border-amber-200 bg-amber-50 text-amber-900'
+								: 'border-slate-200 bg-white text-slate-800'
+						}`}>
+						{state.autoPlayPaused ? 'Resume' : 'Stop'}
 					</button>
 				</div>
 			)}
@@ -1282,6 +1291,7 @@ export default function PlayerV2() {
 
 	useEffect(() => {
 		if (state.phase !== 'play') return
+		if (state.autoPlayPaused) return
 		const turnSeat = state.play?.turnSeat
 		if (!turnSeat || !derived.declarer || !isDefender(turnSeat, derived.declarer)) return
 		if (seatIsVisible(turnSeat)) return
@@ -1299,6 +1309,7 @@ export default function PlayerV2() {
 		return () => clearTimeout(timer)
 	}, [
 		state.phase,
+		state.autoPlayPaused,
 		state.play?.turnSeat,
 		state.play?.trick,
 		state.play?.remaining,
@@ -1310,6 +1321,7 @@ export default function PlayerV2() {
 
 	useEffect(() => {
 		if (state.phase !== 'play') return
+		if (state.autoPlayPaused) return
 		const turnSeat = state.play?.turnSeat
 		if (!turnSeat || !seatIsVisible(turnSeat)) return
 		const legalCards = legalCardsForTurn(state.play, turnSeat)
@@ -1321,6 +1333,7 @@ export default function PlayerV2() {
 		return () => clearTimeout(timer)
 	}, [
 		state.phase,
+		state.autoPlayPaused,
 		state.play,
 		seatIsVisible,
 	])
