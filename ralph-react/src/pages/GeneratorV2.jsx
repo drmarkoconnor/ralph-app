@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, cloneElement, isValidElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BoardZ } from '../schemas/board'
 import { exportBoardPBN } from '../pbn/export'
 import ManualBoardBuilder from '../generator-v2/ManualBoardBuilder'
+import HintBubble from '../generator-v2/HintBubble'
 import {
 	ACOL_PROFILE_OPTIONS,
 	DEFAULT_ACOL_SETTINGS,
@@ -195,7 +196,7 @@ function BoardDiagram({ board }) {
 	)
 }
 
-function BoardReviewCard({ board, onUpdate, onRegenerate, onPlay }) {
+function BoardReviewCard({ board, onUpdate, onRegenerate, onPlay, onRemove, showHints = true }) {
 	const callCount = normalizeAuctionText(board.auctionText).length
 	const suggestedAuction = String(board.suggestedAuctionText || '').trim()
 	return (
@@ -204,6 +205,9 @@ function BoardReviewCard({ board, onUpdate, onRegenerate, onPlay }) {
 				<div>
 					<div className="flex flex-wrap items-center gap-2">
 						<h2 className="text-lg font-black text-slate-950">Board {board.number}</h2>
+						<HintBubble enabled={showHints} align="left">
+							Keep controls export and Play Kept. Remove deletes this board from the current list.
+						</HintBubble>
 						<span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800">
 							{board.topicTitle}
 						</span>
@@ -237,6 +241,12 @@ function BoardReviewCard({ board, onUpdate, onRegenerate, onPlay }) {
 						onClick={onPlay}
 						className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800">
 						Play
+					</button>
+					<button
+						type="button"
+						onClick={onRemove}
+						className="rounded-md border border-rose-200 bg-white px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50">
+						Remove
 					</button>
 				</div>
 			</header>
@@ -298,14 +308,23 @@ function BoardReviewCard({ board, onUpdate, onRegenerate, onPlay }) {
 	)
 }
 
-function Field({ label, children }) {
+function labelControl(children, label) {
+	if (!isValidElement(children)) return children
+	if (children.props['aria-label'] || children.props['aria-labelledby']) return children
+	return cloneElement(children, { 'aria-label': label })
+}
+
+function Field({ label, children, hint, showHints = true }) {
 	return (
-		<label className="block">
-			<span className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">
-				{label}
+		<div className="block">
+			<span className="mb-1 flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">
+				<span>{label}</span>
+				<HintBubble enabled={showHints && !!hint} align="left">
+					{hint}
+				</HintBubble>
 			</span>
-			{children}
-		</label>
+			{labelControl(children, label)}
+		</div>
 	)
 }
 
@@ -338,14 +357,17 @@ function Select(props) {
 	)
 }
 
-function MiniField({ label, children }) {
+function MiniField({ label, children, hint, showHints = true }) {
 	return (
-		<label className="block">
-			<span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-500">
-				{label}
+		<div className="block">
+			<span className="mb-1 flex items-center gap-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+				<span>{label}</span>
+				<HintBubble enabled={showHints && !!hint} align="left">
+					{hint}
+				</HintBubble>
 			</span>
-			{children}
-		</label>
+			{labelControl(children, label)}
+		</div>
 	)
 }
 
@@ -424,7 +446,8 @@ function MiniSingleNumber({ label, inputLabel, value, min, max, disabled = false
 	)
 }
 
-function AcolInfoTooltip({ settings }) {
+function AcolInfoTooltip({ settings, enabled = true }) {
+	if (!enabled) return null
 	const lines = acolSettingsSummary(settings)
 	return (
 		<div className="group relative">
@@ -480,6 +503,7 @@ export default function GeneratorV2() {
 	const [warnings, setWarnings] = useState(restored.warnings || [])
 	const [status, setStatus] = useState(restored.status || 'Choose a topic, then generate a set.')
 	const [pbnExportIssues, setPbnExportIssues] = useState([])
+	const [showHints, setShowHints] = useState(restored.showHints ?? true)
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -499,6 +523,7 @@ export default function GeneratorV2() {
 					boards,
 					warnings,
 					status,
+					showHints,
 				}),
 				savedAt: Date.now(),
 			}
@@ -508,7 +533,7 @@ export default function GeneratorV2() {
 		} catch {
 			// Ignore private-browsing or quota failures; export still works.
 		}
-	}, [presetId, count, startBoard, dealerMode, dealerSeat, auctionMode, dealer4Mode, meta, acolSettings, constraints, boards, warnings, status])
+	}, [presetId, count, startBoard, dealerMode, dealerSeat, auctionMode, dealer4Mode, meta, acolSettings, constraints, boards, warnings, status, showHints])
 
 	const selectedTopic = useMemo(() => topicFromId(presetId), [presetId])
 	const keptBoards = boards.filter((board) => board.keep)
@@ -592,6 +617,15 @@ export default function GeneratorV2() {
 		setStatus(`Added board ${board.number}.`)
 	}
 
+	const removeBoard = (board) => {
+		const confirmed = typeof window === 'undefined' || window.confirm(`Remove board ${board.number} from this set?`)
+		if (!confirmed) return
+		setBoards((items) => items.filter((item) => item.id !== board.id))
+		setWarnings([])
+		setPbnExportIssues([])
+		setStatus(`Removed board ${board.number}.`)
+	}
+
 	const buildPbnForBoards = async (items, options = {}) => {
 		if (!options.omitAuctions) {
 			const auctionIssues = validateBoardAuctionTokens(items)
@@ -654,6 +688,7 @@ export default function GeneratorV2() {
 					boards,
 					warnings,
 					status,
+					showHints,
 				})),
 			)
 			window.sessionStorage.setItem(
@@ -720,7 +755,19 @@ export default function GeneratorV2() {
 							</div>
 						</div>
 						<div className="space-y-3">
-							<Field label="Topic">
+							<div className="flex items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">
+								<label className="flex flex-1 items-center justify-between gap-3">
+									<span>Show hover hints</span>
+									<input type="checkbox" checked={showHints} onChange={(event) => setShowHints(event.target.checked)} />
+								</label>
+								<HintBubble enabled={showHints} align="left">
+									Turn this off once the controls are familiar. It hides the small question-mark help bubbles.
+								</HintBubble>
+							</div>
+							<Field
+								label="Topic"
+								showHints={showHints}
+								hint="Choose the lesson type Generator 2 should try to produce. ACOL settings below can disable topics that clash with your system.">
 								<Select value={presetId} onChange={(event) => setPresetId(event.target.value)}>
 									{SYLLABUS_GROUPS.map((group) => (
 										<optgroup key={group.level} label={group.level}>
@@ -730,17 +777,17 @@ export default function GeneratorV2() {
 												</option>
 											))}
 										</optgroup>
-									))}
-								</Select>
+										))}
+									</Select>
 							</Field>
 							<div className="grid grid-cols-3 gap-2">
-								<Field label="Boards">
+								<Field label="Boards" showHints={showHints} hint="How many boards to create when Generate Set is pressed.">
 									<NumberInput min="1" max="48" value={count} onChange={(event) => setCount(event.target.value)} />
 								</Field>
-								<Field label="Start">
+								<Field label="Start" showHints={showHints} hint="The board number assigned to the first generated board.">
 									<NumberInput min="1" value={startBoard} onChange={(event) => setStartBoard(event.target.value)} />
 								</Field>
-								<Field label="Dealer">
+								<Field label="Dealer" showHints={showHints} hint="Cycle follows normal board dealer order. Pick a seat to force every generated board to that dealer.">
 									<Select value={dealerMode === 'fixed' ? dealerSeat : 'cycle'} onChange={(event) => {
 										if (event.target.value === 'cycle') setDealerMode('cycle')
 										else {
@@ -755,7 +802,10 @@ export default function GeneratorV2() {
 									</Select>
 								</Field>
 							</div>
-							<Field label="Auction">
+							<Field
+								label="Auction"
+								showHints={showHints}
+								hint="Suggest shows an optional auction, Apply writes it into export text, and Blank leaves auctions empty.">
 								<div className="grid grid-cols-3 gap-2">
 									<button
 										type="button"
@@ -792,22 +842,30 @@ export default function GeneratorV2() {
 									Suggest keeps the auction optional; Apply fills it automatically.
 								</p>
 							</Field>
-							<button
-								type="button"
-								onClick={generateSet}
-								className="w-full rounded-lg bg-sky-700 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-sky-800">
-								Generate Set
-							</button>
+							<div className="flex items-center gap-2">
+								<button
+									type="button"
+									onClick={generateSet}
+									className="flex-1 rounded-lg bg-sky-700 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-sky-800">
+									Generate Set
+								</button>
+								<HintBubble enabled={showHints}>
+									Replaces the current generated-board list with a fresh set for this teaching brief.
+								</HintBubble>
+							</div>
 						</div>
 					</section>
 
 					<section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 						<div className="mb-3 flex items-center justify-between gap-3">
 							<h2 className="text-lg font-black text-slate-950">ACOL Defaults</h2>
-							<AcolInfoTooltip settings={acolSettings} />
+							<AcolInfoTooltip settings={acolSettings} enabled={showHints} />
 						</div>
 						<div className="grid gap-2">
-							<MiniField label="Profile">
+							<MiniField
+								label="Profile"
+								showHints={showHints}
+								hint="Choose a convention baseline. Editing any detail switches the profile to Custom.">
 								<MiniSelect value={acolSettings.profile} onChange={(event) => updateAcolProfile(event.target.value)}>
 									{ACOL_PROFILE_OPTIONS.map((profile) => (
 										<option key={profile.id} value={profile.id}>
@@ -904,8 +962,11 @@ export default function GeneratorV2() {
 					</section>
 
 					<section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<div className="mb-3">
+						<div className="mb-3 flex items-center gap-2">
 							<h2 className="text-lg font-black text-slate-950">Custom Constraints</h2>
+							<HintBubble enabled={showHints} align="left">
+								These point ranges only affect the Custom HCP / Shape Constraints topic.
+							</HintBubble>
 						</div>
 						<div className="grid grid-cols-[2rem_1fr_1fr] gap-2">
 							<div />
@@ -973,12 +1034,18 @@ export default function GeneratorV2() {
 						nextBoardNumber={nextBoardNumber}
 						onAddBoard={addManualBoard}
 						onStatus={setStatus}
+						showHints={showHints}
 					/>
 
 					<div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 						<div className="flex flex-wrap items-center justify-between gap-3">
 							<div>
-								<h2 className="text-lg font-black text-slate-950">Generated Boards</h2>
+								<div className="flex items-center gap-2">
+									<h2 className="text-lg font-black text-slate-950">Generated Boards</h2>
+									<HintBubble enabled={showHints} align="left">
+										Only kept boards are exported or opened by Play Kept. Remove deletes a board from this list.
+									</HintBubble>
+								</div>
 								<p className="mt-1 text-sm font-semibold text-slate-500">{status}</p>
 							</div>
 							<div className="flex flex-wrap items-center gap-2">
@@ -1045,6 +1112,8 @@ export default function GeneratorV2() {
 								onUpdate={(patch) => updateBoard(board.id, patch)}
 								onRegenerate={() => regenerateBoard(board)}
 								onPlay={() => playBoards([board], `Generator 2 board ${board.number}`)}
+								onRemove={() => removeBoard(board)}
+								showHints={showHints}
 							/>
 						))
 					) : (

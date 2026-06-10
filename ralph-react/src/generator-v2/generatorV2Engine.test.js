@@ -5,6 +5,8 @@ import {
 	SEATS,
 	acolSettingsSummary,
 	acolTopicAvailability,
+	completePartialHandsRandomly,
+	createDeck,
 	createGenerator2SessionSnapshot,
 	generateGenerator2Boards,
 	hcp,
@@ -69,6 +71,15 @@ function cardsFromCodes(codes) {
 			label: code,
 		}
 	})
+}
+
+function codeForCard(card) {
+	return `${card.rank === '10' ? 'T' : card.rank}${card.suitKey}`
+}
+
+function deckCardsFromCodes(codes) {
+	const wanted = new Set(codes)
+	return createDeck().filter((card) => wanted.has(codeForCard(card)))
 }
 
 function generatePreset(presetId, count = 12, acolSettings = DEFAULT_ACOL_SETTINGS) {
@@ -479,4 +490,48 @@ test('generator session snapshot preserves accepted auction edits for back navig
 	assert.equal(restored.boards[0].auctionText, '1NT P 3NT P P P')
 	assert.equal(restored.boards[0].suggestedAuctionText, result.boards[0].suggestedAuctionText)
 	assert.equal(restored.auctionMode, 'suggest')
+})
+
+test('partial random completion preserves pre-assigned manual cards', () => {
+	const pinnedCards = deckCardsFromCodes(['AS', 'KH', 'QD', 'JC'])
+	const pinnedIds = new Set(pinnedCards.map((card) => card.id))
+	const partialHands = {
+		N: pinnedCards.slice(0, 2),
+		E: [pinnedCards[2]],
+		S: [],
+		W: [pinnedCards[3]],
+	}
+	const remainingDeck = createDeck().filter((card) => !pinnedIds.has(card.id))
+	const result = completePartialHandsRandomly(partialHands, remainingDeck)
+
+	assert.ok(result)
+	assert.equal(result.deck.length, 0)
+	for (const seat of SEATS) assert.equal(result.hands[seat].length, 13)
+	assert.ok(partialHands.N.every((card) => result.hands.N.some((item) => item.id === card.id)))
+	assert.ok(partialHands.E.every((card) => result.hands.E.some((item) => item.id === card.id)))
+	assert.ok(partialHands.W.every((card) => result.hands.W.some((item) => item.id === card.id)))
+	const allIds = SEATS.flatMap((seat) => result.hands[seat].map((card) => card.id))
+	assert.equal(new Set(allIds).size, 52)
+})
+
+test('partial random completion rejects invalid layouts instead of losing manual cards', () => {
+	const deck = createDeck()
+	assert.equal(
+		completePartialHandsRandomly({
+			N: deck.slice(0, 14),
+			E: [],
+			S: [],
+			W: [],
+		}, deck.slice(14)),
+		null,
+	)
+	assert.equal(
+		completePartialHandsRandomly({
+			N: [deck[0]],
+			E: [deck[0]],
+			S: [],
+			W: [],
+		}, deck.slice(1)),
+		null,
+	)
 })

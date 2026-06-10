@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
 	SEATS,
 	SUITS,
+	completePartialHandsRandomly,
 	createDeck,
 	dealRandomHands,
 	dealerForBoard,
@@ -11,6 +12,7 @@ import {
 	suitLengths,
 	vulnerabilityForBoard,
 } from './generatorV2Engine'
+import HintBubble from './HintBubble'
 
 const RANK_VALUE = {
 	A: 14,
@@ -204,7 +206,7 @@ function DropZone({ seat, cards, active, vul, onDropCard, onSelectSeat }) {
 	)
 }
 
-export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStatus }) {
+export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStatus, showHints = true }) {
 	const restoredDraft = useMemo(() => readManualDraft(), [])
 	const [layout, setLayout] = useState(() => hasSavedLayout(restoredDraft.layout) ? restoredDraft.layout : freshLayout())
 	const [targetSeat, setTargetSeat] = useState(restoredDraft.targetSeat || 'N')
@@ -335,10 +337,21 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 	}
 
 	const fillRandom = () => {
-		setLayout({ deck: [], hands: dealRandomHands() })
+		const completed = completePartialHandsRandomly(layout.hands, layout.deck)
+		if (!completed) {
+			onStatus?.('Random fill could not complete this layout. Check for duplicate or missing cards, then try again.')
+			return
+		}
+		setLayout({
+			deck: sortCards(completed.deck),
+			hands: Object.fromEntries(SEATS.map((seat) => [seat, sortCards(completed.hands[seat])])),
+		})
 		clearSelection()
-		setNotes('')
-		onStatus?.('Random deal filled into the manual builder.')
+		onStatus?.(
+			completed.filledCount
+				? `Random fill added ${completed.filledCount} card${completed.filledCount === 1 ? '' : 's'} without moving placed cards.`
+				: 'This manual board is already complete.',
+		)
 	}
 
 	const boardFromHands = (hands, title = 'Manual Board') => {
@@ -382,24 +395,39 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 		<section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 			<header className="mb-4 flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<h2 className="text-lg font-black text-slate-950">Manual Board Builder</h2>
+					<div className="flex items-center gap-2">
+						<h2 className="text-lg font-black text-slate-950">Manual Board Builder</h2>
+						<HintBubble enabled={showHints} align="left">
+							Send known cards to seats first, then use Random Fill to complete the rest of the deal.
+						</HintBubble>
+					</div>
 					<p className="mt-1 text-sm font-semibold text-slate-500">
 						Board {nextBoardNumber} - Dealer {dealer} - Vul {vul} - {totalCards}/52 assigned
 					</p>
 				</div>
 				<div className="flex flex-wrap gap-2">
-					<button
-						type="button"
-						onClick={addRandomBoard}
-						className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-800">
-						Add Random Board
-					</button>
-					<button
-						type="button"
-						onClick={fillRandom}
-						className="rounded-md bg-slate-900 px-3 py-2 text-sm font-black text-white hover:bg-slate-800">
-						Random Fill
-					</button>
+					<div className="flex items-center gap-1.5">
+						<button
+							type="button"
+							onClick={addRandomBoard}
+							className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-800">
+							Add Random Board
+						</button>
+						<HintBubble enabled={showHints}>
+							Creates a separate random board immediately, without changing the manual builder.
+						</HintBubble>
+					</div>
+					<div className="flex items-center gap-1.5">
+						<button
+							type="button"
+							onClick={fillRandom}
+							className="rounded-md bg-slate-900 px-3 py-2 text-sm font-black text-white hover:bg-slate-800">
+							Random Fill
+						</button>
+						<HintBubble enabled={showHints}>
+							Fills empty hand spaces from the remaining deck. Cards already placed in seats are not moved.
+						</HintBubble>
+					</div>
 					<button
 						type="button"
 						onClick={resetBuilder}
@@ -434,7 +462,12 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 						</div>
 						<div className="mb-2 rounded-md border border-slate-200 bg-white p-2">
 							<div className="mb-2 flex items-center justify-between gap-2 text-xs font-black uppercase tracking-wide text-slate-500">
-								<span>{selectedDeckCards.length} selected</span>
+								<div className="flex items-center gap-1.5">
+									<span>{selectedDeckCards.length} selected</span>
+									<HintBubble enabled={showHints} align="left">
+										Click cards in the deck to select a block, then send that block to N, E, S or W.
+									</HintBubble>
+								</div>
 								<button
 									type="button"
 									disabled={!selectedDeckCards.length}
@@ -487,6 +520,12 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 					</div>
 
 					<div className="rounded-lg border border-slate-200 bg-white p-3">
+						<div className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">
+							<span>Keyboard Entry</span>
+							<HintBubble enabled={showHints} align="left">
+								Choose a target seat, type a card such as AS or 10D, then press Enter or Add.
+							</HintBubble>
+						</div>
 						<div className="grid gap-2 sm:grid-cols-[auto_1fr_auto]">
 							<div className="flex gap-1">
 								{SEATS.map((seat) => (
@@ -557,13 +596,18 @@ export default function ManualBoardBuilder({ nextBoardNumber, onAddBoard, onStat
 							<div className="text-xs font-black uppercase text-slate-500">E/W</div>
 							<div className="text-xl font-black text-slate-950">{partnershipHcp(layout.hands, 'EW')}</div>
 						</div>
-						<button
-							type="button"
-							disabled={!complete}
-							onClick={addBuilderBoard}
-							className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40">
-							Add Board
-						</button>
+						<div className="flex items-center justify-center gap-1.5">
+							<button
+								type="button"
+								disabled={!complete}
+								onClick={addBuilderBoard}
+								className="min-h-full flex-1 rounded-md bg-emerald-700 px-3 py-2 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40">
+								Add Board
+							</button>
+							<HintBubble enabled={showHints}>
+								Add Board saves this complete manual deal into the Generated Boards list below.
+							</HintBubble>
+						</div>
 					</div>
 				</div>
 			</div>

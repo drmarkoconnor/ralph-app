@@ -381,6 +381,7 @@ export function createGenerator2SessionSnapshot({
 	boards,
 	warnings,
 	status,
+	showHints,
 }) {
 	return {
 		presetId,
@@ -396,6 +397,7 @@ export function createGenerator2SessionSnapshot({
 		boards,
 		warnings,
 		status,
+		showHints,
 	}
 }
 
@@ -600,6 +602,34 @@ export function dealRandomHands() {
 		hands[seat] = deck.slice(index * 13, index * 13 + 13)
 	})
 	return hands
+}
+
+export function completePartialHandsRandomly(partialHands = {}, availableCards = []) {
+	const hands = { N: [], E: [], S: [], W: [] }
+	const usedIds = new Set()
+	for (const seat of SEATS) {
+		const cards = [...(partialHands[seat] || [])]
+		if (cards.length > 13) return null
+		for (const card of cards) {
+			if (!card || usedIds.has(card.id)) return null
+			usedIds.add(card.id)
+		}
+		hands[seat] = cards
+	}
+
+	const needed = SEATS.reduce((sum, seat) => sum + Math.max(0, 13 - hands[seat].length), 0)
+	const available = shuffle((availableCards || []).filter((card) => card && !usedIds.has(card.id)))
+	if (available.length !== needed) return null
+
+	let cursor = 0
+	for (const seat of SEATS) {
+		const slots = 13 - hands[seat].length
+		if (slots > 0) {
+			hands[seat] = [...hands[seat], ...available.slice(cursor, cursor + slots)]
+			cursor += slots
+		}
+	}
+	return { hands, deck: [], filledCount: cursor }
 }
 
 function numberOrFallback(value, fallback) {
