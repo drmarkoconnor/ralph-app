@@ -10,5 +10,55 @@ body {
 	margin: 0;
 }
 
-/* (Dark theme helpers removed on revert) */
+.player-v3-present .player-v3-auction h2 {
+	font-size: 1.15rem;
+}
 
+.player-v3-present .player-v3-auction p,
+.player-v3-present .player-v3-auction th {
+	font-size: 0.875rem;
+}
+
+.player-v3-present .player-v3-auction button,
+.player-v3-present .player-v3-auction select,
+.player-v3-present .player-v3-auction td span {
+	font-size: 0.95rem;
+	line-height: 1.25rem;
+}
+
+.player-v3-present .player-v3-auction td span {
+	min-height: 2rem;
+}
+
+/* Keep 720p projection crisp by changing integral component dimensions rather
+   than fractionally scaling the whole table. */
+@media (max-height: 820px) {
+	.player-v3-present .player-v3-card,
+	.player-v3-present .player-v3-card-back {
+		height: 152px !important;
+		width: 108px !important;
+	}
+
+	.player-v3-present .player-v3-card {
+		font-size: 38px !important;
+	}
+
+	.player-v3-present .player-v3-card-back-inner {
+		height: 132px !important;
+	}
+
+	.player-v3-present .player-v3-trick-panel {
+		width: 352px !important;
+	}
+
+	.player-v3-present .player-v3-trick-cross {
+		height: 330px !important;
+		width: 330px !important;
+	}
+
+	.player-v3-present .player-v3-stage {
+		min-height: 620px !important;
+	}
+}
+
+/* (Dark theme helpers removed on revert) */

@@ -20,6 +20,7 @@ export default function PlayerHelp() {
 				<h2 className="text-lg font-semibold">1. Load A PBN</h2>
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>Use Load PBN to choose a local .pbn file.</li>
+					<li>Use the board arrows to move through every board in a multi-board file.</li>
 					<li>The player reads board, dealer, vulnerability, deal and auction.</li>
 					<li>
 						If the auction is legal, the contract and declarer are derived
@@ -43,6 +44,11 @@ export default function PlayerHelp() {
 					<li>
 						Step through the PBN auction one call at a time, or show the whole
 						auction when the class is ready.
+					</li>
+					<li>
+						Return and Right Arrow both step to the next call. A hand button
+						clicked with the mouse releases focus, so Return cannot accidentally
+						hide that hand.
 					</li>
 					<li>
 						To explore alternatives, rewind to a call and continue with a
@@ -70,9 +76,10 @@ export default function PlayerHelp() {
 						The default classroom view shows declarer first; dummy appears after
 						the opening lead.
 					</li>
+					<li>Play always starts paused so the opening lead can be discussed.</li>
 					<li>
-						Defenders remain hidden and auto-play unless Ralph reveals their
-						hand and chooses a card manually.
+						Use Play hidden hand to play one simple legal defender card, or Start
+						auto defenders when continuous defender play is wanted.
 					</li>
 				</ul>
 			</section>
@@ -86,11 +93,25 @@ export default function PlayerHelp() {
 					</li>
 					<li>
 						The winning card is highlighted when a trick completes; dimmed cards
-						make the losing plays easy to read.
+						make the losing plays easy to read. The trick stays in the centre until
+						the next card is deliberately played.
 					</li>
 					<li>
 						The Last Trick panel keeps the previous completed trick visible for
 						reference without covering the hands.
+					</li>
+					<li>
+						Dummy places trumps at the left of the screen. In no-trumps, clubs
+						occupy that position; the remaining suits alternate red and black.
+					</li>
+					<li>
+						The hand on turn has a filled amber surround and a plain-language
+						“To play” label. Lower choices puts raised legal cards back into the
+						fan without playing one; Raise choices restores the teaching cue.
+					</li>
+					<li>
+						Replay hand restarts the current deal at the opening lead. The Felt
+						swatches offer four restrained table colours and remember the choice.
 					</li>
 					<li>
 						Declarer and defence trick counts update from the actual trick
@@ -102,7 +123,11 @@ export default function PlayerHelp() {
 			<section className="space-y-2">
 				<h2 className="text-lg font-semibold">5. Keyboard Controls</h2>
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
-					<li>Right Arrow: next auction call, or auto-play the next card.</li>
+					<li>Return: next auction call when no button or field is active.</li>
+					<li>
+						Right Arrow: next auction call, or play one card only when a hidden
+						defender is on turn.
+					</li>
 					<li>Left Arrow: previous auction call, or undo one card in play.</li>
 					<li>Up Arrow: reveal or hide the partner of the current teaching hand.</li>
 					<li>
@@ -110,16 +135,31 @@ export default function PlayerHelp() {
 						hands visible.
 					</li>
 					<li>R: replay bidding, or restart play from the first trick.</li>
+					<li>P: enter or leave Presentation Mode.</li>
+					<li>Page Up / Page Down, or [ / ]: previous or next board.</li>
 				</ul>
 			</section>
 
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">6. Current Limits</h2>
+				<h2 className="text-lg font-semibold">6. Presentation Mode</h2>
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
-					<li>Edited auctions are temporary for the lesson and are not yet exported.</li>
+					<li>Use Presentation mode for larger cards, labels and trick information.</li>
 					<li>
-						ACOL convention settings are planned for a later version; the
-						current player focuses on visual classroom flow.
+						The dark operator bar keeps board navigation, contract confirmation,
+						teacher pacing, replay, legal-card height, felt and hand visibility
+						available on one line.
+					</li>
+					<li>Fullscreen removes the browser chrome when the display supports it.</li>
+				</ul>
+			</section>
+
+			<section className="space-y-2">
+				<h2 className="text-lg font-semibold">7. Current Limits</h2>
+				<ul className="ml-5 list-disc space-y-1 text-gray-700">
+					<li>The Save PBN button exports the current board, not the whole loaded file.</li>
+					<li>
+						The proposed AI Coach is not connected in this preview, so this version
+						cannot make paid API calls.
 					</li>
 					<li>
 						Player 1 still exists in the codebase as a fallback, but normal app

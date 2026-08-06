@@ -91,6 +91,10 @@ export default function Instructions() {
 									all calls at once.
 								</li>
 								<li>
+									Return and Right Arrow both reveal the next call. Mouse-used hand
+									toggles release focus, preventing Return from hiding a hand.
+								</li>
+								<li>
 									Rewind to a call and continue differently to explore what should
 									happen after an alternative legal bid.
 								</li>
@@ -105,11 +109,25 @@ export default function Instructions() {
 								</li>
 								<li>
 									Declarer is visible first; dummy appears after the opening lead.
-									Hidden defenders auto-play unless their hand is revealed.
+									Play starts paused. Hidden defenders can be advanced one card at a
+									time or switched to automatic play.
 								</li>
 								<li>
 									Follow-suit is enforced. Only legal cards can be selected when a
 									hand is being played manually.
+								</li>
+								<li>
+									Dummy displays trumps on the left, or clubs there in no-trumps,
+									with the remaining suits alternating colour.
+								</li>
+								<li>
+									The active hand receives an amber filled surround. Lower choices
+									returns raised legal cards to the fan without playing one; Raise
+									choices restores the visual cue.
+								</li>
+								<li>
+									Replay hand returns the current deal to its opening lead. Four Felt
+									swatches change and remember the table background.
 								</li>
 								<li>
 									The winning card is highlighted in the central trick display, and
@@ -122,8 +140,10 @@ export default function Instructions() {
 								Keyboard controls
 							</h3>
 							<ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
+								<li>Return steps to the next bidding call when focus is on the table.</li>
 								<li>
-									Right Arrow steps forward through bidding or play.
+									Right Arrow steps through bidding, or plays one card when a hidden
+									defender is on turn.
 								</li>
 								<li>
 									Left Arrow steps back through bidding or undoes one card in play.
@@ -136,6 +156,8 @@ export default function Instructions() {
 									R replays the auction before play, or restarts the hand during
 									play.
 								</li>
+								<li>P toggles the large-screen Presentation Mode.</li>
+								<li>Page Up / Page Down, or [ / ], changes board.</li>
 							</ul>
 						</div>
 						<div>

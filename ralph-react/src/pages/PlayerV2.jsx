@@ -7,10 +7,10 @@ import {
 	SEATS,
 	auctionRows,
 	computeDuplicateScore,
-	groupHand,
 	handHcp,
 	isDefender,
 	isSeatVul,
+	orderHandForDisplay,
 	partnerOf,
 	selectSimpleDefenderCard,
 	seatName,
@@ -23,6 +23,71 @@ import {
 } from '../player-v2/playerV2Reducer'
 
 const PLAYER_HANDOFF_KEY = 'ralph-player-handoff-v1'
+const PLAYER_FELT_KEY = 'ralph-player-felt-v1'
+const FELT_THEMES = [
+	{
+		key: 'green',
+		label: 'Classic green',
+		swatch: '#0b6b43',
+		background:
+			'radial-gradient(circle at 50% 42%, #147b4c 0%, #075236 48%, #03281d 100%)',
+	},
+	{
+		key: 'blue',
+		label: 'Tournament blue',
+		swatch: '#155e75',
+		background:
+			'radial-gradient(circle at 50% 42%, #19718a 0%, #104b61 48%, #082b38 100%)',
+	},
+	{
+		key: 'burgundy',
+		label: 'Burgundy',
+		swatch: '#7f1d3b',
+		background:
+			'radial-gradient(circle at 50% 42%, #96304f 0%, #661c37 48%, #340d20 100%)',
+	},
+	{
+		key: 'charcoal',
+		label: 'Charcoal',
+		swatch: '#334155',
+		background:
+			'radial-gradient(circle at 50% 42%, #475569 0%, #263548 48%, #111827 100%)',
+	},
+]
+
+function FeltSwatches({ value, onChange, presentationMode = false }) {
+	return (
+		<div
+			role="group"
+			aria-label="Table felt colour"
+			className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 ${
+				presentationMode ? 'border-white/30 bg-white/10' : 'border-slate-200 bg-white'
+			}`}>
+			<span
+				className={`${presentationMode ? 'text-white' : 'text-slate-600'} text-[11px] font-black uppercase tracking-wide`}>
+				Felt
+			</span>
+			{FELT_THEMES.map((theme) => (
+				<button
+					key={theme.key}
+					type="button"
+					onClick={() => onChange(theme.key)}
+					aria-label={`Use ${theme.label} felt`}
+					aria-pressed={value === theme.key}
+					title={theme.label}
+					className={`h-6 w-6 rounded-full border-2 shadow-sm transition-transform hover:scale-110 ${
+						value === theme.key
+							? 'border-amber-300 ring-2 ring-amber-300/60'
+							: presentationMode
+								? 'border-white/55'
+								: 'border-slate-300'
+					}`}
+					style={{ backgroundColor: theme.swatch }}
+				/>
+			))}
+		</div>
+	)
+}
 
 function todayPbnDate() {
 	const now = new Date()
@@ -141,18 +206,29 @@ function FilePrompt({ onPick }) {
 	)
 }
 
-function SeatVisibilityToggles({ visibleSeats, dispatch }) {
+function SeatVisibilityToggles({ visibleSeats, dispatch, presentationMode = false }) {
 	return (
-		<div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+		<div
+			className={`flex items-center gap-1 rounded-lg border p-1 shadow-sm ${
+				presentationMode ? 'border-white/30 bg-white/10' : 'border-slate-200 bg-white'
+			}`}>
 			{SEATS.map((seat) => (
 				<button
 					key={seat}
-					onClick={() => dispatch({ type: 'TOGGLE_VISIBLE_SEAT', seat })}
+					data-player-seat-toggle="true"
+					onClick={(event) => {
+						dispatch({ type: 'TOGGLE_VISIBLE_SEAT', seat })
+						if (event.detail > 0) event.currentTarget.blur()
+					}}
 					aria-pressed={(visibleSeats || []).includes(seat)}
-					className={`h-8 w-8 rounded-md text-xs font-bold ${
+					className={`${presentationMode ? 'h-9 w-9 text-base' : 'h-8 w-8 text-xs'} rounded-md font-bold ${
 						(visibleSeats || []).includes(seat)
-							? 'bg-slate-900 text-white'
-							: 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+							? presentationMode
+								? 'bg-amber-300 text-slate-950'
+								: 'bg-slate-900 text-white'
+							: presentationMode
+								? 'bg-white/10 text-white hover:bg-white/20'
+								: 'bg-slate-50 text-slate-700 hover:bg-slate-100'
 					}`}>
 					{seat}
 				</button>
@@ -170,46 +246,82 @@ function CardButton({
 	spreadHand = false,
 	playable = false,
 	playableMotion = '',
+	presentationMode = false,
+	raisePlayable = true,
+	stackIndex = 0,
 }) {
 	const red = card.suit === 'Hearts' || card.suit === 'Diamonds'
 	return (
 		<button
 			disabled={disabled}
 			onClick={onClick}
-			className={`relative flex h-[130px] w-[92px] shrink-0 transform-gpu flex-col items-start justify-between overflow-hidden rounded-lg border-2 bg-[#fffdf7] px-2 py-2 text-[27px] font-black shadow-[0_14px_24px_rgba(0,0,0,0.44)] ring-1 ring-white/70 transition-[transform,box-shadow,filter] duration-150 will-change-transform ${
-				red ? 'border-rose-300 text-rose-700' : 'border-slate-400 text-slate-950'
-			} ${overlap ? `${spreadHand ? '-ml-[28px]' : '-ml-[45px]'} first:ml-0` : ''} ${
-				stack ? `${spreadHand ? '-mt-[34px]' : '-mt-[61px]'} first:mt-0` : ''
+			aria-label={`${card.rank} of ${card.suit}${playable ? ', legal play' : ''}`}
+			style={{ zIndex: stackIndex + 1 }}
+			className={`player-v3-card relative flex shrink-0 flex-col items-start justify-between overflow-hidden rounded-lg border-2 bg-white font-black shadow-[0_12px_20px_rgba(0,0,0,0.4)] ring-1 ring-slate-100 transition-[transform,box-shadow,filter] duration-150 ${
+				presentationMode
+					? 'h-[166px] w-[118px] px-3 py-3 text-[40px]'
+					: 'h-[144px] w-[102px] px-2.5 py-2.5 text-[32px]'
+			} ${
+				red ? 'border-rose-400 text-rose-700' : 'border-slate-500 text-slate-950'
+			} ${
+				overlap
+					? presentationMode
+						? `${spreadHand ? '-ml-[42px]' : '-ml-[62px]'} first:ml-0`
+						: `${spreadHand ? '-ml-[39px]' : '-ml-[50px]'} first:ml-0`
+					: ''
+			} ${
+				stack
+					? presentationMode
+						? `${spreadHand ? '-mt-[46px]' : '-mt-[82px]'} first:mt-0`
+						: `${spreadHand ? '-mt-[40px]' : '-mt-[68px]'} first:mt-0`
+					: ''
 			} ${
 				playable
-					? `z-40 scale-[1.14] cursor-pointer ring-4 ring-amber-300 shadow-[0_24px_36px_rgba(0,0,0,0.48)] hover:scale-[1.2] ${playableMotion}`
+					? `cursor-pointer ring-4 ring-amber-300 shadow-[0_20px_30px_rgba(0,0,0,0.46)] hover:brightness-105 ${
+							raisePlayable ? playableMotion : ''
+						}`
 					: disabled
-						? 'z-10 cursor-default brightness-[0.97] saturate-95'
-						: 'z-20 cursor-pointer hover:-translate-y-2 hover:scale-105 hover:shadow-2xl'
+						? 'cursor-default brightness-[0.98] saturate-95'
+						: 'cursor-pointer hover:-translate-y-1 hover:shadow-2xl'
 			}`}>
 			<span className="flex flex-col items-center leading-none">
 				<span>{card.rank}</span>
-				<span className="text-[24px] leading-none">{suitSymbol(card.suit)}</span>
+				<span className={`${presentationMode ? 'text-[34px]' : 'text-[27px]'} leading-none`}>
+					{suitSymbol(card.suit)}
+				</span>
 			</span>
-			<span className="self-end text-[20px] leading-none opacity-90">
+			<span
+				className={`${presentationMode ? 'text-[27px]' : 'text-[22px]'} self-end leading-none opacity-90`}>
 				{suitSymbol(card.suit)}
 			</span>
 		</button>
 	)
 }
 
-function CardBack({ overlap = false, side = false }) {
+function CardBack({ overlap = false, side = false, presentationMode = false }) {
 	return (
 		<div
-			className={`h-[130px] w-[92px] shrink-0 rounded-lg border border-slate-400 bg-[repeating-linear-gradient(135deg,#111827_0,#111827_4px,#374151_4px,#374151_8px)] shadow-[0_10px_20px_rgba(0,0,0,0.38)] ring-1 ring-white/35 ${
-				overlap ? (side ? '-mt-[68px] first:mt-0' : '-ml-[45px] first:ml-0') : ''
+			className={`player-v3-card-back shrink-0 rounded-lg border border-slate-400 bg-[repeating-linear-gradient(135deg,#111827_0,#111827_4px,#374151_4px,#374151_8px)] shadow-[0_10px_20px_rgba(0,0,0,0.38)] ring-1 ring-white/35 ${
+				presentationMode ? 'h-[166px] w-[118px]' : 'h-[144px] w-[102px]'
+			} ${
+				overlap
+					? presentationMode
+						? side
+							? '-mt-[88px] first:mt-0'
+							: '-ml-[62px] first:ml-0'
+						: side
+							? '-mt-[75px] first:mt-0'
+							: '-ml-[50px] first:ml-0'
+					: ''
 			}`}>
-			<div className="m-2 h-[112px] rounded-md border border-white/30" />
+			<div
+				className={`player-v3-card-back-inner ${presentationMode ? 'h-[146px]' : 'h-[124px]'} m-2 rounded-md border border-white/30`}
+			/>
 		</div>
 	)
 }
 
-function HiddenHand({ count = 13, split = false }) {
+function HiddenHand({ count = 13, split = false, presentationMode = false }) {
 	const indexes = Array.from({ length: count }, (_, index) => index)
 	const rows = split ? [indexes.slice(0, 6), indexes.slice(6)] : [indexes]
 	return (
@@ -217,7 +329,7 @@ function HiddenHand({ count = 13, split = false }) {
 			{rows.map((row, rowIndex) => (
 				<div key={rowIndex} className="flex justify-center">
 					{row.map((index) => (
-						<CardBack key={index} overlap />
+						<CardBack key={index} overlap presentationMode={presentationMode} />
 					))}
 				</div>
 			))}
@@ -307,17 +419,30 @@ function playTrickResultSound(declarerWon) {
 	playBridgeNotes([392, 330, 262], { type: 'sine', duration: 0.12, gap: 0.03, gain: 0.03 })
 }
 
-function SeatLabel({ seat, dealer, vul, role, active }) {
+function SeatLabel({ seat, dealer, vul, role, active, presentationMode = false }) {
 	return (
 		<div
-			className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-black shadow-lg ${
+			className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-black shadow-lg ${
+				presentationMode ? 'text-base' : 'text-xs'
+			} ${
 				active ? 'bg-amber-400 text-slate-950' : 'bg-slate-950/85 text-white'
 			}`}>
 			<span className="rounded bg-emerald-600 px-2 py-0.5 text-white">{seat}</span>
 			<span>{seatName(seat)}</span>
-			<span className="text-[10px] font-bold opacity-80">{role}</span>
-			{dealer === seat && <span className="rounded bg-white/20 px-1.5 text-[10px]">D</span>}
-			{vul && <span className="rounded bg-rose-600 px-1.5 text-[10px] text-white">V</span>}
+			<span className={`${presentationMode ? 'text-sm' : 'text-[10px]'} font-bold opacity-80`}>
+				{role}
+			</span>
+			{dealer === seat && (
+				<span className={`${presentationMode ? 'text-sm' : 'text-[10px]'} rounded bg-white/20 px-1.5`}>
+					D
+				</span>
+			)}
+			{vul && (
+				<span
+					className={`${presentationMode ? 'text-sm' : 'text-[10px]'} rounded bg-rose-600 px-1.5 text-white`}>
+					V
+				</span>
+			)}
 		</div>
 	)
 }
@@ -335,17 +460,25 @@ function HandPanel({
 	dummy,
 	openingLeader,
 	position,
+	originalCards,
+	presentationMode = false,
+	trump,
+	raiseLegalChoices = true,
 }) {
-	const grouped = useMemo(() => groupHand(cards), [cards])
 	const sortedCards = useMemo(
-		() => Object.values(grouped).flat(),
-		[grouped],
+		() =>
+			orderHandForDisplay(cards, {
+				isDummy: seat === dummy,
+				inPlay: !!play,
+				trump,
+			}),
+		[cards, dummy, play, seat, trump],
 	)
 	const isTurn = play?.turnSeat === seat
-	const spreadHand = visible && isTurn
 	const isPartnership = declarer && (seat === declarer || seat === dummy)
 	const role = seat === declarer ? 'Declarer' : seat === dummy ? 'Dummy' : 'Defender'
 	const isSideSeat = position === 'E' || position === 'W'
+	const spreadHand = visible && isTurn && !presentationMode
 	const cardRows = isSideSeat
 		? [sortedCards.slice(0, 6), sortedCards.slice(6)]
 		: [sortedCards]
@@ -357,8 +490,16 @@ function HandPanel({
 
 	return (
 		<section
-			className={`relative flex w-fit max-w-full flex-col items-center justify-center rounded-xl p-0.5 ${
-				active || isTurn ? 'ring-4 ring-amber-300/80' : ''
+			className={`relative flex w-fit max-w-full flex-col items-center justify-center rounded-2xl transition-[background-color,box-shadow,padding,transform] duration-150 ${
+				isTurn
+					? presentationMode
+						? 'z-30 scale-[1.015] bg-amber-200/22 p-2.5 ring-4 ring-amber-300 shadow-[0_0_46px_rgba(251,191,36,0.34)]'
+						: 'z-30 scale-[1.015] bg-amber-200/24 p-2 ring-4 ring-amber-300 shadow-[0_0_40px_rgba(251,191,36,0.32)]'
+					: presentationMode
+						? 'p-1'
+						: 'p-0.5'
+			} ${
+				active && !isTurn ? 'ring-4 ring-amber-300/80' : ''
 			} ${isPartnership ? 'shadow-[0_0_35px_rgba(14,165,233,0.16)]' : ''}`}>
 			<div className="mb-0.5 text-center">
 				<SeatLabel
@@ -367,9 +508,19 @@ function HandPanel({
 					vul={vul}
 					role={role}
 					active={active || isTurn}
+					presentationMode={presentationMode}
 				/>
+				{isTurn && (
+					<div
+						role="status"
+						aria-live="polite"
+						className={`${presentationMode ? 'text-base' : 'text-sm'} mt-1 rounded-full bg-amber-300 px-4 py-1 font-black uppercase tracking-wide text-slate-950 shadow-lg`}>
+						{seatName(seat)} to play
+					</div>
+				)}
 				{openingLeader === seat && (
-					<div className="mt-1 text-xs font-black uppercase tracking-wide text-amber-200">
+					<div
+						className={`${presentationMode ? 'text-base' : 'text-xs'} mt-1 font-black uppercase tracking-wide text-amber-200`}>
 						Opening lead
 					</div>
 				)}
@@ -379,7 +530,7 @@ function HandPanel({
 					<div className={`flex items-center justify-center ${isSideSeat ? 'flex-col gap-3' : ''}`}>
 						{cardRows.map((row, rowIndex) => (
 							<div key={rowIndex} className="flex justify-center">
-								{row.map((card) => {
+								{row.map((card, cardIndex) => {
 									const legal = !!onPlay && isTurn && legalCardIds.has(card.id)
 									return (
 										<CardButton
@@ -391,6 +542,9 @@ function HandPanel({
 											playable={legal}
 											playableMotion={playableMotion}
 											spreadHand={spreadHand}
+											presentationMode={presentationMode}
+											raisePlayable={raiseLegalChoices}
+											stackIndex={cardIndex}
 										/>
 									)
 								})}
@@ -398,11 +552,16 @@ function HandPanel({
 						))}
 					</div>
 				) : (
-					<HiddenHand count={(cards || []).length || 13} split={isSideSeat} />
+					<HiddenHand
+						count={(cards || []).length}
+						split={isSideSeat}
+						presentationMode={presentationMode}
+					/>
 				)}
 			</div>
-			<footer className="mt-1 rounded bg-slate-950/75 px-2 py-0.5 text-[11px] font-black text-white">
-				HCP {visible ? handHcp(cards) : '?'}
+			<footer
+				className={`${presentationMode ? 'text-sm' : 'text-[11px]'} mt-1 rounded bg-slate-950 px-2 py-0.5 font-black text-white`}>
+				HCP {visible ? handHcp(originalCards || cards) : '?'}
 			</footer>
 		</section>
 	)
@@ -518,13 +677,14 @@ function BiddingEditor({ dispatch }) {
 	)
 }
 
-function StagePanel({ state, derived, dispatch, visualPlay }) {
+function StagePanel({ state, derived, dispatch, visualPlay, presentationMode = false }) {
 	if (state.phase === 'play') {
-		return <TrickPanel play={visualPlay || state.play} />
+		return <TrickPanel play={visualPlay || state.play} presentationMode={presentationMode} />
 	}
 
 	return (
-		<div className="grid w-[360px] gap-1">
+		<div
+			className={`player-v3-auction grid gap-1 ${presentationMode ? 'w-[410px]' : 'w-[360px]'}`}>
 			<div className="rounded-lg border border-sky-200 bg-sky-50 p-1.5">
 				<div className="flex items-center justify-between gap-2">
 					<div>
@@ -583,6 +743,13 @@ function TrickCardSlot({ seat, trick, winner, size = 'md' }) {
 					suit: 'text-[11px]',
 					radius: 'rounded-lg',
 				}
+			: size === 'lg'
+				? {
+						card: 'h-[126px] w-[86px]',
+						rank: 'text-[44px]',
+						suit: 'text-base',
+						radius: 'rounded-xl',
+					}
 			: {
 					card: 'h-[108px] w-[74px]',
 					rank: 'text-4xl',
@@ -643,6 +810,7 @@ function CrossTrick({
 	showContract = true,
 }) {
 	const played = (trick || []).length
+	const large = size === 'lg'
 	return (
 		<div
 			className="relative h-full w-full overflow-hidden rounded-2xl border-2 border-amber-400/80 shadow-[inset_0_0_30px_rgba(0,0,0,0.34),0_18px_38px_rgba(0,0,0,0.32)]"
@@ -662,20 +830,23 @@ function CrossTrick({
 					{contract}
 				</div>
 			)}
-			<div className="absolute left-1/2 top-5 -translate-x-1/2">
+			<div className={`absolute left-1/2 -translate-x-1/2 ${large ? 'top-6' : 'top-5'}`}>
 				<TrickCardSlot seat="N" trick={trick} winner={winner} size={size} />
 			</div>
-			<div className="absolute right-5 top-1/2 -translate-y-1/2">
+			<div className={`absolute top-1/2 -translate-y-1/2 ${large ? 'right-6' : 'right-5'}`}>
 				<TrickCardSlot seat="E" trick={trick} winner={winner} size={size} />
 			</div>
-			<div className="absolute bottom-5 left-1/2 -translate-x-1/2">
+			<div className={`absolute left-1/2 -translate-x-1/2 ${large ? 'bottom-6' : 'bottom-5'}`}>
 				<TrickCardSlot seat="S" trick={trick} winner={winner} size={size} />
 			</div>
-			<div className="absolute left-5 top-1/2 -translate-y-1/2">
+			<div className={`absolute top-1/2 -translate-y-1/2 ${large ? 'left-6' : 'left-5'}`}>
 				<TrickCardSlot seat="W" trick={trick} winner={winner} size={size} />
 			</div>
 			{showStatus && (
-				<div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-amber-300/45 bg-black/24 text-center text-[9px] font-black uppercase leading-tight tracking-wide text-amber-100">
+				<div
+					className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-amber-300 bg-slate-950 text-center font-black uppercase leading-tight tracking-wide text-amber-100 ${
+						large ? 'h-24 w-24 px-2 text-sm' : 'h-16 w-16 text-[9px]'
+					}`}>
 					{winner ? `Won by ${winner}` : turnSeat ? `Turn ${turnSeat}` : `${played}/4`}
 				</div>
 			)}
@@ -683,32 +854,42 @@ function CrossTrick({
 	)
 }
 
-function TrickPanel({ play }) {
+function TrickPanel({ play, presentationMode = false }) {
 	const trick = play?.trick || []
 	const winner = play?.visualWinner || null
 	return (
-		<section className="flex w-[328px] flex-col rounded-2xl border-2 border-amber-500/70 bg-emerald-950/62 p-2 text-white shadow-[0_18px_40px_rgba(0,0,0,0.34)]">
-			<div className="mx-auto h-[306px] w-[306px]">
+		<section
+			className={`player-v3-trick-panel flex flex-col rounded-2xl border-2 border-amber-400 bg-emerald-950 p-2 text-white shadow-[0_18px_40px_rgba(0,0,0,0.34)] ${
+				presentationMode ? 'w-[390px]' : 'w-[328px]'
+			}`}>
+			<div
+				className={`player-v3-trick-cross mx-auto ${presentationMode ? 'h-[368px] w-[368px]' : 'h-[306px] w-[306px]'}`}>
 				<CrossTrick
 					trick={trick}
 					winner={winner}
 					turnSeat={play?.turnSeat}
 					contract={null}
 					showContract={false}
+					size={presentationMode ? 'lg' : 'md'}
 				/>
 			</div>
 		</section>
 	)
 }
 
-function LastTrickPanel({ trick }) {
+function LastTrickPanel({ trick, presentationMode = false }) {
 	return (
-		<aside className="w-[238px] rounded-2xl border-2 border-amber-400/70 bg-emerald-950/82 p-2 text-white shadow-2xl backdrop-blur">
+		<aside
+			className={`rounded-2xl border-2 border-amber-400 bg-emerald-950 p-2 text-white shadow-2xl ${
+				presentationMode ? 'w-[254px]' : 'w-[238px]'
+			}`}>
 			<div className="mb-1 flex items-center justify-between">
-				<h2 className="text-xs font-black uppercase tracking-wide text-amber-100">
+				<h2
+					className={`${presentationMode ? 'text-base' : 'text-xs'} font-black uppercase tracking-wide text-amber-100`}>
 					Last Trick
 				</h2>
-				<div className="rounded-md bg-amber-300 px-2 py-0.5 text-[10px] font-black text-slate-950">
+				<div
+					className={`${presentationMode ? 'text-sm' : 'text-[10px]'} rounded-md bg-amber-300 px-2 py-0.5 font-black text-slate-950`}>
 					{trick?.winner ? `To ${trick.winner}` : '-'}
 				</div>
 			</div>
@@ -731,11 +912,15 @@ function LastTrickPanel({ trick }) {
 	)
 }
 
-function PlayStatusPanel({ state, derived, settledTrickCount }) {
+function PlayStatusPanel({ state, derived, settledTrickCount, presentationMode = false }) {
 	const shownTricks = (state.completedTricks || []).slice(0, settledTrickCount)
 	const counts = countTricksBySide(shownTricks, derived.declarer)
-	const liveScore =
-		derived.contract && derived.declarer
+	const level = Number(String(derived.contract || '').match(/^([1-7])/)?.[1] || 0)
+	const target = level ? level + 6 : 0
+	const tricksNeeded = target ? Math.max(0, target - counts.declarer) : 0
+	const isComplete = settledTrickCount >= 13
+	const finalScore =
+		isComplete && derived.contract && derived.declarer
 			? computeDuplicateScore(
 					derived.contract,
 					derived.declarer,
@@ -744,16 +929,20 @@ function PlayStatusPanel({ state, derived, settledTrickCount }) {
 				)
 			: null
 	return (
-		<aside className="w-[238px] rounded-2xl border-2 border-amber-400/70 bg-emerald-950/82 p-3 text-white shadow-2xl backdrop-blur">
+		<aside
+			className={`rounded-2xl border-2 border-amber-400 bg-emerald-950 p-3 text-white shadow-2xl ${
+				presentationMode ? 'w-[254px]' : 'w-[238px]'
+			}`}>
 			<div className="flex items-start justify-between gap-2">
 				<div>
-					<div className="text-xs font-black uppercase tracking-wide text-amber-100">
+					<div
+						className={`${presentationMode ? 'text-base' : 'text-xs'} font-black uppercase tracking-wide text-amber-100`}>
 						Contract
 					</div>
 					<div className="text-[44px] font-black leading-none text-white">
 						{derived.contract || '-'}
 					</div>
-					<div className="mt-1 text-xs font-bold text-emerald-100">
+					<div className={`${presentationMode ? 'text-base' : 'text-xs'} mt-1 font-bold text-emerald-100`}>
 						Declarer {derived.declarer || '-'}
 					</div>
 				</div>
@@ -778,12 +967,19 @@ function PlayStatusPanel({ state, derived, settledTrickCount }) {
 				</div>
 			</div>
 
-			<div className="mt-2 rounded-xl bg-white/10 px-3 py-2 shadow-inner">
-				<div className="text-[10px] font-black uppercase tracking-wide text-emerald-100">
-					Live Result
+			<div className="mt-2 rounded-xl bg-slate-950 px-3 py-2 shadow-inner">
+				<div
+					className={`${presentationMode ? 'text-sm' : 'text-[10px]'} font-black uppercase tracking-wide text-emerald-100`}>
+					{isComplete ? 'Final Result' : `Target ${target || '-'}`}
 				</div>
-				<div className="text-2xl font-black leading-tight">
-					{liveScore && !liveScore.partial ? liveScore.resultText : '-'}
+				<div className={`${presentationMode ? 'text-3xl' : 'text-2xl'} font-black leading-tight`}>
+					{isComplete && finalScore && !finalScore.partial
+						? finalScore.resultText
+						: tricksNeeded > 0
+							? `Needs ${tricksNeeded}`
+							: target
+								? 'Contract made'
+								: '-'}
 				</div>
 			</div>
 		</aside>
@@ -847,11 +1043,18 @@ function Controls({
 	onPick,
 	onSavePbn,
 	returnPath,
+	onPreviousBoard,
+	onNextBoard,
+	onAdvanceHidden,
+	canAdvanceHidden,
+	onReplayHand,
+	raiseLegalChoices,
+	onToggleLegalChoices,
 }) {
 	const hasAuction = derived.auctionCalls.length > 0
 	return (
-		<aside className="mx-auto flex h-16 w-full max-w-[1420px] items-center gap-4 overflow-visible rounded-xl border border-white/50 bg-white/90 p-2 shadow-2xl backdrop-blur">
-			<div className="flex w-[258px] shrink-0 items-center justify-between gap-2">
+		<aside className="mx-auto flex h-16 w-full max-w-[1420px] items-center gap-3 overflow-visible rounded-xl border border-white/50 bg-white/90 p-2 shadow-2xl backdrop-blur">
+			<div className="flex w-[210px] shrink-0 items-center justify-between gap-1.5">
 				<Link to="/player/help" className="text-xs font-semibold text-sky-700 hover:underline">
 					Guide
 				</Link>
@@ -870,29 +1073,54 @@ function Controls({
 					Save PBN
 				</button>
 			</div>
-			<div className="w-[150px] shrink-0">
+			<div className="w-[175px] shrink-0">
 				<div className="text-xs font-bold uppercase tracking-wide text-slate-500">Board</div>
-				<div className="text-sm font-bold text-slate-900">
-					{state.board?.board || state.index + 1} of {state.deals.length || 0}
+				<div className="flex items-center gap-1">
+					<button
+						onClick={onPreviousBoard}
+						disabled={state.index <= 0}
+						aria-label="Previous board"
+						className="h-7 w-7 rounded-md border border-slate-200 bg-white text-sm font-black disabled:opacity-30">
+						‹
+					</button>
+					<div className="min-w-0 flex-1 text-center text-sm font-bold text-slate-900">
+						{state.board?.board || state.index + 1} of {state.deals.length || 0}
+					</div>
+					<button
+						onClick={onNextBoard}
+						disabled={state.index >= state.deals.length - 1}
+						aria-label="Next board"
+						className="h-7 w-7 rounded-md border border-slate-200 bg-white text-sm font-black disabled:opacity-30">
+						›
+					</button>
 				</div>
 				<div className="text-xs text-slate-500">
 					Dealer {state.board?.dealer || '-'} · Vul {state.board?.vul || '-'}
 				</div>
 			</div>
-			<div className="w-[178px] shrink-0">
+			<div className="w-[170px] shrink-0">
 				<div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">
 					Show Hands
 				</div>
 				<SeatVisibilityToggles visibleSeats={state.visibleSeats} dispatch={dispatch} />
 			</div>
-			<div className="w-[300px] shrink-0">
-				<div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">
-					Contract
+			{state.phase !== 'play' ? (
+				<div className="w-[270px] shrink-0">
+					<div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+						Contract
+					</div>
+					<ManualContractControls manual={state.manualContract} dispatch={dispatch} />
 				</div>
-				<ManualContractControls manual={state.manualContract} dispatch={dispatch} />
-			</div>
+			) : (
+				<div className="w-[140px] shrink-0 rounded-lg bg-slate-900 px-3 py-2 text-white">
+					<div className="text-[10px] font-black uppercase tracking-wide text-slate-300">Contract</div>
+					<div className="text-lg font-black leading-none">
+						{derived.contract} by {derived.declarer}
+					</div>
+				</div>
+			)}
 			{state.phase !== 'play' && (
-				<div className="grid w-[156px] shrink-0 grid-cols-3 gap-1.5">
+				<div className="grid w-[150px] shrink-0 grid-cols-3 gap-1.5">
 					<button
 						disabled={!hasAuction || state.auctionCursor <= 0}
 						onClick={() => dispatch({ type: 'AUCTION_PREV' })}
@@ -914,7 +1142,7 @@ function Controls({
 				</div>
 			)}
 			{state.phase === 'play' && (
-				<div className="grid w-[218px] shrink-0 grid-cols-3 gap-1.5">
+				<div className="grid w-[400px] shrink-0 grid-cols-6 gap-1.5">
 					<button
 						onClick={() => dispatch({ type: 'UNDO_CARD' })}
 						disabled={!state.history.length}
@@ -934,33 +1162,219 @@ function Controls({
 								? 'border-amber-200 bg-amber-50 text-amber-900'
 								: 'border-slate-200 bg-white text-slate-800'
 						}`}>
-						{state.autoPlayPaused ? 'Resume' : 'Stop'}
+						{state.autoPlayPaused ? 'Start auto' : 'Stop auto'}
+					</button>
+					<button
+						onClick={onAdvanceHidden}
+						disabled={!canAdvanceHidden}
+						title="Play the lowest legal card from the hidden hand"
+						className="rounded-md border border-amber-300 bg-amber-50 px-1 py-2 text-xs font-semibold text-amber-950 disabled:opacity-40">
+						Hidden card
+					</button>
+					<button
+						onClick={onReplayHand}
+						className="rounded-md border border-sky-200 bg-sky-50 px-1 py-2 text-xs font-semibold text-sky-900">
+						Replay hand
+					</button>
+					<button
+						onClick={onToggleLegalChoices}
+						aria-pressed={raiseLegalChoices}
+						title="Raise or lower the legal cards without playing one"
+						className="rounded-md border border-amber-300 bg-amber-50 px-1 py-2 text-xs font-semibold text-amber-950">
+						{raiseLegalChoices ? 'Lower choices' : 'Raise choices'}
 					</button>
 				</div>
 			)}
-			<div className="grid w-[190px] shrink-0 grid-cols-2 gap-2">
-				<button
-					disabled={!derived.contract || !derived.declarer || state.phase === 'play'}
+			{state.phase !== 'play' && (
+				<div className="grid w-[180px] shrink-0 grid-cols-2 gap-2">
+					<button
+					disabled={
+						!derived.contract ||
+						!derived.declarer ||
+						state.phase === 'play' ||
+						state.phase === 'confirmed'
+					}
 					onClick={() => dispatch({ type: 'CONFIRM_AUCTION' })}
 					className="rounded-md bg-sky-700 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
 					Confirm
-				</button>
-				<button
-					disabled={!derived.contract || !derived.declarer || state.phase === 'play'}
+					</button>
+					<button
+					disabled={!derived.contract || !derived.declarer || state.phase !== 'confirmed'}
 					onClick={() => {
 						primeBridgeAudio()
 						dispatch({ type: 'START_PLAY' })
 					}}
 					className="rounded-md bg-emerald-700 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
 					Start Play
-				</button>
-			</div>
+					</button>
+				</div>
+			)}
 			{state.status && (
-				<div className="min-w-0 flex-1 truncate rounded-md bg-white px-2 py-2 text-xs font-medium text-slate-600 shadow-sm">
+				<div
+					role="status"
+					aria-live="polite"
+					className="min-w-0 flex-1 truncate rounded-md bg-white px-2 py-2 text-xs font-medium text-slate-600 shadow-sm">
 					{state.status}
 				</div>
 			)}
 		</aside>
+	)
+}
+
+function PresentationBar({
+	state,
+	derived,
+	isFullscreen,
+	onExitPresentation,
+	onToggleFullscreen,
+	onPreviousBoard,
+	onNextBoard,
+	onAdvanceHidden,
+	canAdvanceHidden,
+	onReplayHand,
+	raiseLegalChoices,
+	onToggleLegalChoices,
+	feltTheme,
+	onFeltThemeChange,
+	dispatch,
+}) {
+	const latestTrick = state.completedTricks[state.completedTricks.length - 1]
+	const status =
+		state.phase === 'play'
+			? state.play?.trickComplete && latestTrick
+				? `Trick ${state.completedTricks.length} won by ${latestTrick.winner} — held for discussion`
+				: `${seatName(state.play?.turnSeat)} (${state.play?.turnSeat || '-'}) to play${
+						state.autoPlayPaused ? ' · teacher control' : ' · automatic defenders on'
+					}`
+			: state.phase === 'confirmed'
+				? `${derived.contract} by ${derived.declarer} confirmed — ready to start play`
+				: `Auction ${state.auctionCursor} of ${derived.auctionCalls.length} calls`
+
+	return (
+		<div className="mx-auto flex h-[72px] w-full max-w-[1880px] items-center gap-3 border-b-2 border-amber-300 bg-slate-950 px-4 text-white shadow-2xl">
+			<button
+				onClick={onExitPresentation}
+				className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-black hover:bg-white/20">
+				Exit presentation
+			</button>
+			<div className="flex items-center gap-1 rounded-xl bg-white/10 p-1">
+				<button
+					onClick={onPreviousBoard}
+					disabled={state.index <= 0}
+					aria-label="Previous board"
+					className="h-10 w-10 rounded-lg bg-white text-xl font-black text-slate-950 disabled:opacity-25">
+					‹
+				</button>
+				<div className="min-w-[112px] px-2 text-center">
+					<div className="text-[11px] font-black uppercase tracking-widest text-amber-200">Board</div>
+					<div className="text-xl font-black leading-none">
+						{state.board?.board || state.index + 1} / {state.deals.length}
+					</div>
+				</div>
+				<button
+					onClick={onNextBoard}
+					disabled={state.index >= state.deals.length - 1}
+					aria-label="Next board"
+					className="h-10 w-10 rounded-lg bg-white text-xl font-black text-slate-950 disabled:opacity-25">
+					›
+				</button>
+			</div>
+			<div
+				role="status"
+				aria-live="polite"
+				className="min-w-0 flex-1 rounded-xl bg-emerald-900 px-4 py-2 text-center ring-1 ring-emerald-500">
+				<div className="truncate text-xl font-black">{status}</div>
+				<div className="text-sm font-bold text-emerald-100">
+					{derived.contract || 'No contract'} {derived.declarer ? `by ${derived.declarer}` : ''} · Dealer{' '}
+					{state.board?.dealer || '-'} · Vul {state.board?.vul || '-'}
+				</div>
+			</div>
+			{state.phase === 'auction' && (
+				<button
+					disabled={!derived.contract || !derived.declarer}
+					onClick={() => dispatch({ type: 'CONFIRM_AUCTION' })}
+					className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-black text-white disabled:opacity-35">
+					Confirm contract
+				</button>
+			)}
+			{state.phase === 'confirmed' && (
+				<button
+					onClick={() => {
+						primeBridgeAudio()
+						dispatch({ type: 'START_PLAY' })
+					}}
+					className="rounded-lg bg-emerald-300 px-4 py-2 text-sm font-black text-emerald-950">
+					Start play
+				</button>
+			)}
+			{state.phase === 'play' && (
+				<>
+					<div className="flex items-center gap-1">
+						<button
+							onClick={() => dispatch({ type: 'UNDO_CARD' })}
+							disabled={!state.history.length}
+							aria-label="Undo one card"
+							title="Undo one card"
+							className="h-10 w-10 rounded-lg border border-white/30 bg-white/10 text-xl font-black disabled:opacity-25">
+							↶
+						</button>
+						<button
+							onClick={() => dispatch({ type: 'UNDO_TRICK' })}
+							disabled={!state.history.length}
+							aria-label="Undo current trick"
+							title="Undo current trick"
+							className="h-10 w-10 rounded-lg border border-white/30 bg-white/10 text-sm font-black disabled:opacity-25">
+							↶4
+						</button>
+					</div>
+					<button
+						onClick={onAdvanceHidden}
+						disabled={!canAdvanceHidden}
+						title="Play the lowest legal card from the hidden hand"
+						className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-black text-slate-950 disabled:opacity-35">
+						Play hidden hand
+					</button>
+					<button
+						onClick={onReplayHand}
+						className="rounded-lg border border-sky-200/60 bg-sky-500/20 px-3 py-2 text-sm font-black text-sky-50">
+						Replay hand
+					</button>
+					<button
+						onClick={onToggleLegalChoices}
+						aria-pressed={raiseLegalChoices}
+						title="Raise or lower the legal cards without playing one"
+						className="rounded-lg border border-amber-300/70 bg-amber-300/15 px-3 py-2 text-sm font-black text-amber-100">
+						{raiseLegalChoices ? 'Lower choices' : 'Raise choices'}
+					</button>
+					<button
+						onClick={() =>
+							dispatch({ type: 'SET_AUTO_PLAY_PAUSED', paused: !state.autoPlayPaused })
+						}
+						className={`rounded-lg px-3 py-2 text-sm font-black ${
+							state.autoPlayPaused
+								? 'bg-white text-slate-950'
+								: 'bg-rose-500 text-white'
+						}`}>
+						{state.autoPlayPaused ? 'Start auto defenders' : 'Stop auto defenders'}
+					</button>
+				</>
+			)}
+			<FeltSwatches
+				value={feltTheme}
+				onChange={onFeltThemeChange}
+				presentationMode
+			/>
+			<SeatVisibilityToggles
+				visibleSeats={state.visibleSeats}
+				dispatch={dispatch}
+				presentationMode
+			/>
+			<button
+				onClick={onToggleFullscreen}
+				className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-black hover:bg-white/20">
+				{isFullscreen ? 'Window' : 'Fullscreen'}
+			</button>
+		</div>
 	)
 }
 
@@ -981,17 +1395,21 @@ function ContractNotice({ notice, dispatch }) {
 	)
 }
 
-function EndResultModal({ result, onBack, onPick }) {
+function EndResultModal({ result, onBack, onPick, onReplay }) {
 	if (!result) return null
 	const positive = result.score >= 0
 	const signedScore = result.score > 0 ? `+${result.score}` : String(result.score)
 	return (
 		<div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/72 p-6">
-			<div className="w-full max-w-2xl rounded-3xl border-4 border-amber-300 bg-emerald-950 p-7 text-center text-white shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
+			<div
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="player-hand-complete-title"
+				className="w-full max-w-2xl rounded-3xl border-4 border-amber-300 bg-emerald-950 p-7 text-center text-white shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
 				<div className="text-sm font-black uppercase tracking-[0.24em] text-amber-200">
 					Hand Complete
 				</div>
-				<h2 className="mt-2 text-5xl font-black leading-tight">
+				<h2 id="player-hand-complete-title" className="mt-2 text-5xl font-black leading-tight">
 					{positive ? 'Congratulations' : 'Commiserations'}
 				</h2>
 				<div
@@ -1020,6 +1438,11 @@ function EndResultModal({ result, onBack, onPick }) {
 				</div>
 				<div className="mt-7 flex flex-wrap justify-center gap-3">
 					<button
+						onClick={onReplay}
+						className="rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-amber-200">
+						Replay Hand
+					</button>
+					<button
 						onClick={onBack}
 						className="rounded-xl bg-white px-5 py-3 text-sm font-black text-emerald-950 shadow-lg hover:bg-emerald-50">
 						Back To Board
@@ -1029,7 +1452,7 @@ function EndResultModal({ result, onBack, onPick }) {
 							onBack()
 							onPick()
 						}}
-						className="rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-amber-200">
+						className="rounded-xl border border-white/30 bg-white/10 px-5 py-3 text-sm font-black text-white shadow-lg hover:bg-white/20">
 						Choose New PBN
 					</button>
 				</div>
@@ -1045,53 +1468,23 @@ function TableSurface({
 	seatIsVisible,
 	onPlay,
 	dispatch,
+	presentationMode = false,
+	raiseLegalChoices = true,
 }) {
 	const completedCount = state.completedTricks.length
-	const [settledTrickCount, setSettledTrickCount] = useState(0)
-	useEffect(() => {
-		if (state.phase !== 'play' || completedCount === 0) {
-			setSettledTrickCount(0)
-			return undefined
-		}
-		if (completedCount < settledTrickCount) {
-			setSettledTrickCount(completedCount)
-			return undefined
-		}
-		if (state.play?.trickComplete && completedCount > settledTrickCount) {
-			const timer = window.setTimeout(() => {
-				setSettledTrickCount(completedCount)
-			}, 500)
-			return () => window.clearTimeout(timer)
-		}
-		if (!state.play?.trickComplete && completedCount > settledTrickCount) {
-			setSettledTrickCount(completedCount)
-		}
-		return undefined
-	}, [state.phase, state.play?.trickComplete, completedCount, settledTrickCount])
-	const visibleSettledTrickCount = Math.min(settledTrickCount, completedCount)
-	const lastTrick =
-		visibleSettledTrickCount > 0
-			? state.completedTricks[visibleSettledTrickCount - 1]
-			: null
+	const lastTrickIndex = completedCount - (state.play?.trickComplete ? 2 : 1)
+	const lastTrick = lastTrickIndex >= 0 ? state.completedTricks[lastTrickIndex] : null
 	const latestWinner =
 		state.play?.trickComplete && completedCount > 0
 			? state.completedTricks[completedCount - 1]?.winner
 			: null
-	const showClearedTrick =
-		state.phase === 'play' &&
-		state.play?.trickComplete &&
-		completedCount > 0 &&
-		visibleSettledTrickCount >= completedCount
 	const visualPlay =
-		state.play && showClearedTrick
-			? { ...state.play, trick: [], trickComplete: false, visualWinner: null }
-			: state.play
-				? { ...state.play, visualWinner: latestWinner }
-				: null
+		state.play ? { ...state.play, visualWinner: latestWinner } : null
 	const common = (seat) => ({
 		seat,
 		position: seat,
 		cards: state.play?.remaining?.[seat] || state.hands[seat],
+		originalCards: state.hands[seat],
 		visible: seatIsVisible(seat),
 		active: (state.visibleSeats || []).includes(seat) && state.phase !== 'play',
 		dealer: state.board.dealer,
@@ -1107,11 +1500,22 @@ function TableSurface({
 			state.phase === 'play' && state.history.length === 0
 				? derived.openingLeader
 				: '',
+		presentationMode,
+		trump: derived.trump,
+		raiseLegalChoices,
 	})
 
 	return (
-		<main className="mx-auto h-[calc(100vh-7.4rem)] max-w-[1420px] px-5 py-2">
-			<div className="relative h-full min-h-[610px]">
+		<main
+			className={`mx-auto ${
+				presentationMode
+					? 'h-[calc(100vh-72px)] max-w-[1880px] px-12 py-3'
+					: 'h-[calc(100vh-7.4rem)] max-w-[1420px] px-5 py-2'
+			}`}>
+			<div
+				className={`player-v3-stage relative h-full ${
+					presentationMode ? 'min-h-[650px]' : 'min-h-[610px]'
+				}`}>
 				<div className="absolute left-1/2 top-0 z-20 -translate-x-1/2">
 					<HandPanel {...common('N')} />
 				</div>
@@ -1130,11 +1534,12 @@ function TableSurface({
 						derived={derived}
 						dispatch={dispatch}
 						visualPlay={visualPlay}
+						presentationMode={presentationMode}
 					/>
 				</div>
 				{state.phase === 'play' && (
 					<div className="absolute left-0 top-0 z-10">
-						<LastTrickPanel trick={lastTrick} />
+						<LastTrickPanel trick={lastTrick} presentationMode={presentationMode} />
 					</div>
 				)}
 				{state.phase === 'play' && (
@@ -1142,7 +1547,8 @@ function TableSurface({
 						<PlayStatusPanel
 							state={state}
 							derived={derived}
-							settledTrickCount={visibleSettledTrickCount}
+							settledTrickCount={completedCount}
+							presentationMode={presentationMode}
 						/>
 					</div>
 				)}
@@ -1157,8 +1563,15 @@ export default function PlayerV2() {
 	const [visibleEndKey, setVisibleEndKey] = useState('')
 	const [returnPath, setReturnPath] = useState('')
 	const [isFullscreen, setIsFullscreen] = useState(false)
+	const [presentationMode, setPresentationMode] = useState(false)
+	const [raiseLegalChoices, setRaiseLegalChoices] = useState(true)
+	const [feltTheme, setFeltTheme] = useState(() => {
+		if (typeof window === 'undefined') return 'green'
+		const saved = window.localStorage.getItem(PLAYER_FELT_KEY)
+		return FELT_THEMES.some((theme) => theme.key === saved) ? saved : 'green'
+	})
 	const fileRef = useRef(null)
-	const audioProgressRef = useRef({ historyLength: 0, completedLength: 0 })
+	const audioProgressRef = useRef({ boardIndex: -1, historyLength: 0, completedLength: 0 })
 	const derived = getPlayerV2Derived(state)
 	const dummy = derived.declarer ? partnerOf(derived.declarer) : ''
 	const endResult =
@@ -1178,6 +1591,7 @@ export default function PlayerV2() {
 		: ''
 	const showEndResult =
 		!!endResult && visibleEndKey === endResultKey && dismissedEndKey !== endResultKey
+	const selectedFelt = FELT_THEMES.find((theme) => theme.key === feltTheme) || FELT_THEMES[0]
 
 	const onFile = (event) => {
 		const file = event.target.files?.[0]
@@ -1186,6 +1600,7 @@ export default function PlayerV2() {
 		reader.onload = () => {
 			const parsed = parsePBN(sanitizePBN(String(reader.result)))
 			dispatch({ type: 'LOAD_DEALS', deals: parsed, name: file.name })
+			setRaiseLegalChoices(true)
 			setReturnPath('')
 			if (fileRef.current) fileRef.current.value = ''
 		}
@@ -1223,6 +1638,81 @@ export default function PlayerV2() {
 		(seat) => (state.visibleSeats || []).includes(seat),
 		[state.visibleSeats],
 	)
+	const turnSeat = state.play?.turnSeat || ''
+	const canAdvanceHidden =
+		state.phase === 'play' &&
+		!!turnSeat &&
+		!!derived.declarer &&
+		isDefender(turnSeat, derived.declarer) &&
+		!seatIsVisible(turnSeat) &&
+		(state.play?.remaining?.[turnSeat] || []).length > 0
+
+	const advanceHiddenHand = useCallback(() => {
+		const currentSeat = state.play?.turnSeat
+		if (
+			state.phase !== 'play' ||
+			!currentSeat ||
+			!derived.declarer ||
+			!isDefender(currentSeat, derived.declarer) ||
+			seatIsVisible(currentSeat)
+		) {
+			return
+		}
+		const trickForChoice = state.play.trickComplete ? [] : state.play.trick
+		const card = selectSimpleDefenderCard(
+			state.play.remaining,
+			trickForChoice,
+			currentSeat,
+			derived.trump,
+		)
+		if (!card) return
+		primeBridgeAudio()
+		dispatch({ type: 'PLAY_CARD', seat: currentSeat, cardId: card.id })
+	}, [state.phase, state.play, derived.declarer, derived.trump, seatIsVisible])
+
+	const goToBoard = useCallback(
+		(index) => {
+			if (index < 0 || index >= state.deals.length || index === state.index) return
+			dispatch({ type: 'GO_BOARD', index })
+			setRaiseLegalChoices(true)
+		},
+		[state.deals.length, state.index],
+	)
+
+	const replayCurrentHand = useCallback(
+		({ confirm = true } = {}) => {
+			if (state.phase !== 'play') return
+			if (
+				confirm &&
+				state.history.length > 0 &&
+				!window.confirm('Replay this hand from the opening lead?')
+			) {
+				return
+			}
+			primeBridgeAudio()
+			dispatch({ type: 'START_PLAY' })
+			setRaiseLegalChoices(true)
+			setDismissedEndKey('')
+			setVisibleEndKey('')
+		},
+		[state.phase, state.history.length],
+	)
+
+	const resetPlayer = useCallback(() => {
+		if (
+			state.board &&
+			!window.confirm('Unload the current PBN and clear the player? Your saved file will not be changed.')
+		) {
+			return
+		}
+		dispatch({ type: 'RESET' })
+		setPresentationMode(false)
+		setReturnPath('')
+	}, [state.board])
+
+	useEffect(() => {
+		window.localStorage.setItem(PLAYER_FELT_KEY, feltTheme)
+	}, [feltTheme])
 
 	useEffect(() => {
 		const raw = window.sessionStorage.getItem(PLAYER_HANDOFF_KEY)
@@ -1232,6 +1722,7 @@ export default function PlayerV2() {
 			const parsed = parsePBN(sanitizePBN(payload.pbn || ''))
 			if (parsed.length) {
 				dispatch({ type: 'LOAD_DEALS', deals: parsed, name: payload.name || 'Generator handoff' })
+				setRaiseLegalChoices(true)
 				setReturnPath(payload.sourcePath || '')
 			}
 		} catch (error) {
@@ -1263,8 +1754,20 @@ export default function PlayerV2() {
 		const progress = audioProgressRef.current
 		const historyLength = state.history.length
 		const completedLength = state.completedTricks.length
+		if (progress.boardIndex !== state.index) {
+			audioProgressRef.current = {
+				boardIndex: state.index,
+				historyLength,
+				completedLength,
+			}
+			return undefined
+		}
 		if (state.phase !== 'play') {
-			audioProgressRef.current = { historyLength, completedLength }
+			audioProgressRef.current = {
+				boardIndex: state.index,
+				historyLength,
+				completedLength,
+			}
 			return undefined
 		}
 
@@ -1278,11 +1781,16 @@ export default function PlayerV2() {
 				playTrickResultSound(declarerWon)
 			}, 180)
 		}
-		audioProgressRef.current = { historyLength, completedLength }
+		audioProgressRef.current = {
+			boardIndex: state.index,
+			historyLength,
+			completedLength,
+		}
 		return () => {
 			if (resultTimer) window.clearTimeout(resultTimer)
 		}
 	}, [
+		state.index,
 		state.phase,
 		state.history.length,
 		state.completedTricks,
@@ -1305,7 +1813,7 @@ export default function PlayerV2() {
 		if (!card) return
 		const timer = setTimeout(() => {
 			dispatch({ type: 'PLAY_CARD', seat: turnSeat, cardId: card.id })
-		}, state.play.trickComplete ? 750 : 450)
+		}, state.play.trickComplete ? 1600 : 700)
 		return () => clearTimeout(timer)
 	}, [
 		state.phase,
@@ -1319,25 +1827,6 @@ export default function PlayerV2() {
 		seatIsVisible,
 	])
 
-	useEffect(() => {
-		if (state.phase !== 'play') return
-		if (state.autoPlayPaused) return
-		const turnSeat = state.play?.turnSeat
-		if (!turnSeat || !seatIsVisible(turnSeat)) return
-		const legalCards = legalCardsForTurn(state.play, turnSeat)
-		if (legalCards.length !== 1) return
-		const [card] = legalCards
-		const timer = setTimeout(() => {
-			dispatch({ type: 'PLAY_CARD', seat: turnSeat, cardId: card.id })
-		}, state.play.trickComplete ? 750 : 350)
-		return () => clearTimeout(timer)
-	}, [
-		state.phase,
-		state.autoPlayPaused,
-		state.play,
-		seatIsVisible,
-	])
-
 	const onPlay = (seat, cardId) => {
 		primeBridgeAudio()
 		dispatch({ type: 'PLAY_CARD', seat, cardId })
@@ -1345,28 +1834,20 @@ export default function PlayerV2() {
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
-			const tag = event.target?.tagName
-			if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
+			const interactiveTarget = event.target?.closest?.(
+				'button, a, input, select, textarea, [contenteditable="true"]',
+			)
+			if (interactiveTarget) return
 			if (!state.board) return
+			if (event.key === 'Enter' && state.phase !== 'play') {
+				event.preventDefault()
+				dispatch({ type: 'AUCTION_NEXT' })
+				return
+			}
 			if (event.key === 'ArrowRight') {
 				event.preventDefault()
 				if (state.phase !== 'play') dispatch({ type: 'AUCTION_NEXT' })
-				else {
-					const turnSeat = state.play?.turnSeat
-					const trickForChoice = state.play?.trickComplete ? [] : state.play?.trick
-					const card = turnSeat
-						? selectSimpleDefenderCard(
-								state.play.remaining,
-								trickForChoice,
-								turnSeat,
-								derived.trump,
-							)
-						: null
-					if (turnSeat && card) {
-						primeBridgeAudio()
-						dispatch({ type: 'PLAY_CARD', seat: turnSeat, cardId: card.id })
-					}
-				}
+				else advanceHiddenHand()
 			}
 			const rank = rankFromKey(event)
 			if (state.phase === 'play' && rank) {
@@ -1403,7 +1884,19 @@ export default function PlayerV2() {
 			if (event.key.toLowerCase() === 'r') {
 				event.preventDefault()
 				if (state.phase !== 'play') dispatch({ type: 'AUCTION_REPLAY' })
-				else dispatch({ type: 'START_PLAY' })
+				else replayCurrentHand()
+			}
+			if (event.key.toLowerCase() === 'p') {
+				event.preventDefault()
+				setPresentationMode((current) => !current)
+			}
+			if (event.key === 'PageUp' || event.key === '[') {
+				event.preventDefault()
+				goToBoard(state.index - 1)
+			}
+			if (event.key === 'PageDown' || event.key === ']') {
+				event.preventDefault()
+				goToBoard(state.index + 1)
 			}
 		}
 		window.addEventListener('keydown', onKeyDown)
@@ -1414,74 +1907,128 @@ export default function PlayerV2() {
 		state.play,
 		state.visibleSeats,
 		state.history.length,
+		state.index,
 		dummy,
 		derived.declarer,
-		derived.trump,
 		seatIsVisible,
+		advanceHiddenHand,
+		goToBoard,
+		replayCurrentHand,
 	])
 
 	return (
-		<div className="h-screen overflow-hidden bg-[radial-gradient(circle_at_center,#11683f_0,#064329_48%,#032418_100%)] text-slate-900">
+		<div
+			style={{ background: selectedFelt.background }}
+			className={`h-screen overflow-hidden text-slate-900 ${
+				presentationMode ? 'player-v3-present' : ''
+			}`}>
 			<ContractNotice notice={state.contractNotice} dispatch={dispatch} />
 			<EndResultModal
 				result={showEndResult ? endResult : null}
 				onBack={() => setDismissedEndKey(endResultKey)}
 				onPick={() => fileRef.current?.click()}
+				onReplay={() => replayCurrentHand({ confirm: false })}
 			/>
 			<input ref={fileRef} type="file" accept=".pbn,text/plain" onChange={onFile} className="hidden" />
-			<header className="h-10 border-b border-emerald-900/40 bg-white/95">
-				<div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4">
-					<div>
-						<div className="text-base font-black">Bridge Hand Player</div>
-						<div className="text-xs font-medium text-slate-500">
-							{state.selectedName || 'No file loaded'}
+			{!presentationMode && (
+				<header className="h-10 border-b border-emerald-900/40 bg-white/95">
+					<div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4">
+						<div>
+							<div className="flex items-center gap-2 text-base font-black">
+								Bridge Hand Player
+								<span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-900">
+									V3 preview
+								</span>
+							</div>
+							<div className="text-xs font-medium text-slate-500">
+								{state.selectedName || 'No file loaded'}
+							</div>
+						</div>
+						<div className="flex items-center gap-2">
+							{returnPath && (
+								<Link to={returnPath} className="text-sm font-semibold text-sky-700 hover:underline">
+									Back to Generator
+								</Link>
+							)}
+							<Link to="/" className="text-sm font-semibold text-sky-700 hover:underline">
+								Home
+							</Link>
+							<button
+								onClick={() => setPresentationMode(true)}
+								disabled={!state.board}
+								className="rounded-md bg-amber-300 px-3 py-1.5 text-sm font-black text-slate-950 disabled:opacity-40">
+								Presentation mode
+							</button>
+							<button
+								onClick={toggleFullscreen}
+								className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold">
+								{isFullscreen ? 'Window' : 'Fullscreen'}
+							</button>
+							<FeltSwatches value={feltTheme} onChange={setFeltTheme} />
+							<button
+								onClick={resetPlayer}
+								className="rounded-md border border-rose-200 bg-white px-3 py-1.5 text-sm font-semibold text-rose-800">
+								Unload PBN
+							</button>
 						</div>
 					</div>
-					<div className="flex items-center gap-2">
-						{returnPath && (
-							<Link to={returnPath} className="text-sm font-semibold text-sky-700 hover:underline">
-								Back to Generator
-							</Link>
-						)}
-						<Link to="/" className="text-sm font-semibold text-sky-700 hover:underline">
-							Home
-						</Link>
-						<button
-							onClick={toggleFullscreen}
-							className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold">
-							{isFullscreen ? 'Window' : 'Fullscreen'}
-						</button>
-						<button
-							onClick={() => dispatch({ type: 'RESET' })}
-							className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold">
-							Reset
-						</button>
-					</div>
-				</div>
-			</header>
+				</header>
+			)}
+			{presentationMode && state.board && (
+				<PresentationBar
+					state={state}
+					derived={derived}
+					isFullscreen={isFullscreen}
+					onExitPresentation={() => setPresentationMode(false)}
+					onToggleFullscreen={toggleFullscreen}
+					onPreviousBoard={() => goToBoard(state.index - 1)}
+					onNextBoard={() => goToBoard(state.index + 1)}
+						onAdvanceHidden={advanceHiddenHand}
+						canAdvanceHidden={canAdvanceHidden}
+						onReplayHand={() => replayCurrentHand()}
+						raiseLegalChoices={raiseLegalChoices}
+						onToggleLegalChoices={() => setRaiseLegalChoices((current) => !current)}
+						feltTheme={feltTheme}
+						onFeltThemeChange={setFeltTheme}
+						dispatch={dispatch}
+				/>
+			)}
 
 			{!state.board ? (
 				<FilePrompt onPick={() => fileRef.current?.click()} />
 			) : (
 				<>
-					<div className="px-6 pt-2">
-						<Controls
-							state={state}
-							derived={derived}
-							dispatch={dispatch}
-							onPick={() => fileRef.current?.click()}
-							onSavePbn={saveCurrentBoardPbn}
-							returnPath={returnPath}
-						/>
-					</div>
+					{!presentationMode && (
+						<div className="px-6 pt-2">
+							<Controls
+								state={state}
+								derived={derived}
+								dispatch={dispatch}
+								onPick={() => fileRef.current?.click()}
+								onSavePbn={saveCurrentBoardPbn}
+								returnPath={returnPath}
+								onPreviousBoard={() => goToBoard(state.index - 1)}
+								onNextBoard={() => goToBoard(state.index + 1)}
+								onAdvanceHidden={advanceHiddenHand}
+								canAdvanceHidden={canAdvanceHidden}
+								onReplayHand={() => replayCurrentHand()}
+								raiseLegalChoices={raiseLegalChoices}
+								onToggleLegalChoices={() =>
+									setRaiseLegalChoices((current) => !current)
+								}
+							/>
+						</div>
+					)}
 					<TableSurface
 						state={state}
 						derived={derived}
 						dummy={dummy}
 						seatIsVisible={seatIsVisible}
 						onPlay={onPlay}
-						dispatch={dispatch}
-					/>
+							dispatch={dispatch}
+							presentationMode={presentationMode}
+							raiseLegalChoices={raiseLegalChoices}
+						/>
 				</>
 			)}
 		</div>

@@ -27,6 +27,7 @@ export const initialPlayerV2State = {
 	play: null,
 	history: [],
 	completedTricks: [],
+	boardSessions: {},
 	autoPlayPaused: false,
 	visibilityMode: 'mimic',
 	status: '',
@@ -69,7 +70,7 @@ function normalizeBoard(raw) {
 	}
 }
 
-function hydrateBoard(deals, index, preferredVisibleSeat = '') {
+function hydrateBoard(deals, index) {
 	const board = deals[index] || null
 	if (!board) {
 		return {
@@ -77,8 +78,8 @@ function hydrateBoard(deals, index, preferredVisibleSeat = '') {
 			hands: null,
 			auction: null,
 			phase: deals.length ? 'auction' : 'empty',
-			visibleSeat: preferredVisibleSeat || 'S',
-			visibleSeats: normalizeVisibleSeats(preferredVisibleSeat, 'S'),
+			visibleSeat: 'S',
+			visibleSeats: ['S'],
 			auctionCursor: 0,
 			play: null,
 			history: [],
@@ -90,7 +91,7 @@ function hydrateBoard(deals, index, preferredVisibleSeat = '') {
 
 	const hands = stableDealToHands(board.deal)
 	const auction = deriveAuction(board)
-	const visibleSeat = preferredVisibleSeat || board.dealer || 'N'
+	const visibleSeat = board.dealer || 'N'
 	return {
 		board,
 		hands,
@@ -105,6 +106,23 @@ function hydrateBoard(deals, index, preferredVisibleSeat = '') {
 		completedTricks: [],
 		autoPlayPaused: false,
 		status: '',
+	}
+}
+
+function snapshotBoardSession(state) {
+	return {
+		auction: state.auction,
+		phase: state.phase,
+		visibleSeat: state.visibleSeat,
+		visibleSeats: [...(state.visibleSeats || [])],
+		auctionCursor: state.auctionCursor,
+		manualContract: { ...state.manualContract },
+		contractNotice: state.contractNotice,
+		play: state.play,
+		history: [...state.history],
+		completedTricks: [...state.completedTricks],
+		autoPlayPaused: state.autoPlayPaused,
+		status: state.status,
 	}
 }
 
@@ -183,6 +201,7 @@ function withAuctionValidation(state, calls, notice = '') {
 		auction: nextAuction,
 		auctionCursor: calls.length,
 		manualContract: { declarer: '', level: '', strain: '', dbl: '' },
+		phase: state.phase === 'confirmed' ? 'auction' : state.phase,
 		status: notice,
 	}
 	const next = getPlayerV2Derived(nextState)
@@ -207,6 +226,7 @@ export function playerV2Reducer(state, action) {
 				deals,
 				index: 0,
 				selectedName: action.name || '',
+				boardSessions: {},
 				manualContract: { declarer: '', level: '', strain: '', dbl: '' },
 				contractNotice: '',
 				...hydrateBoard(deals, 0),
@@ -218,11 +238,19 @@ export function playerV2Reducer(state, action) {
 			return { ...state, status: action.status || '' }
 		case 'GO_BOARD': {
 			const index = Math.max(0, Math.min(state.deals.length - 1, action.index))
+			if (index === state.index) return state
+			const boardSessions = {
+				...state.boardSessions,
+				[state.index]: snapshotBoardSession(state),
+			}
+			const savedSession = boardSessions[index]
 			return {
 				...state,
 				index,
+				boardSessions,
 				manualContract: { declarer: '', level: '', strain: '', dbl: '' },
-				...hydrateBoard(state.deals, index, state.visibleSeat),
+				...hydrateBoard(state.deals, index),
+				...(savedSession || {}),
 			}
 		}
 		case 'SET_VISIBLE_SEAT':
@@ -262,6 +290,11 @@ export function playerV2Reducer(state, action) {
 			return {
 				...state,
 				manualContract: { ...state.manualContract, [action.field]: action.value },
+				phase: state.phase === 'confirmed' ? 'auction' : state.phase,
+				status:
+					state.phase === 'confirmed'
+						? 'Contract changed. Confirm it again before starting play.'
+						: state.status,
 			}
 		case 'AUCTION_NEXT':
 			return {
@@ -315,6 +348,10 @@ export function playerV2Reducer(state, action) {
 			if (!state.hands || !derived.contract || !derived.declarer) {
 				return { ...state, status: 'Play needs a known contract and declarer.' }
 			}
+			const isRestartingCurrentPlay = state.phase === 'play' && !!state.play
+			if (state.phase !== 'confirmed' && !isRestartingCurrentPlay) {
+				return { ...state, status: 'Confirm the auction before starting play.' }
+			}
 			return {
 				...state,
 				phase: 'play',
@@ -328,8 +365,8 @@ export function playerV2Reducer(state, action) {
 				),
 				history: [],
 				completedTricks: [],
-				autoPlayPaused: false,
-				status: `Opening lead: ${derived.openingLeader}.`,
+				autoPlayPaused: true,
+				status: `Opening lead: ${derived.openingLeader}. Automatic play paused.`,
 			}
 		}
 		case 'PLAY_CARD': {
