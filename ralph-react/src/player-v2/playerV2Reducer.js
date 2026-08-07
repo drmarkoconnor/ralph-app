@@ -1,6 +1,7 @@
 import { createInitialManualState, playCardManual } from '../lib/manualPlayEngine.js'
 import {
 	SEATS,
+	auctionProgress,
 	computeDuplicateScore,
 	deriveAuction,
 	isSeatVul,
@@ -8,7 +9,6 @@ import {
 	parseTrump,
 	rightOf,
 	stableDealToHands,
-	validateAuction,
 } from './bridgeV2.js'
 
 export const initialPlayerV2State = {
@@ -17,6 +17,10 @@ export const initialPlayerV2State = {
 	selectedName: '',
 	board: null,
 	hands: null,
+	practiceAuction: null,
+	recordedAuction: null,
+	auctionView: 'practice',
+	auctionCursors: { practice: 0, recorded: 0 },
 	auction: null,
 	phase: 'empty',
 	visibleSeat: 'S',
@@ -31,6 +35,49 @@ export const initialPlayerV2State = {
 	autoPlayPaused: false,
 	visibilityMode: 'mimic',
 	status: '',
+}
+
+const EMPTY_MANUAL_CONTRACT = Object.freeze({ declarer: '', level: '', strain: '', dbl: '' })
+
+function emptyManualContract() {
+	return { ...EMPTY_MANUAL_CONTRACT }
+}
+
+function practiceAuctionFor(state) {
+	return state.practiceAuction || state.auction || null
+}
+
+function makePracticeAuction(dealer = 'N', revision = 0) {
+	return {
+		dealer: SEATS.includes(dealer) ? dealer : 'N',
+		calls: [],
+		callSources: [],
+		status: 'in-progress',
+		terminal: false,
+		valid: true,
+		legal: false,
+		contract: '',
+		declarer: '',
+		revision,
+	}
+}
+
+function makeRecordedAuction(board) {
+	const derived = deriveAuction(board)
+	return Object.freeze({
+		...derived,
+		calls: Object.freeze([...(derived.calls || [])]),
+	})
+}
+
+function normalizedCursors(state) {
+	return {
+		practice: Math.max(
+			0,
+			Number(state.auctionCursors?.practice ?? practiceAuctionFor(state)?.calls?.length) || 0,
+		),
+		recorded: Math.max(0, Number(state.auctionCursors?.recorded) || 0),
+	}
 }
 
 function partnerSeat(seat) {
@@ -76,6 +123,10 @@ function hydrateBoard(deals, index) {
 		return {
 			board: null,
 			hands: null,
+			practiceAuction: null,
+			recordedAuction: null,
+			auctionView: 'practice',
+			auctionCursors: { practice: 0, recorded: 0 },
 			auction: null,
 			phase: deals.length ? 'auction' : 'empty',
 			visibleSeat: 'S',
@@ -90,16 +141,22 @@ function hydrateBoard(deals, index) {
 	}
 
 	const hands = stableDealToHands(board.deal)
-	const auction = deriveAuction(board)
-	const visibleSeat = board.dealer || 'N'
+	const recordedAuction = makeRecordedAuction(board)
+	const practiceAuction = makePracticeAuction(recordedAuction.dealer)
 	return {
 		board,
 		hands,
-		auction,
+		practiceAuction,
+		recordedAuction,
+		auctionView: 'practice',
+		auctionCursors: { practice: 0, recorded: 0 },
+		// Compatibility alias for existing coach/export consumers. This is always the
+		// live practice auction, never whichever comparison track is being viewed.
+		auction: practiceAuction,
 		phase: 'auction',
-		visibleSeat,
-		visibleSeats: normalizeVisibleSeats(visibleSeat, board.dealer || 'N'),
-		auctionCursor: auction.calls.length,
+		visibleSeat: 'S',
+		visibleSeats: ['S'],
+		auctionCursor: 0,
 		contractNotice: '',
 		play: null,
 		history: [],
@@ -111,7 +168,11 @@ function hydrateBoard(deals, index) {
 
 function snapshotBoardSession(state) {
 	return {
-		auction: state.auction,
+		practiceAuction: practiceAuctionFor(state),
+		recordedAuction: state.recordedAuction,
+		auctionView: state.auctionView || 'practice',
+		auctionCursors: normalizedCursors(state),
+		auction: practiceAuctionFor(state),
 		phase: state.phase,
 		visibleSeat: state.visibleSeat,
 		visibleSeats: [...(state.visibleSeats || [])],
@@ -128,15 +189,16 @@ function snapshotBoardSession(state) {
 
 function effectiveContract(state) {
 	const manual = state.manualContract
+	const practiceAuction = practiceAuctionFor(state)
 	if (manual.level && manual.strain) {
 		return {
 			contract: `${manual.level}${manual.strain}${manual.dbl}`,
-			declarer: manual.declarer || state.auction?.declarer || state.board?.declarer || '',
+			declarer: manual.declarer || practiceAuction?.declarer || '',
 		}
 	}
 	return {
-		contract: state.auction?.contract || state.board?.contract || '',
-		declarer: manual.declarer || state.auction?.declarer || state.board?.declarer || '',
+		contract: practiceAuction?.contract || '',
+		declarer: manual.declarer || practiceAuction?.declarer || '',
 	}
 }
 
@@ -160,6 +222,12 @@ function buildCompletedTricks(history, hands, leader, trump, declarer) {
 }
 
 export function getPlayerV2Derived(state) {
+	const practiceAuction = practiceAuctionFor(state)
+	const recordedAuction = state.recordedAuction || null
+	const auctionView = state.auctionView === 'recorded' ? 'recorded' : 'practice'
+	const cursors = normalizedCursors(state)
+	const displayedAuction =
+		auctionView === 'recorded' ? recordedAuction : practiceAuction
 	const { contract, declarer } = effectiveContract(state)
 	const trump = parseTrump(contract)
 	const openingLeader = declarer ? rightOf(declarer) : state.board?.dealer || 'N'
@@ -180,29 +248,57 @@ export function getPlayerV2Derived(state) {
 		openingLeader,
 		score,
 		dummy: declarer ? (declarer === 'N' ? 'S' : declarer === 'S' ? 'N' : declarer === 'E' ? 'W' : 'E') : '',
-		auctionCalls: state.auction?.calls || [],
+		auctionCalls: practiceAuction?.calls || [],
+		practiceAuction,
+		recordedAuction,
+		auctionView,
+		displayedAuction,
+		displayedAuctionCalls: displayedAuction?.calls || [],
+		displayedAuctionCursor: cursors[auctionView],
+		nextAuctionSeat:
+			practiceAuction?.status === 'in-progress'
+				? auctionProgress(practiceAuction.dealer, practiceAuction.calls).nextSeat
+				: null,
 	}
 }
 
-function withAuctionValidation(state, calls, notice = '') {
-	const dealer = state.auction?.dealer || state.board?.auctionDealer || state.board?.dealer || 'N'
-	const validation = calls.length ? validateAuction(dealer, calls) : { legal: false }
+function withPracticeCalls(state, calls, notice = '', source = 'manual') {
+	const currentAuction = practiceAuctionFor(state) || makePracticeAuction(
+		state.board?.auctionDealer || state.board?.dealer || 'N',
+	)
+	const dealer = currentAuction.dealer || state.board?.auctionDealer || state.board?.dealer || 'N'
+	const progress = auctionProgress(dealer, calls)
+	if (progress.status === 'invalid') {
+		return { ...state, status: progress.reason || 'Illegal auction.' }
+	}
 	const prior = getPlayerV2Derived(state)
 	const nextAuction = {
-		...(state.auction || {}),
-		calls,
+		...currentAuction,
+		...progress,
+		calls: [...progress.calls],
+		callSources: [
+			...(currentAuction.callSources || []).slice(0, Math.max(0, progress.calls.length - 1)),
+			...(progress.calls.length ? [source] : []),
+		],
 		dealer,
-		legal: validation.legal,
-		contract: validation.legal ? validation.contract : '',
-		declarer: validation.legal ? validation.declarer : '',
+		revision: (Number(currentAuction.revision) || 0) + 1,
+	}
+	const auctionCursors = {
+		...normalizedCursors(state),
+		practice: nextAuction.calls.length,
 	}
 	const nextState = {
 		...state,
+		practiceAuction: nextAuction,
 		auction: nextAuction,
-		auctionCursor: calls.length,
-		manualContract: { declarer: '', level: '', strain: '', dbl: '' },
+		auctionCursors,
+		auctionCursor: nextAuction.calls.length,
+		manualContract: emptyManualContract(),
 		phase: state.phase === 'confirmed' ? 'auction' : state.phase,
-		status: notice,
+		status:
+			progress.status === 'passed-out'
+				? 'The hand was passed out. Restart the auction or move to another board.'
+				: notice,
 	}
 	const next = getPlayerV2Derived(nextState)
 	const changed =
@@ -217,6 +313,109 @@ function withAuctionValidation(state, calls, notice = '') {
 	}
 }
 
+function appendSouthCall(state, call) {
+	if (state.phase === 'play') return { ...state, status: 'Restart before changing the auction.' }
+	const practiceAuction = practiceAuctionFor(state)
+	if (!practiceAuction) return { ...state, status: 'Load a board before bidding.' }
+	const progress = auctionProgress(practiceAuction.dealer, practiceAuction.calls)
+	if (progress.terminal) {
+		return { ...state, status: 'The auction has ended. Restart it to bid again.' }
+	}
+	if (progress.status === 'invalid') {
+		return { ...state, status: progress.reason || 'The practice auction is invalid.' }
+	}
+	if (progress.nextSeat !== 'S') {
+		return { ...state, status: `${progress.nextSeat} must bid before South.` }
+	}
+	const legal = legalNextAuctionCall(practiceAuction.dealer, practiceAuction.calls, call)
+	if (!legal.legal) return { ...state, status: legal.reason || 'Illegal call.' }
+	return withPracticeCalls(
+		state,
+		[...practiceAuction.calls, legal.call],
+		`South called ${legal.call}.`,
+		'south',
+	)
+}
+
+function appendAutomaticCall(state, action) {
+	if (state.phase !== 'auction') return state
+	const practiceAuction = practiceAuctionFor(state)
+	if (!practiceAuction) return state
+	const progress = auctionProgress(practiceAuction.dealer, practiceAuction.calls)
+	if (progress.terminal || progress.status === 'invalid') return state
+	if (
+		action.expectedSeat !== progress.nextSeat ||
+		progress.nextSeat === 'S' ||
+		Number(action.expectedRevision) !== Number(practiceAuction.revision)
+	) {
+		return {
+			...state,
+			status: 'Ignored a stale automatic bid; the auction position has changed.',
+		}
+	}
+	const legal = legalNextAuctionCall(
+		practiceAuction.dealer,
+		practiceAuction.calls,
+		action.call,
+	)
+	if (!legal.legal) {
+		return { ...state, status: legal.reason || 'The automatic call was illegal.' }
+	}
+	return withPracticeCalls(
+		state,
+		[...practiceAuction.calls, legal.call],
+		`${action.expectedSeat} called ${legal.call}.`,
+		action.source || 'auto',
+	)
+}
+
+function updateAuctionViewCursor(state, operation) {
+	const view = state.auctionView === 'recorded' ? 'recorded' : 'practice'
+	const cursors = normalizedCursors(state)
+	const auction = view === 'recorded' ? state.recordedAuction : practiceAuctionFor(state)
+	const maximum = auction?.calls?.length || 0
+	const current = Math.min(maximum, cursors[view])
+	const next =
+		operation === 'next'
+			? Math.min(maximum, current + 1)
+			: operation === 'previous'
+				? Math.max(0, current - 1)
+				: operation === 'all'
+					? maximum
+					: 0
+	return {
+		...state,
+		auctionCursors: { ...cursors, [view]: next },
+		// Keep this compatibility cursor tied to the live public practice history so
+		// the existing spoiler-safe Coach never consumes recorded future calls.
+		auctionCursor: practiceAuctionFor(state)?.calls?.length || 0,
+	}
+}
+
+function restartPracticeAuction(state) {
+	const current = practiceAuctionFor(state)
+	const dealer = current?.dealer || state.board?.auctionDealer || state.board?.dealer || 'N'
+	const practiceAuction = makePracticeAuction(dealer, (Number(current?.revision) || 0) + 1)
+	return {
+		...state,
+		practiceAuction,
+		auction: practiceAuction,
+		auctionView: 'practice',
+		auctionCursors: { ...normalizedCursors(state), practice: 0 },
+		auctionCursor: 0,
+		manualContract: emptyManualContract(),
+		contractNotice: '',
+		phase: 'auction',
+		visibleSeat: 'S',
+		visibleSeats: ['S'],
+		play: null,
+		history: [],
+		completedTricks: [],
+		autoPlayPaused: false,
+		status: 'Practice auction restarted. South remains the learner seat.',
+	}
+}
+
 export function playerV2Reducer(state, action) {
 	switch (action.type) {
 		case 'LOAD_DEALS': {
@@ -227,7 +426,7 @@ export function playerV2Reducer(state, action) {
 				index: 0,
 				selectedName: action.name || '',
 				boardSessions: {},
-				manualContract: { declarer: '', level: '', strain: '', dbl: '' },
+				manualContract: emptyManualContract(),
 				contractNotice: '',
 				...hydrateBoard(deals, 0),
 			}
@@ -248,7 +447,7 @@ export function playerV2Reducer(state, action) {
 				...state,
 				index,
 				boardSessions,
-				manualContract: { declarer: '', level: '', strain: '', dbl: '' },
+				manualContract: emptyManualContract(),
 				...hydrateBoard(state.deals, index),
 				...(savedSession || {}),
 			}
@@ -296,54 +495,69 @@ export function playerV2Reducer(state, action) {
 						? 'Contract changed. Confirm it again before starting play.'
 						: state.status,
 			}
-		case 'AUCTION_NEXT':
+		case 'SET_AUCTION_VIEW':
+		case 'AUCTION_SET_VIEW': {
+			const view = action.view === 'recorded' ? 'recorded' : 'practice'
 			return {
 				...state,
-				auctionCursor: Math.min((state.auction?.calls || []).length, state.auctionCursor + 1),
+				auctionView: view,
+				status:
+					view === 'recorded'
+						? 'Showing the recorded PBN for comparison; your practice auction is preserved.'
+						: 'Returned to your practice auction.',
 			}
+		}
+		case 'AUCTION_NEXT':
+			return updateAuctionViewCursor(state, 'next')
 		case 'AUCTION_PREV':
-			return { ...state, auctionCursor: Math.max(0, state.auctionCursor - 1) }
+			return updateAuctionViewCursor(state, 'previous')
 		case 'AUCTION_REPLAY':
-			return { ...state, auctionCursor: 0, phase: 'auction' }
+			return updateAuctionViewCursor(state, 'replay')
 		case 'AUCTION_ALL':
-			return { ...state, auctionCursor: (state.auction?.calls || []).length }
-		case 'AUCTION_APPEND_CALL': {
-			const base = (state.auction?.calls || []).slice(0, state.auctionCursor)
-			const dealer = state.auction?.dealer || state.board?.dealer || 'N'
-			if (base.length === (state.auction?.calls || []).length && validateAuction(dealer, base).legal) {
+			return updateAuctionViewCursor(state, 'all')
+		case 'AUCTION_SOUTH_CALL':
+		case 'AUCTION_APPEND_CALL':
+			return appendSouthCall(state, action.call)
+		case 'AUCTION_AUTO_CALL':
+			return appendAutomaticCall(state, action)
+		case 'RESTART_PRACTICE_AUCTION':
+		case 'AUCTION_RESTART_PRACTICE':
+			return restartPracticeAuction(state)
+		case 'AUCTION_RESTORE_PBN':
+			return {
+				...updateAuctionViewCursor({ ...state, auctionView: 'recorded' }, 'all'),
+				status: 'Showing the original PBN without replacing your practice auction.',
+			}
+		case 'CONFIRM_AUCTION': {
+			if (state.auctionView === 'recorded') {
 				return {
 					...state,
-					status: 'Rewind to the call you want to change, then choose a different next call.',
+					status: 'Return to Play as South before confirming your practice contract.',
 				}
 			}
-			const legal = legalNextAuctionCall(dealer, base, action.call)
-			if (!legal.legal) return { ...state, status: legal.reason || 'Illegal call.' }
-			return withAuctionValidation(
-				state,
-				[...base, legal.call],
-				`Added ${legal.call}; later calls were replaced from this point.`,
-			)
-		}
-		case 'AUCTION_RESTORE_PBN':
-			return withAuctionValidation(
-				state,
-				state.board?.auction || [],
-				'Restored the original PBN auction.',
-			)
-		case 'CONFIRM_AUCTION': {
+			if (practiceAuctionFor(state)?.status === 'passed-out') {
+				return { ...state, status: 'This hand was passed out, so there is no contract to play.' }
+			}
 			const derived = getPlayerV2Derived(state)
 			if (!derived.contract || !derived.declarer) {
 				return { ...state, status: 'Set a contract and declarer before play.' }
 			}
+			const learnerSeat = derived.declarer === 'N' ? 'N' : 'S'
 			return {
 				...state,
 				phase: 'confirmed',
-				visibleSeat: derived.declarer,
-				visibleSeats: normalizeVisibleSeats(state.visibleSeats, derived.declarer),
+				visibleSeat: learnerSeat,
+				visibleSeats: [learnerSeat],
 				status: `Contract confirmed: ${derived.contract} by ${derived.declarer}. Opening lead ${derived.openingLeader}.`,
 			}
 		}
 		case 'START_PLAY': {
+			if (state.auctionView === 'recorded') {
+				return {
+					...state,
+					status: 'Return to Play as South before starting the practice contract.',
+				}
+			}
 			const derived = getPlayerV2Derived(state)
 			if (!state.hands || !derived.contract || !derived.declarer) {
 				return { ...state, status: 'Play needs a known contract and declarer.' }
@@ -355,8 +569,10 @@ export function playerV2Reducer(state, action) {
 			return {
 				...state,
 				phase: 'play',
-				visibleSeat: derived.declarer,
-				visibleSeats: [derived.declarer],
+				visibleSeat: derived.declarer === 'N' ? 'N' : 'S',
+				// Keep dummy face down until the opening lead, even when the whole
+				// table is rotated to put a North declarer in the learner position.
+				visibleSeats: [derived.declarer === 'N' ? 'N' : 'S'],
 				play: createInitialManualState(
 					state.hands,
 					derived.openingLeader,
@@ -365,8 +581,8 @@ export function playerV2Reducer(state, action) {
 				),
 				history: [],
 				completedTricks: [],
-				autoPlayPaused: true,
-				status: `Opening lead: ${derived.openingLeader}. Automatic play paused.`,
+				autoPlayPaused: false,
+				status: `Opening lead: ${derived.openingLeader}. Computer-controlled seats will play automatically.`,
 			}
 		}
 		case 'PLAY_CARD': {

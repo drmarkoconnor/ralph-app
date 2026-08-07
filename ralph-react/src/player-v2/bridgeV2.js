@@ -134,24 +134,18 @@ export function orderHandForDisplay(
 }
 
 export function deriveAuction(board) {
-	const calls = Array.isArray(board?.auction) ? board.auction : []
-	if (!calls.length) {
-		return {
-			legal: false,
-			calls: [],
-			dealer: board?.auctionDealer || board?.dealer || 'N',
-			contract: board?.contract || '',
-			declarer: board?.declarer || '',
-		}
-	}
 	const dealer = board?.auctionDealer || board?.dealer || 'N'
-	const validation = validateAuction(dealer, calls)
+	const calls = Array.isArray(board?.auction) ? [...board.auction] : []
+	const progress = auctionProgress(
+		dealer,
+		calls,
+	)
 	return {
-		...validation,
+		...progress,
 		calls,
 		dealer,
-		contract: board?.contract || (validation.legal ? validation.contract : ''),
-		declarer: board?.declarer || (validation.legal ? validation.declarer : ''),
+		contract: board?.contract || progress.contract,
+		declarer: board?.declarer || progress.declarer,
 	}
 }
 
@@ -165,7 +159,7 @@ export function auctionRows(calls, dealer = 'N') {
 	return { columns, rows }
 }
 
-function normalizeCall(call) {
+export function normalizeAuctionCall(call) {
 	const up = String(call || '').trim().toUpperCase()
 	if (/^(P|PASS)$/.test(up)) return 'P'
 	if (up === 'X' || up === 'XX') return up
@@ -173,8 +167,145 @@ function normalizeCall(call) {
 	return bid ? `${bid[1]}${bid[2]}` : ''
 }
 
+export function auctionSeatAt(dealer = 'N', callIndex = 0) {
+	const startIndex = SEATS.indexOf(SEATS.includes(dealer) ? dealer : 'N')
+	return SEATS[(startIndex + Math.max(0, Number(callIndex) || 0)) % SEATS.length]
+}
+
+function auctionContractDetails(dealer, calls) {
+	const bidRe = /^([1-7])(C|D|H|S|NT)$/
+	let lastBid = null
+	let doubled = ''
+	for (let index = 0; index < calls.length; index++) {
+		const call = calls[index]
+		const bid = call.match(bidRe)
+		if (bid) {
+			lastBid = {
+				level: Number(bid[1]),
+				strain: bid[2],
+				seat: auctionSeatAt(dealer, index),
+				index,
+			}
+			doubled = ''
+		} else if (call === 'X') doubled = 'X'
+		else if (call === 'XX') doubled = 'XX'
+	}
+	if (!lastBid) return { contract: '', declarer: '' }
+
+	const declaringSide = SEATS.indexOf(lastBid.seat) % 2
+	let declarer = ''
+	for (let index = 0; index <= lastBid.index; index++) {
+		const bid = calls[index].match(bidRe)
+		const seat = auctionSeatAt(dealer, index)
+		if (
+			bid?.[2] === lastBid.strain &&
+			SEATS.indexOf(seat) % 2 === declaringSide
+		) {
+			declarer = seat
+			break
+		}
+	}
+	return {
+		contract: `${lastBid.level}${lastBid.strain}${doubled}`,
+		declarer,
+	}
+}
+
+export function auctionProgress(dealer = 'N', sourceCalls = []) {
+	const normalizedDealer = SEATS.includes(dealer) ? dealer : 'N'
+	const calls = []
+	let hasBid = false
+	let trailingPasses = 0
+
+	for (let index = 0; index < (sourceCalls || []).length; index++) {
+		if ((!hasBid && calls.length === 4) || (hasBid && trailingPasses >= 3)) {
+			return {
+				status: 'invalid',
+				terminal: true,
+				valid: false,
+				legal: false,
+				calls,
+				nextSeat: null,
+				contract: '',
+				declarer: '',
+				reason: 'The auction already ended before this call.',
+				invalidIndex: index,
+			}
+		}
+
+		const call = normalizeAuctionCall(sourceCalls[index])
+		if (!call) {
+			return {
+				status: 'invalid',
+				terminal: false,
+				valid: false,
+				legal: false,
+				calls,
+				nextSeat: auctionSeatAt(normalizedDealer, index),
+				contract: '',
+				declarer: '',
+				reason: 'Unknown auction call.',
+				invalidIndex: index,
+			}
+		}
+		const legal = legalNextAuctionCall(normalizedDealer, calls, call)
+		if (!legal.legal) {
+			return {
+				status: 'invalid',
+				terminal: false,
+				valid: false,
+				legal: false,
+				calls,
+				nextSeat: auctionSeatAt(normalizedDealer, index),
+				contract: '',
+				declarer: '',
+				reason: legal.reason || 'Illegal auction call.',
+				invalidIndex: index,
+			}
+		}
+
+		calls.push(legal.call)
+		if (/^[1-7](C|D|H|S|NT)$/.test(legal.call)) hasBid = true
+		trailingPasses = legal.call === 'P' ? trailingPasses + 1 : 0
+	}
+
+	if (!hasBid && calls.length === 4 && trailingPasses === 4) {
+		return {
+			status: 'passed-out',
+			terminal: true,
+			valid: true,
+			legal: false,
+			calls,
+			nextSeat: null,
+			contract: '',
+			declarer: '',
+		}
+	}
+	if (hasBid && trailingPasses >= 3) {
+		return {
+			status: 'complete',
+			terminal: true,
+			valid: true,
+			legal: true,
+			calls,
+			nextSeat: null,
+			...auctionContractDetails(normalizedDealer, calls),
+		}
+	}
+	return {
+		status: 'in-progress',
+		terminal: false,
+		valid: true,
+		legal: false,
+		calls,
+		nextSeat: auctionSeatAt(normalizedDealer, calls.length),
+		contract: '',
+		declarer: '',
+	}
+}
+
 export function legalNextAuctionCall(dealer, calls, nextCall) {
-	const call = normalizeCall(nextCall)
+	const call = normalizeAuctionCall(nextCall)
 	if (!call) return { legal: false, reason: 'Unknown call.' }
 	if (call === 'P') return { legal: true, call }
 
@@ -190,7 +321,7 @@ export function legalNextAuctionCall(dealer, calls, nextCall) {
 	let doubledBy = null
 	let redoubledBy = null
 	for (let i = 0; i < draft.length; i++) {
-		const existing = normalizeCall(draft[i])
+		const existing = normalizeAuctionCall(draft[i])
 		const seat = seatFor(i)
 		const bid = existing.match(bidRe)
 		if (bid) {

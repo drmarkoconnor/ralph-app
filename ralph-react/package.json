@@ -8,13 +8,18 @@
 		"build": "vite build",
 		"lint": "eslint .",
 		"test:generator2": "node --test src/generator-v2/generatorV2Engine.test.js",
+		"test:coach": "node --test src/player-v2/coach/coachContext.test.js src/player-v2/coach/coachClient.test.js netlify/tests/coach.test.mts netlify/tests/coach-trial.test.mts",
+		"test:coach-server": "node --test netlify/tests/coach.test.mts netlify/tests/coach-trial.test.mts",
 		"capture:walkthrough": "node scripts/capture-walkthrough.mjs",
 		"preview": "vite preview",
 		"build:auctions": "node --loader ts-node/esm scripts/build-auctions.ts"
 	},
 	"dependencies": {
+		"@netlify/blobs": "^10.7.12",
+		"@netlify/identity": "^1.2.0",
 		"bridge-dds": "^1.4.0",
 		"jspdf": "^2.5.2",
+		"openai": "^7.4.0",
 		"react": "^19.1.1",
 		"react-dom": "^19.1.1",
 		"react-router-dom": "^7.8.1",
@@ -22,6 +27,7 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.33.0",
+		"@netlify/functions": "^5.3.0",
 		"@tailwindcss/postcss": "^4.1.12",
 		"@types/react": "^19.1.10",
 		"@types/react-dom": "^19.1.7",

@@ -10,6 +10,20 @@ import PlayerHelp from './pages/PlayerHelp.jsx'
 import GeneratorV2 from './pages/GeneratorV2.jsx'
 import HomeConcepts from './pages/HomeConcepts.jsx'
 
+const COACH_AUTH_HASH_PATTERN =
+	/^#(confirmation_token|recovery_token|invite_token|email_change_token|access_token)=/
+
+if (
+	COACH_AUTH_HASH_PATTERN.test(window.location.hash) &&
+	!['/player', '/player-v2'].includes(window.location.pathname)
+) {
+	window.history.replaceState(
+		window.history.state,
+		'',
+		`/player${window.location.search}${window.location.hash}`,
+	)
+}
+
 const router = createBrowserRouter([
 	{ path: '/', element: <Home /> },
 	{ path: '/home-concepts', element: <HomeConcepts /> },

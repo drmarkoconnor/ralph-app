@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import AiCoachPanel from '../components/AiCoachPanel'
+import CoachOwnerAuthForm from '../components/CoachOwnerAuthForm'
+import SouthCoachNudge from '../components/SouthCoachNudge'
+import { useCoachIdentity } from '../hooks/useCoachIdentity'
 import { parsePBN, sanitizePBN } from '../lib/pbn'
 import { BoardZ } from '../schemas/board'
 import { exportBoardPBN } from '../pbn/export'
@@ -12,6 +16,7 @@ import {
 	isSeatVul,
 	orderHandForDisplay,
 	partnerOf,
+	legalNextAuctionCall,
 	selectSimpleDefenderCard,
 	seatName,
 	suitSymbol,
@@ -21,9 +26,40 @@ import {
 	initialPlayerV2State,
 	playerV2Reducer,
 } from '../player-v2/playerV2Reducer'
+import { choosePracticeAutoCall } from '../player-v2/acolPracticeBidder'
+import {
+	COACH_PAID_ACTIONS,
+	COACH_QUICK_ACTIONS,
+	CoachRequestError,
+	buildLearnerCoachContext,
+	coachPhaseId,
+	coachPositionKey,
+	coachReplyText,
+	getBridgeCoachAccess,
+	localCoachFact,
+	requestBridgeCoach,
+	requestBridgeCoachTrial,
+	transcriptEntry,
+} from '../player-v2/coach'
 
 const PLAYER_HANDOFF_KEY = 'ralph-player-handoff-v1'
 const PLAYER_FELT_KEY = 'ralph-player-felt-v1'
+
+function learnerSeatForPosition(phase, declarer) {
+	return (phase === 'confirmed' || phase === 'play') && declarer === 'N' ? 'N' : 'S'
+}
+
+function learnerControlledSeats(phase, declarer) {
+	if (phase !== 'play') return new Set(['S'])
+	return declarer === 'N' || declarer === 'S'
+		? new Set(['N', 'S'])
+		: new Set(['S'])
+}
+
+function rotatedForNorthDeclarer(phase, declarer) {
+	return (phase === 'confirmed' || phase === 'play') && declarer === 'N'
+}
+
 const FELT_THEMES = [
 	{
 		key: 'green',
@@ -482,7 +518,7 @@ function HandPanel({
 	const cardRows = isSideSeat
 		? [sortedCards.slice(0, 6), sortedCards.slice(6)]
 		: [sortedCards]
-	const playableMotion = playableMotionBySeat[seat] || ''
+	const playableMotion = playableMotionBySeat[position] || ''
 	const legalCardIds = useMemo(
 		() => new Set(legalCardsForTurn(play, seat).map((card) => card.id)),
 		[play, seat],
@@ -629,29 +665,105 @@ function AuctionPanel({ auction, cursor, dealer, contract, declarer }) {
 	)
 }
 
-function BiddingEditor({ dispatch }) {
-	const [level, setLevel] = useState('1')
-	const [strain, setStrain] = useState('S')
+function AuctionModeSwitch({ state, derived, dispatch, presentationMode = false }) {
+	const recordedAvailable = (derived.recordedAuction?.calls || []).length > 0
 	return (
-		<section className="rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm">
-			<div className="mb-1 flex items-center justify-between">
-				<h2 className="text-sm font-bold text-slate-900">Change Auction</h2>
+		<section className="rounded-xl border-2 border-amber-300 bg-slate-950 p-1.5 text-white shadow-lg">
+			<div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Auction experience">
 				<button
-					onClick={() => dispatch({ type: 'AUCTION_RESTORE_PBN' })}
-					className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-700">
-					Restore PBN
+					type="button"
+					aria-pressed={derived.auctionView === 'practice'}
+					onClick={() => dispatch({ type: 'SET_AUCTION_VIEW', view: 'practice' })}
+					className={`rounded-lg px-2 py-2 font-black ${
+						presentationMode ? 'text-base' : 'text-sm'
+					} ${
+						derived.auctionView === 'practice'
+							? 'bg-amber-300 text-slate-950'
+							: 'bg-white/10 text-white hover:bg-white/20'
+					}`}>
+					Play as South
+				</button>
+				<button
+					type="button"
+					disabled={!recordedAvailable}
+					aria-pressed={derived.auctionView === 'recorded'}
+					onClick={() => dispatch({ type: 'SET_AUCTION_VIEW', view: 'recorded' })}
+					className={`rounded-lg px-2 py-2 font-black disabled:cursor-not-allowed disabled:opacity-35 ${
+						presentationMode ? 'text-base' : 'text-sm'
+					} ${
+						derived.auctionView === 'recorded'
+							? 'bg-sky-300 text-slate-950'
+							: 'bg-white/10 text-white hover:bg-white/20'
+					}`}>
+					{recordedAvailable ? 'Review recorded PBN' : 'No recorded auction'}
 				</button>
 			</div>
-			<div className="grid grid-cols-[1fr_1fr_1fr_0.8fr_1fr_auto] gap-1">
+			<p className="mt-1 text-center text-[11px] font-bold leading-tight text-slate-200">
+				{derived.auctionView === 'recorded'
+					? 'Comparison only — your practice auction and contract remain safely preserved.'
+					: state.practiceAuction?.calls?.length
+						? 'Your live auction is saved automatically.'
+						: 'You are South. The other seats bid automatically until your turn.'}
+			</p>
+		</section>
+	)
+}
+
+function BiddingEditor({ state, derived, dispatch }) {
+	const [level, setLevel] = useState('1')
+	const [strain, setStrain] = useState('S')
+	const auction = state.practiceAuction
+	const calls = auction?.calls || []
+	const dealer = auction?.dealer || state.board?.auctionDealer || state.board?.dealer || 'N'
+	const canBid =
+		state.phase === 'auction' &&
+		derived.auctionView === 'practice' &&
+		auction?.status === 'in-progress' &&
+		derived.nextAuctionSeat === 'S'
+	const legal = (call) => canBid && legalNextAuctionCall(dealer, calls, call).legal
+	const restart = () => {
+		if (calls.length && !window.confirm('Restart your practice auction from the first call?')) return
+		dispatch({ type: 'RESTART_PRACTICE_AUCTION' })
+	}
+	const statusMessage =
+		auction?.status === 'passed-out'
+			? 'The hand was passed out. Restart to try another auction.'
+			: auction?.status === 'complete'
+				? `Auction complete: ${derived.contract} by ${derived.declarer}. Confirm when ready.`
+				: canBid
+					? 'South to bid — choose your call.'
+					: derived.nextAuctionSeat
+						? `${seatName(derived.nextAuctionSeat)} is bidding…`
+						: 'Waiting for the auction to begin.'
+	return (
+		<section className="rounded-lg border-2 border-slate-200 bg-white p-2 shadow-sm">
+			<div className="mb-1 flex items-center justify-between">
+				<div>
+					<h2 className="text-sm font-black text-slate-900">Your call — South</h2>
+					<p className={`text-xs font-bold ${canBid ? 'text-emerald-700' : 'text-slate-500'}`}>
+						{statusMessage}
+					</p>
+				</div>
+				<button
+					type="button"
+					onClick={restart}
+					className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-black text-rose-800">
+					Restart
+				</button>
+			</div>
+			<div className="grid grid-cols-[1fr_1fr_1fr_0.8fr_1fr_auto] gap-1.5">
 				{['P', 'X', 'XX'].map((call) => (
 					<button
 						key={call}
+						type="button"
+						disabled={!legal(call)}
 						onClick={() => dispatch({ type: 'AUCTION_APPEND_CALL', call })}
-						className="rounded-md bg-slate-900 px-2 py-1.5 text-xs font-black text-white hover:bg-slate-800">
+						className="min-h-10 rounded-md bg-slate-900 px-2 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-30">
 						{call === 'P' ? 'Pass' : call}
 					</button>
 				))}
 				<select
+					disabled={!canBid}
 					value={level}
 					onChange={(event) => setLevel(event.target.value)}
 					className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-xs font-black">
@@ -660,6 +772,7 @@ function BiddingEditor({ dispatch }) {
 					))}
 				</select>
 				<select
+					disabled={!canBid}
 					value={strain}
 					onChange={(event) => setStrain(event.target.value)}
 					className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-xs font-black">
@@ -668,8 +781,10 @@ function BiddingEditor({ dispatch }) {
 					))}
 				</select>
 				<button
+					type="button"
+					disabled={!legal(`${level}${strain}`)}
 					onClick={() => dispatch({ type: 'AUCTION_APPEND_CALL', call: `${level}${strain}` })}
-					className="rounded-md bg-sky-700 px-2.5 py-1.5 text-xs font-black text-white hover:bg-sky-800">
+					className="min-h-10 rounded-md bg-sky-700 px-3 py-2 text-xs font-black text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-30">
 					Bid
 				</button>
 			</div>
@@ -677,63 +792,103 @@ function BiddingEditor({ dispatch }) {
 	)
 }
 
-function StagePanel({ state, derived, dispatch, visualPlay, presentationMode = false }) {
+function StagePanel({
+	state,
+	derived,
+	dispatch,
+	visualPlay,
+	presentationMode = false,
+	rotated = false,
+}) {
 	if (state.phase === 'play') {
-		return <TrickPanel play={visualPlay || state.play} presentationMode={presentationMode} />
+		return (
+			<TrickPanel
+				play={visualPlay || state.play}
+				presentationMode={presentationMode}
+				rotated={rotated}
+			/>
+		)
 	}
+	const recordedView = derived.auctionView === 'recorded'
+	const shownAuction = derived.displayedAuction
+	const shownCalls = derived.displayedAuctionCalls
+	const shownCursor = recordedView ? derived.displayedAuctionCursor : shownCalls.length
 
 	return (
 		<div
-			className={`player-v3-auction grid gap-1 ${presentationMode ? 'w-[410px]' : 'w-[360px]'}`}>
+			className={`player-v3-auction grid gap-1.5 ${presentationMode ? 'w-[430px]' : 'w-[390px]'}`}>
+			<AuctionModeSwitch
+				state={state}
+				derived={derived}
+				dispatch={dispatch}
+				presentationMode={presentationMode}
+			/>
 			<div className="rounded-lg border border-sky-200 bg-sky-50 p-1.5">
 				<div className="flex items-center justify-between gap-2">
 					<div>
-						<h2 className="text-sm font-black text-slate-900">Bidding Layer</h2>
+						<h2 className="text-sm font-black text-slate-900">
+							{recordedView ? 'Recorded PBN auction' : 'Your practice auction'}
+						</h2>
 						<p className="mt-0.5 text-[11px] font-medium leading-tight text-slate-600">
-							Step, reveal, then confirm.
+							{recordedView
+								? 'Step through the teacher’s recorded sequence.'
+								: derived.nextAuctionSeat === 'S'
+									? 'South to bid.'
+									: derived.nextAuctionSeat
+										? `${seatName(derived.nextAuctionSeat)} is thinking…`
+										: 'Auction complete.'}
 						</p>
 					</div>
 					<div className="rounded-md bg-white px-2 py-1 text-xs font-bold text-sky-900 shadow-sm">
-						{state.auctionCursor}/{derived.auctionCalls.length || 0} calls
+						{shownCursor}/{shownCalls.length || 0} calls
 					</div>
 				</div>
-				<div className="mt-1 grid grid-cols-3 gap-1">
+				{recordedView && <div className="mt-1 grid grid-cols-3 gap-1">
 					<button
-						disabled={!derived.auctionCalls.length}
+						disabled={!shownCalls.length}
 						onClick={() => dispatch({ type: 'AUCTION_REPLAY' })}
 						className="rounded-md border border-sky-200 bg-white px-2 py-1.5 text-xs font-bold text-sky-900 disabled:opacity-40">
 						Replay
 					</button>
 					<button
 						disabled={
-							!derived.auctionCalls.length ||
-							state.auctionCursor >= derived.auctionCalls.length
+							!shownCalls.length ||
+							shownCursor >= shownCalls.length
 						}
 						onClick={() => dispatch({ type: 'AUCTION_NEXT' })}
 						className="rounded-md border border-sky-200 bg-white px-2 py-1.5 text-xs font-bold text-sky-900 disabled:opacity-40">
 						Next
 					</button>
 					<button
-						disabled={!derived.auctionCalls.length}
+						disabled={!shownCalls.length}
 						onClick={() => dispatch({ type: 'AUCTION_ALL' })}
 						className="rounded-md border border-sky-200 bg-white px-2 py-1.5 text-xs font-bold text-sky-900 disabled:opacity-40">
 						Show All
 					</button>
-				</div>
+				</div>}
 			</div>
 			<AuctionPanel
-				auction={derived.auctionCalls}
-				cursor={state.auctionCursor}
-				dealer={state.auction?.dealer || state.board.dealer}
-				contract={derived.contract}
-				declarer={derived.declarer}
+				auction={shownCalls}
+				cursor={shownCursor}
+				dealer={shownAuction?.dealer || state.board.dealer}
+				contract={recordedView ? shownAuction?.contract : derived.contract}
+				declarer={recordedView ? shownAuction?.declarer : derived.declarer}
 			/>
-			<BiddingEditor dispatch={dispatch} />
+			{recordedView ? (
+				<button
+					type="button"
+					onClick={() => dispatch({ type: 'SET_AUCTION_VIEW', view: 'practice' })}
+					className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-black text-slate-950 shadow-lg">
+					Return to your auction
+				</button>
+			) : (
+				<BiddingEditor state={state} derived={derived} dispatch={dispatch} />
+			)}
 		</div>
 	)
 }
 
-function TrickCardSlot({ seat, trick, winner, size = 'md' }) {
+function TrickCardSlot({ seat, position = seat, trick, winner, size = 'md' }) {
 	const item = (trick || []).find((entry) => entry.seat === seat)
 	const dims =
 		size === 'sm'
@@ -756,7 +911,7 @@ function TrickCardSlot({ seat, trick, winner, size = 'md' }) {
 					suit: 'text-xs',
 					radius: 'rounded-xl',
 				}
-	const rotateClass = seat === 'E' ? 'rotate-6' : seat === 'W' ? '-rotate-6' : ''
+	const rotateClass = position === 'E' ? 'rotate-6' : position === 'W' ? '-rotate-6' : ''
 	if (!item) {
 		return (
 			<div
@@ -808,9 +963,13 @@ function CrossTrick({
 	size = 'md',
 	showStatus = true,
 	showContract = true,
+	rotated = false,
 }) {
 	const played = (trick || []).length
 	const large = size === 'lg'
+	const visualSeats = rotated
+		? { top: 'S', right: 'W', bottom: 'N', left: 'E' }
+		: { top: 'N', right: 'E', bottom: 'S', left: 'W' }
 	return (
 		<div
 			className="relative h-full w-full overflow-hidden rounded-2xl border-2 border-amber-400/80 shadow-[inset_0_0_30px_rgba(0,0,0,0.34),0_18px_38px_rgba(0,0,0,0.32)]"
@@ -831,16 +990,16 @@ function CrossTrick({
 				</div>
 			)}
 			<div className={`absolute left-1/2 -translate-x-1/2 ${large ? 'top-6' : 'top-5'}`}>
-				<TrickCardSlot seat="N" trick={trick} winner={winner} size={size} />
+				<TrickCardSlot seat={visualSeats.top} position="N" trick={trick} winner={winner} size={size} />
 			</div>
 			<div className={`absolute top-1/2 -translate-y-1/2 ${large ? 'right-6' : 'right-5'}`}>
-				<TrickCardSlot seat="E" trick={trick} winner={winner} size={size} />
+				<TrickCardSlot seat={visualSeats.right} position="E" trick={trick} winner={winner} size={size} />
 			</div>
 			<div className={`absolute left-1/2 -translate-x-1/2 ${large ? 'bottom-6' : 'bottom-5'}`}>
-				<TrickCardSlot seat="S" trick={trick} winner={winner} size={size} />
+				<TrickCardSlot seat={visualSeats.bottom} position="S" trick={trick} winner={winner} size={size} />
 			</div>
 			<div className={`absolute top-1/2 -translate-y-1/2 ${large ? 'left-6' : 'left-5'}`}>
-				<TrickCardSlot seat="W" trick={trick} winner={winner} size={size} />
+				<TrickCardSlot seat={visualSeats.left} position="W" trick={trick} winner={winner} size={size} />
 			</div>
 			{showStatus && (
 				<div
@@ -854,7 +1013,7 @@ function CrossTrick({
 	)
 }
 
-function TrickPanel({ play, presentationMode = false }) {
+function TrickPanel({ play, presentationMode = false, rotated = false }) {
 	const trick = play?.trick || []
 	const winner = play?.visualWinner || null
 	return (
@@ -871,13 +1030,14 @@ function TrickPanel({ play, presentationMode = false }) {
 					contract={null}
 					showContract={false}
 					size={presentationMode ? 'lg' : 'md'}
+					rotated={rotated}
 				/>
 			</div>
 		</section>
 	)
 }
 
-function LastTrickPanel({ trick, presentationMode = false }) {
+function LastTrickPanel({ trick, presentationMode = false, rotated = false }) {
 	return (
 		<aside
 			className={`rounded-2xl border-2 border-amber-400 bg-emerald-950 p-2 text-white shadow-2xl ${
@@ -901,6 +1061,7 @@ function LastTrickPanel({ trick, presentationMode = false }) {
 						turnSeat={null}
 						size="sm"
 						showStatus={false}
+						rotated={rotated}
 					/>
 				) : (
 					<div className="flex h-full items-center justify-center rounded-2xl border-2 border-dashed border-white/28 bg-white/8 text-center text-xs font-bold text-emerald-100">
@@ -1051,7 +1212,8 @@ function Controls({
 	raiseLegalChoices,
 	onToggleLegalChoices,
 }) {
-	const hasAuction = derived.auctionCalls.length > 0
+	const hasAuction = derived.displayedAuctionCalls.length > 0
+	const recordedView = derived.auctionView === 'recorded'
 	return (
 		<aside className="mx-auto flex h-16 w-full max-w-[1420px] items-center gap-3 overflow-visible rounded-xl border border-white/50 bg-white/90 p-2 shadow-2xl backdrop-blur">
 			<div className="flex w-[210px] shrink-0 items-center justify-between gap-1.5">
@@ -1119,16 +1281,19 @@ function Controls({
 					</div>
 				</div>
 			)}
-			{state.phase !== 'play' && (
+			{state.phase !== 'play' && recordedView && (
 				<div className="grid w-[150px] shrink-0 grid-cols-3 gap-1.5">
 					<button
-						disabled={!hasAuction || state.auctionCursor <= 0}
+						disabled={!hasAuction || derived.displayedAuctionCursor <= 0}
 						onClick={() => dispatch({ type: 'AUCTION_PREV' })}
 						className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold disabled:opacity-40">
 						Back
 					</button>
 					<button
-						disabled={!hasAuction || state.auctionCursor >= derived.auctionCalls.length}
+						disabled={
+							!hasAuction ||
+							derived.displayedAuctionCursor >= derived.displayedAuctionCalls.length
+						}
 						onClick={() => dispatch({ type: 'AUCTION_NEXT' })}
 						className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold disabled:opacity-40">
 						Next
@@ -1138,6 +1303,22 @@ function Controls({
 						onClick={() => dispatch({ type: 'AUCTION_ALL' })}
 						className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold disabled:opacity-40">
 						All
+					</button>
+				</div>
+			)}
+			{state.phase !== 'play' && !recordedView && (
+				<div className="w-[150px] shrink-0">
+					<button
+						type="button"
+						onClick={() => {
+							if (
+								state.practiceAuction?.calls?.length &&
+								!window.confirm('Restart your practice auction from the first call?')
+							) return
+							dispatch({ type: 'RESTART_PRACTICE_AUCTION' })
+						}}
+						className="w-full rounded-md border border-rose-200 bg-rose-50 px-2 py-2 text-xs font-black text-rose-800">
+						Restart auction
 					</button>
 				</div>
 			)}
@@ -1162,14 +1343,14 @@ function Controls({
 								? 'border-amber-200 bg-amber-50 text-amber-900'
 								: 'border-slate-200 bg-white text-slate-800'
 						}`}>
-						{state.autoPlayPaused ? 'Start auto' : 'Stop auto'}
+						{state.autoPlayPaused ? 'Start computers' : 'Pause computers'}
 					</button>
 					<button
 						onClick={onAdvanceHidden}
 						disabled={!canAdvanceHidden}
-						title="Play the lowest legal card from the hidden hand"
+						title="Play the computer-controlled seat’s next legal card"
 						className="rounded-md border border-amber-300 bg-amber-50 px-1 py-2 text-xs font-semibold text-amber-950 disabled:opacity-40">
-						Hidden card
+						Computer card
 					</button>
 					<button
 						onClick={onReplayHand}
@@ -1189,6 +1370,7 @@ function Controls({
 				<div className="grid w-[180px] shrink-0 grid-cols-2 gap-2">
 					<button
 					disabled={
+						derived.auctionView !== 'practice' ||
 						!derived.contract ||
 						!derived.declarer ||
 						state.phase === 'play' ||
@@ -1199,7 +1381,12 @@ function Controls({
 					Confirm
 					</button>
 					<button
-					disabled={!derived.contract || !derived.declarer || state.phase !== 'confirmed'}
+					disabled={
+						derived.auctionView !== 'practice' ||
+						!derived.contract ||
+						!derived.declarer ||
+						state.phase !== 'confirmed'
+					}
 					onClick={() => {
 						primeBridgeAudio()
 						dispatch({ type: 'START_PLAY' })
@@ -1234,6 +1421,7 @@ function PresentationBar({
 	onReplayHand,
 	raiseLegalChoices,
 	onToggleLegalChoices,
+	onOpenCoach,
 	feltTheme,
 	onFeltThemeChange,
 	dispatch,
@@ -1244,11 +1432,17 @@ function PresentationBar({
 			? state.play?.trickComplete && latestTrick
 				? `Trick ${state.completedTricks.length} won by ${latestTrick.winner} — held for discussion`
 				: `${seatName(state.play?.turnSeat)} (${state.play?.turnSeat || '-'}) to play${
-						state.autoPlayPaused ? ' · teacher control' : ' · automatic defenders on'
+						state.autoPlayPaused ? ' · computer players paused' : ' · computer players on'
 					}`
 			: state.phase === 'confirmed'
 				? `${derived.contract} by ${derived.declarer} confirmed — ready to start play`
-				: `Auction ${state.auctionCursor} of ${derived.auctionCalls.length} calls`
+				: derived.auctionView === 'recorded'
+					? `Recorded PBN ${derived.displayedAuctionCursor} of ${derived.displayedAuctionCalls.length} calls — your auction is saved`
+					: derived.nextAuctionSeat === 'S'
+						? `South to bid · ${derived.auctionCalls.length} calls so far`
+						: derived.nextAuctionSeat
+							? `${seatName(derived.nextAuctionSeat)} is bidding…`
+							: `Your auction is complete · ${derived.auctionCalls.length} calls`
 
 	return (
 		<div className="mx-auto flex h-[72px] w-full max-w-[1880px] items-center gap-3 border-b-2 border-amber-300 bg-slate-950 px-4 text-white shadow-2xl">
@@ -1289,7 +1483,7 @@ function PresentationBar({
 					{state.board?.dealer || '-'} · Vul {state.board?.vul || '-'}
 				</div>
 			</div>
-			{state.phase === 'auction' && (
+			{state.phase === 'auction' && derived.auctionView === 'practice' && (
 				<button
 					disabled={!derived.contract || !derived.declarer}
 					onClick={() => dispatch({ type: 'CONFIRM_AUCTION' })}
@@ -1297,7 +1491,15 @@ function PresentationBar({
 					Confirm contract
 				</button>
 			)}
-			{state.phase === 'confirmed' && (
+			{state.phase !== 'play' && derived.auctionView === 'recorded' && (
+				<button
+					type="button"
+					onClick={() => dispatch({ type: 'SET_AUCTION_VIEW', view: 'practice' })}
+					className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-black text-slate-950">
+					Return to your auction
+				</button>
+			)}
+			{state.phase === 'confirmed' && derived.auctionView === 'practice' && (
 				<button
 					onClick={() => {
 						primeBridgeAudio()
@@ -1330,9 +1532,9 @@ function PresentationBar({
 					<button
 						onClick={onAdvanceHidden}
 						disabled={!canAdvanceHidden}
-						title="Play the lowest legal card from the hidden hand"
+						title="Play the computer-controlled seat’s next legal card"
 						className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-black text-slate-950 disabled:opacity-35">
-						Play hidden hand
+						Play computer card
 					</button>
 					<button
 						onClick={onReplayHand}
@@ -1355,10 +1557,16 @@ function PresentationBar({
 								? 'bg-white text-slate-950'
 								: 'bg-rose-500 text-white'
 						}`}>
-						{state.autoPlayPaused ? 'Start auto defenders' : 'Stop auto defenders'}
+						{state.autoPlayPaused ? 'Start computer players' : 'Pause computer players'}
 					</button>
 				</>
 			)}
+			<button
+				type="button"
+				onClick={onOpenCoach}
+				className="rounded-lg border border-violet-200/70 bg-violet-500/25 px-3 py-2 text-sm font-black text-violet-50">
+				Coach notebook
+			</button>
 			<FeltSwatches
 				value={feltTheme}
 				onChange={onFeltThemeChange}
@@ -1395,7 +1603,7 @@ function ContractNotice({ notice, dispatch }) {
 	)
 }
 
-function EndResultModal({ result, onBack, onPick, onReplay }) {
+function EndResultModal({ result, onBack, onPick, onReplay, onReview }) {
 	if (!result) return null
 	const positive = result.score >= 0
 	const signedScore = result.score > 0 ? `+${result.score}` : String(result.score)
@@ -1438,6 +1646,11 @@ function EndResultModal({ result, onBack, onPick, onReplay }) {
 				</div>
 				<div className="mt-7 flex flex-wrap justify-center gap-3">
 					<button
+						onClick={onReview}
+						className="rounded-xl bg-violet-200 px-5 py-3 text-sm font-black text-violet-950 shadow-lg hover:bg-violet-100">
+						Coach notebook
+					</button>
+					<button
 						onClick={onReplay}
 						className="rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-amber-200">
 						Replay Hand
@@ -1468,9 +1681,15 @@ function TableSurface({
 	seatIsVisible,
 	onPlay,
 	dispatch,
+	coachNudge = null,
 	presentationMode = false,
 	raiseLegalChoices = true,
 }) {
+	const rotated = rotatedForNorthDeclarer(state.phase, derived.declarer)
+	const visualSeats = rotated
+		? { top: 'S', left: 'E', right: 'W', bottom: 'N' }
+		: { top: 'N', left: 'W', right: 'E', bottom: 'S' }
+	const controlledSeats = learnerControlledSeats(state.phase, derived.declarer)
 	const completedCount = state.completedTricks.length
 	const lastTrickIndex = completedCount - (state.play?.trickComplete ? 2 : 1)
 	const lastTrick = lastTrickIndex >= 0 ? state.completedTricks[lastTrickIndex] : null
@@ -1480,9 +1699,9 @@ function TableSurface({
 			: null
 	const visualPlay =
 		state.play ? { ...state.play, visualWinner: latestWinner } : null
-	const common = (seat) => ({
+	const common = (seat, position) => ({
 		seat,
-		position: seat,
+		position,
 		cards: state.play?.remaining?.[seat] || state.hands[seat],
 		originalCards: state.hands[seat],
 		visible: seatIsVisible(seat),
@@ -1492,7 +1711,7 @@ function TableSurface({
 			seat === 'N' || seat === 'S'
 				? state.board.vul === 'NS' || state.board.vul === 'All'
 				: state.board.vul === 'EW' || state.board.vul === 'All',
-		onPlay: state.phase === 'play' ? onPlay : null,
+		onPlay: state.phase === 'play' && controlledSeats.has(seat) ? onPlay : null,
 		play: state.play,
 		declarer: derived.declarer,
 		dummy,
@@ -1517,16 +1736,17 @@ function TableSurface({
 					presentationMode ? 'min-h-[650px]' : 'min-h-[610px]'
 				}`}>
 				<div className="absolute left-1/2 top-0 z-20 -translate-x-1/2">
-					<HandPanel {...common('N')} />
+					<HandPanel {...common(visualSeats.top, 'N')} />
 				</div>
 				<div className="absolute left-0 top-1/2 z-20 -translate-y-1/2">
-					<HandPanel {...common('W')} />
+					<HandPanel {...common(visualSeats.left, 'W')} />
 				</div>
 				<div className="absolute right-0 top-1/2 z-20 -translate-y-1/2">
-					<HandPanel {...common('E')} />
+					<HandPanel {...common(visualSeats.right, 'E')} />
 				</div>
-				<div className="absolute bottom-0 left-1/2 z-20 -translate-x-1/2">
-					<HandPanel {...common('S')} />
+				<div className="absolute bottom-0 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center gap-1">
+					{coachNudge}
+					<HandPanel {...common(visualSeats.bottom, 'S')} />
 				</div>
 				<div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
 					<StagePanel
@@ -1535,11 +1755,16 @@ function TableSurface({
 						dispatch={dispatch}
 						visualPlay={visualPlay}
 						presentationMode={presentationMode}
+						rotated={rotated}
 					/>
 				</div>
 				{state.phase === 'play' && (
 					<div className="absolute left-0 top-0 z-10">
-						<LastTrickPanel trick={lastTrick} presentationMode={presentationMode} />
+						<LastTrickPanel
+							trick={lastTrick}
+							presentationMode={presentationMode}
+							rotated={rotated}
+						/>
 					</div>
 				)}
 				{state.phase === 'play' && (
@@ -1565,6 +1790,21 @@ export default function PlayerV2() {
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [presentationMode, setPresentationMode] = useState(false)
 	const [raiseLegalChoices, setRaiseLegalChoices] = useState(true)
+	const [coachOpen, setCoachOpen] = useState(false)
+	const [coachTranscript, setCoachTranscript] = useState([])
+	const [coachLoading, setCoachLoading] = useState(false)
+	const [coachError, setCoachError] = useState('')
+	const [liveNudge, setLiveNudge] = useState({ state: 'idle', message: '' })
+	const [dismissedNudgePosition, setDismissedNudgePosition] = useState('')
+	const [coachAccess, setCoachAccess] = useState({
+		checked: false,
+		trialAvailable: false,
+		trialStatus: 'checking',
+		access: 'checking',
+	})
+	const [manualTeachingMode, setManualTeachingMode] = useState(true)
+	const [coachUsage, setCoachUsage] = useState({ requests: 0, estimatedUsd: 0 })
+	const [coachSessionVersion, setCoachSessionVersion] = useState(0)
 	const [feltTheme, setFeltTheme] = useState(() => {
 		if (typeof window === 'undefined') return 'green'
 		const saved = window.localStorage.getItem(PLAYER_FELT_KEY)
@@ -1572,7 +1812,30 @@ export default function PlayerV2() {
 	})
 	const fileRef = useRef(null)
 	const audioProgressRef = useRef({ boardIndex: -1, historyLength: 0, completedLength: 0 })
+	const coachRequestRef = useRef(null)
+	const coachCacheRef = useRef(new Map())
+	const latestCoachPositionRef = useRef('')
+	const lastAutomaticCoachRef = useRef('')
+	const coachIdentity = useCoachIdentity()
+	const localCoachPreview =
+		import.meta.env.DEV && new URLSearchParams(window.location.search).get('coach-preview') === '1'
 	const derived = getPlayerV2Derived(state)
+	const learnerSeat = learnerSeatForPosition(state.phase, derived.declarer)
+	const learnerSeatName = seatName(learnerSeat)
+	const controlledSeats = useMemo(
+		() => learnerControlledSeats(state.phase, derived.declarer),
+		[state.phase, derived.declarer],
+	)
+	const coachContext = useMemo(
+		() =>
+			buildLearnerCoachContext(state, {
+				learnerSeat,
+				controlledSeats: [...controlledSeats],
+			}),
+		[state, learnerSeat, controlledSeats],
+	)
+	const coachPositionIdentity = useMemo(() => coachPositionKey(coachContext), [coachContext])
+	latestCoachPositionRef.current = coachPositionIdentity
 	const dummy = derived.declarer ? partnerOf(derived.declarer) : ''
 	const endResult =
 		state.phase === 'play' &&
@@ -1592,6 +1855,255 @@ export default function PlayerV2() {
 	const showEndResult =
 		!!endResult && visibleEndKey === endResultKey && dismissedEndKey !== endResultKey
 	const selectedFelt = FELT_THEMES.find((theme) => theme.key === feltTheme) || FELT_THEMES[0]
+	const coachAuthStatus = localCoachPreview
+		? 'signed-in'
+		: coachIdentity.loading
+			? 'checking'
+			: coachIdentity.flow
+				? 'signed-out'
+				: coachIdentity.user
+					? 'signed-in'
+					: 'signed-out'
+	const coachUsageLabel = coachUsage.requests
+		? `${coachUsage.requests} AI request${coachUsage.requests === 1 ? '' : 's'} sent · returned usage estimate $${coachUsage.estimatedUsd.toFixed(3)}`
+		: 'No AI requests sent in this browser session'
+
+	const addCoachEntry = useCallback((entry) => {
+		setCoachTranscript((current) => [...current, entry])
+	}, [])
+	const openCoach = useCallback(() => setCoachOpen(true), [])
+	const closeCoach = useCallback(() => setCoachOpen(false), [])
+
+	const clearCoachSession = useCallback(() => {
+		coachRequestRef.current?.abort()
+		coachRequestRef.current = null
+		coachCacheRef.current.clear()
+		lastAutomaticCoachRef.current = ''
+		setCoachTranscript([])
+		setLiveNudge({ state: 'idle', message: '' })
+		setDismissedNudgePosition('')
+		setCoachSessionVersion((current) => current + 1)
+		setCoachLoading(false)
+		setCoachError('')
+	}, [])
+
+	const askCoach = useCallback(
+		async (intent, question = '') => {
+			if (!coachIdentity.user) {
+				setCoachError('Sign in with the invited owner account before making a paid Coach call.')
+				return
+			}
+			const baseContext = buildLearnerCoachContext(state, {
+				learnerSeat,
+				controlledSeats: [...controlledSeats],
+			})
+			if (!baseContext) {
+				setCoachError('Load a board before asking the Coach.')
+				return
+			}
+			const trigger =
+				baseContext.phase === 'auction'
+					? 'auction-step'
+					: baseContext.phase === 'opening-lead'
+						? 'opening-lead'
+						: baseContext.facts?.play?.legalFollow?.learnerToPlay
+							? 'learner-turn'
+							: 'manual'
+			const context = buildLearnerCoachContext(state, {
+				trigger,
+				learnerSeat,
+				controlledSeats: [...controlledSeats],
+			})
+			const positionIdentity = coachPositionKey(context)
+			const safeQuestion = String(question || '').trim().slice(0, 500)
+			const cacheKey = JSON.stringify({ positionIdentity, intent, question: safeQuestion.toLowerCase() })
+			if (safeQuestion) {
+				addCoachEntry(
+					transcriptEntry({
+						phase: context.phase,
+						role: 'teacher',
+						label: 'You',
+						text: safeQuestion,
+					}),
+				)
+			}
+			const cached = coachCacheRef.current.get(cacheKey)
+			if (cached) {
+				addCoachEntry(
+					transcriptEntry({
+						phase: context.phase,
+						role: 'coach',
+						label: 'Coach · saved response',
+						text: coachReplyText(cached.coach || cached.reply || cached),
+					}),
+				)
+				return
+			}
+
+			coachRequestRef.current?.abort()
+			const controller = new AbortController()
+			coachRequestRef.current = controller
+			setCoachLoading(true)
+			setCoachError('')
+			setCoachUsage((current) => ({ ...current, requests: current.requests + 1 }))
+			try {
+				const payload = await requestBridgeCoach({
+					context,
+					intent,
+					question: safeQuestion,
+					signal: controller.signal,
+				})
+				const usage = payload?.meta?.usage || {}
+				setCoachUsage((current) => ({
+					...current,
+					estimatedUsd: current.estimatedUsd + (Number(usage.estimatedUsd) || 0),
+				}))
+				if (latestCoachPositionRef.current !== positionIdentity) return
+				coachCacheRef.current.set(cacheKey, payload)
+				addCoachEntry(
+					transcriptEntry({
+						phase: context.phase,
+						role: 'coach',
+						label: 'AI Coach',
+						text: coachReplyText(payload?.coach || payload?.reply || payload),
+					}),
+				)
+			} catch (error) {
+				if (error?.name !== 'AbortError') setCoachError(error?.message || 'The Coach is unavailable.')
+			} finally {
+				if (coachRequestRef.current === controller) {
+					coachRequestRef.current = null
+					setCoachLoading(false)
+				}
+			}
+		},
+		[state, coachIdentity.user, addCoachEntry, learnerSeat, controlledSeats],
+	)
+
+	const requestLiveNudge = useCallback(async () => {
+		if (!coachContext) {
+			setLiveNudge({ state: 'error', message: 'Load a board before asking the Coach.' })
+			return
+		}
+		if (localCoachPreview) {
+			setLiveNudge({
+				state: 'response',
+				message: 'Pause first: count your points or legal cards, recall the public auction, and name the bridge principle before choosing.',
+			})
+			return
+		}
+		if (!coachIdentity.user && coachAccess.checked && !coachAccess.trialAvailable) {
+			setLiveNudge({
+				state: 'access-required',
+				message: 'Your complimentary AI nudge has been used. Sign in or email for access.',
+			})
+			setCoachOpen(true)
+			return
+		}
+
+		const trigger =
+			coachContext.phase === 'auction'
+				? 'auction-step'
+				: coachContext.phase === 'opening-lead'
+					? 'opening-lead'
+					: 'learner-turn'
+		const context = buildLearnerCoachContext(state, {
+			trigger,
+			learnerSeat,
+			controlledSeats: [...controlledSeats],
+		})
+		const positionIdentity = coachPositionKey(context)
+		coachRequestRef.current?.abort()
+		const controller = new AbortController()
+		coachRequestRef.current = controller
+		setLiveNudge({ state: 'loading', message: '' })
+		setCoachLoading(true)
+		setCoachError('')
+		setCoachUsage((current) => ({ ...current, requests: current.requests + 1 }))
+
+		try {
+			const payload = coachIdentity.user
+				? await requestBridgeCoach({ context, intent: 'nudge', signal: controller.signal })
+				: await requestBridgeCoachTrial({ context, signal: controller.signal })
+			if (latestCoachPositionRef.current !== positionIdentity) return
+			const usage = payload?.meta?.usage || {}
+			setCoachUsage((current) => ({
+				...current,
+				estimatedUsd: current.estimatedUsd + (Number(usage.estimatedUsd) || 0),
+			}))
+			const message = coachReplyText(payload?.coach || payload?.reply || payload)
+			setLiveNudge({ state: 'response', message })
+			addCoachEntry(
+				transcriptEntry({
+					phase: context.phase,
+					role: 'coach',
+					label: payload?.meta?.trial ? 'AI Coach · complimentary nudge' : 'AI Coach',
+					text: message,
+				}),
+			)
+			if (payload?.meta?.trialUsed) {
+				setCoachAccess({
+					checked: true,
+					trialAvailable: false,
+					trialStatus: 'used',
+					access: 'access-required',
+				})
+			}
+		} catch (error) {
+			if (error?.name === 'AbortError') return
+			if (error instanceof CoachRequestError && error.accessRequired) {
+				setCoachAccess({
+					checked: true,
+					trialAvailable: false,
+					trialStatus: 'used',
+					access: 'access-required',
+				})
+				setLiveNudge({
+					state: 'access-required',
+					message: 'Your complimentary AI nudge has been used. Sign in or email for access.',
+				})
+				setCoachOpen(true)
+				return
+			}
+			setLiveNudge({
+				state: 'error',
+				message: error?.message || 'The Coach is unavailable just now.',
+			})
+		} finally {
+			if (coachRequestRef.current === controller) {
+				coachRequestRef.current = null
+				setCoachLoading(false)
+			}
+		}
+	}, [
+		coachContext,
+		localCoachPreview,
+		coachIdentity.user,
+		coachAccess,
+		state,
+		learnerSeat,
+		controlledSeats,
+		addCoachEntry,
+	])
+
+	const showLocalCoachFact = useCallback(
+		(actionId) => {
+			const context = buildLearnerCoachContext(state, {
+				learnerSeat,
+				controlledSeats: [...controlledSeats],
+			})
+			const fact = localCoachFact(context, actionId)
+			addCoachEntry(
+				transcriptEntry({
+					phase: context?.phase || 'auction',
+					role: 'fact',
+					label: fact.label,
+					text: fact.text,
+				}),
+			)
+		},
+		[state, addCoachEntry, learnerSeat, controlledSeats],
+	)
 
 	const onFile = (event) => {
 		const file = event.target.files?.[0]
@@ -1643,8 +2155,7 @@ export default function PlayerV2() {
 		state.phase === 'play' &&
 		!!turnSeat &&
 		!!derived.declarer &&
-		isDefender(turnSeat, derived.declarer) &&
-		!seatIsVisible(turnSeat) &&
+		!controlledSeats.has(turnSeat) &&
 		(state.play?.remaining?.[turnSeat] || []).length > 0
 
 	const advanceHiddenHand = useCallback(() => {
@@ -1653,8 +2164,7 @@ export default function PlayerV2() {
 			state.phase !== 'play' ||
 			!currentSeat ||
 			!derived.declarer ||
-			!isDefender(currentSeat, derived.declarer) ||
-			seatIsVisible(currentSeat)
+			controlledSeats.has(currentSeat)
 		) {
 			return
 		}
@@ -1668,7 +2178,7 @@ export default function PlayerV2() {
 		if (!card) return
 		primeBridgeAudio()
 		dispatch({ type: 'PLAY_CARD', seat: currentSeat, cardId: card.id })
-	}, [state.phase, state.play, derived.declarer, derived.trump, seatIsVisible])
+	}, [state.phase, state.play, derived.declarer, derived.trump, controlledSeats])
 
 	const goToBoard = useCallback(
 		(index) => {
@@ -1690,12 +2200,13 @@ export default function PlayerV2() {
 				return
 			}
 			primeBridgeAudio()
+			clearCoachSession()
 			dispatch({ type: 'START_PLAY' })
 			setRaiseLegalChoices(true)
 			setDismissedEndKey('')
 			setVisibleEndKey('')
 		},
-		[state.phase, state.history.length],
+		[state.phase, state.history.length, clearCoachSession],
 	)
 
 	const resetPlayer = useCallback(() => {
@@ -1706,13 +2217,140 @@ export default function PlayerV2() {
 			return
 		}
 		dispatch({ type: 'RESET' })
+		clearCoachSession()
+		setCoachOpen(false)
 		setPresentationMode(false)
 		setReturnPath('')
-	}, [state.board])
+	}, [state.board, clearCoachSession])
 
 	useEffect(() => {
 		window.localStorage.setItem(PLAYER_FELT_KEY, feltTheme)
 	}, [feltTheme])
+
+	useEffect(() => {
+		clearCoachSession()
+	}, [state.index, state.selectedName, clearCoachSession])
+
+	useEffect(() => {
+		coachRequestRef.current?.abort()
+		setLiveNudge({ state: 'idle', message: '' })
+	}, [coachPositionIdentity])
+
+	useEffect(() => {
+		if (coachIdentity.flow) setCoachOpen(true)
+	}, [coachIdentity.flow])
+
+	useEffect(() => {
+		if (localCoachPreview || coachIdentity.loading) return undefined
+		if (coachIdentity.user) {
+			setCoachAccess({
+				checked: true,
+				trialAvailable: false,
+				trialStatus: 'not-needed',
+				access: 'owner',
+			})
+			return undefined
+		}
+		const controller = new AbortController()
+		getBridgeCoachAccess({ signal: controller.signal })
+			.then((payload) => {
+				setCoachAccess({
+					checked: true,
+					trialAvailable: !!payload?.trial?.available,
+					trialStatus: payload?.trial?.status || 'unavailable',
+					access: payload?.access || 'access-required',
+				})
+			})
+			.catch((error) => {
+				if (error?.name !== 'AbortError') {
+					setCoachAccess({
+						checked: true,
+						trialAvailable: false,
+						trialStatus: 'unavailable',
+						access: 'access-required',
+					})
+				}
+			})
+		return () => controller.abort()
+	}, [localCoachPreview, coachIdentity.loading, coachIdentity.user])
+
+	useEffect(
+		() => () => {
+			coachRequestRef.current?.abort()
+		},
+		[],
+	)
+
+	const learnerHasDecision =
+		!!coachContext?.auction?.learnerToCall ||
+		!!coachContext?.facts?.play?.legalFollow?.learnerToPlay ||
+		(coachContext?.phase === 'opening-lead' && controlledSeats.has(state.play?.turnSeat))
+
+	useEffect(() => {
+		if (manualTeachingMode) {
+			lastAutomaticCoachRef.current = ''
+			return undefined
+		}
+		if (
+			!coachOpen ||
+			!coachIdentity.user ||
+			!coachContext ||
+			!learnerHasDecision ||
+			coachLoading ||
+			lastAutomaticCoachRef.current === coachPositionIdentity
+		) {
+			return undefined
+		}
+		lastAutomaticCoachRef.current = coachPositionIdentity
+		const timer = window.setTimeout(() => askCoach('nudge'), 350)
+		return () => window.clearTimeout(timer)
+	}, [
+		manualTeachingMode,
+		coachOpen,
+		coachIdentity.user,
+		coachContext,
+		coachPositionIdentity,
+		learnerHasDecision,
+		coachLoading,
+		askCoach,
+	])
+
+	useEffect(() => {
+		if (state.phase !== 'auction' || derived.auctionView !== 'practice' || coachOpen) {
+			return undefined
+		}
+		const seat = derived.nextAuctionSeat
+		if (!seat || seat === 'S' || state.practiceAuction?.terminal) return undefined
+		const revision = Number(state.practiceAuction?.revision) || 0
+		const choice = choosePracticeAutoCall({
+			seat,
+			hand: state.hands?.[seat] || [],
+			dealer: state.practiceAuction?.dealer || state.board?.dealer || 'N',
+			calls: state.practiceAuction?.calls || [],
+			recordedCalls: state.recordedAuction?.calls || [],
+		})
+		if (!choice) return undefined
+		const timer = window.setTimeout(() => {
+			dispatch({
+				type: 'AUCTION_AUTO_CALL',
+				call: choice.call,
+				expectedSeat: seat,
+				expectedRevision: revision,
+				source: choice.source,
+			})
+		}, presentationMode ? 900 : 600)
+		return () => window.clearTimeout(timer)
+	}, [
+		state.phase,
+		state.practiceAuction,
+		state.recordedAuction,
+		state.hands,
+		state.board,
+		derived.auctionView,
+		derived.nextAuctionSeat,
+		coachOpen,
+		presentationMode,
+	])
 
 	useEffect(() => {
 		const raw = window.sessionStorage.getItem(PLAYER_HANDOFF_KEY)
@@ -1800,9 +2438,9 @@ export default function PlayerV2() {
 	useEffect(() => {
 		if (state.phase !== 'play') return
 		if (state.autoPlayPaused) return
+		if (coachOpen) return
 		const turnSeat = state.play?.turnSeat
-		if (!turnSeat || !derived.declarer || !isDefender(turnSeat, derived.declarer)) return
-		if (seatIsVisible(turnSeat)) return
+		if (!turnSeat || !derived.declarer || controlledSeats.has(turnSeat)) return
 		const trickForChoice = state.play.trickComplete ? [] : state.play.trick
 		const card = selectSimpleDefenderCard(
 			state.play.remaining,
@@ -1818,13 +2456,14 @@ export default function PlayerV2() {
 	}, [
 		state.phase,
 		state.autoPlayPaused,
+		coachOpen,
 		state.play?.turnSeat,
 		state.play?.trick,
 		state.play?.remaining,
 		state.play?.trickComplete,
 		derived.declarer,
 		derived.trump,
-		seatIsVisible,
+		controlledSeats,
 	])
 
 	const onPlay = (seat, cardId) => {
@@ -1834,26 +2473,35 @@ export default function PlayerV2() {
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
+			if (coachOpen) return
 			const interactiveTarget = event.target?.closest?.(
 				'button, a, input, select, textarea, [contenteditable="true"]',
 			)
 			if (interactiveTarget) return
 			if (!state.board) return
-			if (event.key === 'Enter' && state.phase !== 'play') {
+			if (
+				event.key === 'Enter' &&
+				state.phase !== 'play' &&
+				derived.auctionView === 'recorded'
+			) {
 				event.preventDefault()
 				dispatch({ type: 'AUCTION_NEXT' })
 				return
 			}
 			if (event.key === 'ArrowRight') {
-				event.preventDefault()
-				if (state.phase !== 'play') dispatch({ type: 'AUCTION_NEXT' })
-				else advanceHiddenHand()
+				if (state.phase === 'play') {
+					event.preventDefault()
+					advanceHiddenHand()
+				} else if (derived.auctionView === 'recorded') {
+					event.preventDefault()
+					dispatch({ type: 'AUCTION_NEXT' })
+				}
 			}
 			const rank = rankFromKey(event)
 			if (state.phase === 'play' && rank) {
 				const turnSeat = state.play?.turnSeat
 				const legalCards =
-					turnSeat && seatIsVisible(turnSeat)
+					turnSeat && controlledSeats.has(turnSeat)
 						? legalCardsForTurn(state.play, turnSeat)
 						: []
 				const matchingCards = legalCards.filter((card) => card.rank === rank)
@@ -1864,27 +2512,41 @@ export default function PlayerV2() {
 				}
 			}
 			if (event.key === 'ArrowLeft') {
-				event.preventDefault()
-				if (state.phase !== 'play') dispatch({ type: 'AUCTION_PREV' })
-				else dispatch({ type: 'UNDO_CARD' })
+				if (state.phase === 'play') {
+					event.preventDefault()
+					dispatch({ type: 'UNDO_CARD' })
+				} else if (derived.auctionView === 'recorded') {
+					event.preventDefault()
+					dispatch({ type: 'AUCTION_PREV' })
+				}
 			}
 			if (event.key === 'ArrowUp') {
 				event.preventDefault()
 				dispatch({ type: 'REVEAL_PARTNER' })
 			}
 			if (event.key === ' ') {
-				event.preventDefault()
-				if (state.phase !== 'play') dispatch({ type: 'AUCTION_ALL' })
-				else {
+				if (state.phase !== 'play' && derived.auctionView === 'recorded') {
+					event.preventDefault()
+					dispatch({ type: 'AUCTION_ALL' })
+				} else if (state.phase === 'play') {
+					event.preventDefault()
 					const allVisible = SEATS.every((seat) => state.visibleSeats.includes(seat))
-					const defaultVisible = [derived.declarer, state.history.length ? dummy : ''].filter(Boolean)
+					const defaultVisible = [
+						'S',
+						derived.declarer === 'N' ? 'N' : '',
+						state.history.length ? dummy : '',
+					].filter(Boolean)
 					dispatch({ type: 'SET_VISIBLE_SEATS', seats: allVisible ? defaultVisible : SEATS })
 				}
 			}
 			if (event.key.toLowerCase() === 'r') {
-				event.preventDefault()
-				if (state.phase !== 'play') dispatch({ type: 'AUCTION_REPLAY' })
-				else replayCurrentHand()
+				if (state.phase === 'play') {
+					event.preventDefault()
+					replayCurrentHand()
+				} else if (derived.auctionView === 'recorded') {
+					event.preventDefault()
+					dispatch({ type: 'AUCTION_REPLAY' })
+				}
 			}
 			if (event.key.toLowerCase() === 'p') {
 				event.preventDefault()
@@ -1903,6 +2565,7 @@ export default function PlayerV2() {
 		return () => window.removeEventListener('keydown', onKeyDown)
 	}, [
 		state.board,
+		coachOpen,
 		state.phase,
 		state.play,
 		state.visibleSeats,
@@ -1910,11 +2573,44 @@ export default function PlayerV2() {
 		state.index,
 		dummy,
 		derived.declarer,
-		seatIsVisible,
+		derived.auctionView,
+		controlledSeats,
 		advanceHiddenHand,
 		goToBoard,
 		replayCurrentHand,
 	])
+
+	const coachNudge =
+		learnerHasDecision &&
+		!coachOpen &&
+		dismissedNudgePosition !== coachPositionIdentity ? (
+			<SouthCoachNudge
+				state={liveNudge.state}
+				message={liveNudge.message}
+				onRequest={requestLiveNudge}
+				onMore={openCoach}
+				onClose={() => {
+					setLiveNudge({ state: 'idle', message: '' })
+					setDismissedNudgePosition(coachPositionIdentity)
+				}}
+				disabled={
+					coachLoading ||
+					!coachContext ||
+					(!localCoachPreview && !coachIdentity.user && !coachAccess.checked)
+				}
+				presentationMode={presentationMode}
+				focusSeat={learnerSeat}
+				focusSeatName={learnerSeatName}
+				requestLabel={
+					!localCoachPreview && !coachIdentity.user && !coachAccess.checked
+						? 'Checking access…'
+						: !coachIdentity.user && coachAccess.trialAvailable
+						? 'Free AI nudge'
+						: 'Coach nudge'
+				}
+				moreLabel="Coach notebook"
+			/>
+		) : null
 
 	return (
 		<div
@@ -1928,6 +2624,77 @@ export default function PlayerV2() {
 				onBack={() => setDismissedEndKey(endResultKey)}
 				onPick={() => fileRef.current?.click()}
 				onReplay={() => replayCurrentHand({ confirm: false })}
+				onReview={() => {
+					setDismissedEndKey(endResultKey)
+					openCoach()
+				}}
+			/>
+			<AiCoachPanel
+				sessionKey={coachSessionVersion}
+				isOpen={coachOpen}
+				onClose={closeCoach}
+				authStatus={coachAuthStatus}
+				authMessage={coachIdentity.error}
+				authContent={
+					<>
+						<a
+							className="ai-coach-access-email"
+							href="mailto:bridge@markoconnor.ai?subject=AI%20Coach%20access%20request">
+							Email bridge@markoconnor.ai for an access code
+						</a>
+						<CoachOwnerAuthForm
+							identityAvailable={coachIdentity.identityAvailable}
+							flow={coachIdentity.flow}
+							loading={coachIdentity.loading}
+							onSignIn={coachIdentity.signIn}
+							onAcceptInvite={coachIdentity.acceptOwnerInvite}
+							onFinishRecovery={coachIdentity.finishPasswordRecovery}
+							onSendRecovery={coachIdentity.sendPasswordRecovery}
+						/>
+					</>
+				}
+				authTitle={
+					!coachAccess.checked
+						? 'Checking AI Coach access'
+						: coachAccess.trialStatus === 'used'
+							? 'Your complimentary AI nudge has been used'
+							: coachAccess.trialAvailable
+						? 'Sign in to continue with AI Coach'
+						: 'AI Coach access required'
+				}
+				authDescription="The bridge player remains free for everyone. Email the teacher to request a personal access code or invitation, then sign in with the account you receive."
+				ownerLabel={
+					localCoachPreview
+						? 'Local layout preview · no paid calls'
+						: coachIdentity.user
+							? 'Private owner signed in'
+							: 'AI Coach access'
+				}
+				onLogout={
+					localCoachPreview
+						? undefined
+						: async () => {
+								await coachIdentity.signOut()
+								clearCoachSession()
+							}
+				}
+				focusSeat={learnerSeat}
+				focusSeatName={learnerSeatName}
+				activePhase={coachPhaseId(coachContext?.phase)}
+				manualTeachingMode={manualTeachingMode}
+				onManualTeachingModeChange={localCoachPreview ? undefined : setManualTeachingMode}
+				transcript={coachTranscript}
+				loading={coachLoading}
+				error={coachError}
+				quickActions={COACH_QUICK_ACTIONS}
+				onQuickAction={showLocalCoachFact}
+				paidActions={COACH_PAID_ACTIONS}
+				onPaidAction={localCoachPreview ? undefined : askCoach}
+				onSubmitFollowUp={
+					localCoachPreview ? undefined : (question) => askCoach('explain', question)
+				}
+				usageLabel={coachUsageLabel}
+				actionsDisabled={!coachContext}
 			/>
 			<input ref={fileRef} type="file" accept=".pbn,text/plain" onChange={onFile} className="hidden" />
 			{!presentationMode && (
@@ -1953,6 +2720,12 @@ export default function PlayerV2() {
 							<Link to="/" className="text-sm font-semibold text-sky-700 hover:underline">
 								Home
 							</Link>
+							<button
+								type="button"
+								onClick={openCoach}
+								className="rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-black text-violet-900">
+								Coach notebook
+							</button>
 							<button
 								onClick={() => setPresentationMode(true)}
 								disabled={!state.board}
@@ -1983,14 +2756,15 @@ export default function PlayerV2() {
 					onToggleFullscreen={toggleFullscreen}
 					onPreviousBoard={() => goToBoard(state.index - 1)}
 					onNextBoard={() => goToBoard(state.index + 1)}
-						onAdvanceHidden={advanceHiddenHand}
-						canAdvanceHidden={canAdvanceHidden}
-						onReplayHand={() => replayCurrentHand()}
-						raiseLegalChoices={raiseLegalChoices}
-						onToggleLegalChoices={() => setRaiseLegalChoices((current) => !current)}
-						feltTheme={feltTheme}
-						onFeltThemeChange={setFeltTheme}
-						dispatch={dispatch}
+					onAdvanceHidden={advanceHiddenHand}
+					canAdvanceHidden={canAdvanceHidden}
+					onReplayHand={() => replayCurrentHand()}
+					raiseLegalChoices={raiseLegalChoices}
+					onToggleLegalChoices={() => setRaiseLegalChoices((current) => !current)}
+					onOpenCoach={openCoach}
+					feltTheme={feltTheme}
+					onFeltThemeChange={setFeltTheme}
+					dispatch={dispatch}
 				/>
 			)}
 
@@ -2025,7 +2799,8 @@ export default function PlayerV2() {
 						dummy={dummy}
 						seatIsVisible={seatIsVisible}
 						onPlay={onPlay}
-							dispatch={dispatch}
+						dispatch={dispatch}
+						coachNudge={coachNudge}
 							presentationMode={presentationMode}
 							raiseLegalChoices={raiseLegalChoices}
 						/>

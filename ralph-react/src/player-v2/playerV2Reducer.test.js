@@ -2,7 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createInitialManualState, playCardManual } from '../lib/manualPlayEngine.js'
 import { orderHandForDisplay } from './bridgeV2.js'
-import { initialPlayerV2State, playerV2Reducer } from './playerV2Reducer.js'
+import {
+	getPlayerV2Derived,
+	initialPlayerV2State,
+	playerV2Reducer,
+} from './playerV2Reducer.js'
 
 function clubCard(id, owner, rank) {
 	return {
@@ -110,16 +114,62 @@ test('start play is blocked until the auction is confirmed', () => {
 	assert.match(next.status, /Confirm the auction/)
 })
 
-test('confirmed play starts with automation paused for teacher pacing', () => {
+test('confirmed play starts with computer-controlled seats enabled', () => {
 	const state = makeAuctionState()
 	const confirmed = playerV2Reducer(state, { type: 'CONFIRM_AUCTION' })
 	const started = playerV2Reducer(confirmed, { type: 'START_PLAY' })
 
 	assert.equal(confirmed.phase, 'confirmed')
+	assert.deepEqual(confirmed.visibleSeats, ['S'])
 	assert.equal(started.phase, 'play')
-	assert.equal(started.autoPlayPaused, true)
+	assert.equal(started.autoPlayPaused, false)
 	assert.equal(started.play.turnSeat, 'N')
-	assert.match(started.status, /Automatic play paused/)
+	assert.match(started.status, /play automatically/)
+})
+
+test('North declarer is visible at the learner position while South dummy waits for the lead', () => {
+	const state = {
+		...makeAuctionState(),
+		auction: {
+			dealer: 'N',
+			contract: '1NT',
+			declarer: 'N',
+			calls: ['1NT', 'P', 'P', 'P'],
+		},
+	}
+	const confirmed = playerV2Reducer(state, { type: 'CONFIRM_AUCTION' })
+	const started = playerV2Reducer(confirmed, { type: 'START_PLAY' })
+
+	assert.deepEqual(confirmed.visibleSeats, ['N'])
+	assert.equal(started.play.turnSeat, 'E')
+	assert.deepEqual(started.visibleSeats, ['N'])
+
+	const openingCard = started.play.remaining.E[0]
+	const afterLead = playerV2Reducer(started, {
+		type: 'PLAY_CARD',
+		seat: 'E',
+		cardId: openingCard.id,
+	})
+	assert.deepEqual(afterLead.visibleSeats.sort(), ['N', 'S'])
+})
+
+test('recorded comparison cannot confirm or start the preserved practice contract', () => {
+	const state = { ...makeAuctionState(), auctionView: 'recorded' }
+	const blockedConfirm = playerV2Reducer(state, { type: 'CONFIRM_AUCTION' })
+	assert.equal(blockedConfirm.phase, 'auction')
+	assert.match(blockedConfirm.status, /Return to Play as South/)
+
+	const confirmedPractice = playerV2Reducer(
+		{ ...state, auctionView: 'practice' },
+		{ type: 'CONFIRM_AUCTION' },
+	)
+	const blockedStart = playerV2Reducer(
+		{ ...confirmedPractice, auctionView: 'recorded' },
+		{ type: 'START_PLAY' },
+	)
+	assert.equal(blockedStart.phase, 'confirmed')
+	assert.equal(blockedStart.play, null)
+	assert.match(blockedStart.status, /Return to Play as South/)
 })
 
 test('replay hand restores the original deal and opening leader', () => {
@@ -138,8 +188,8 @@ test('replay hand restores the original deal and opening leader', () => {
 	assert.equal(replayed.history.length, 0)
 	assert.equal(replayed.completedTricks.length, 0)
 	assert.equal(replayed.play.turnSeat, 'N')
-	assert.equal(replayed.autoPlayPaused, true)
-	assert.deepEqual(replayed.visibleSeats, ['W'])
+	assert.equal(replayed.autoPlayPaused, false)
+	assert.deepEqual(replayed.visibleSeats, ['S'])
 	for (const seat of ['N', 'E', 'S', 'W']) {
 		assert.equal(replayed.play.remaining[seat].length, 13)
 	}
@@ -220,19 +270,24 @@ test('board navigation restores each board session without leaking hand reveals'
 		field: 'strain',
 		value: 'H',
 	})
+	state = playerV2Reducer(state, {
+		type: 'SET_MANUAL_CONTRACT',
+		field: 'declarer',
+		value: 'S',
+	})
 	state = playerV2Reducer(state, { type: 'CONFIRM_AUCTION' })
 
 	const boardTwo = playerV2Reducer(state, { type: 'GO_BOARD', index: 1 })
 	assert.equal(boardTwo.index, 1)
-	assert.equal(boardTwo.visibleSeat, 'E')
-	assert.deepEqual(boardTwo.visibleSeats, ['E'])
+	assert.equal(boardTwo.visibleSeat, 'S')
+	assert.deepEqual(boardTwo.visibleSeats, ['S'])
 	assert.equal(boardTwo.manualContract.level, '')
 
 	const restoredBoardOne = playerV2Reducer(boardTwo, { type: 'GO_BOARD', index: 0 })
 	assert.equal(restoredBoardOne.phase, 'confirmed')
 	assert.equal(restoredBoardOne.manualContract.level, '2')
 	assert.equal(restoredBoardOne.manualContract.strain, 'H')
-	assert.deepEqual(restoredBoardOne.visibleSeats, ['W'])
+	assert.deepEqual(restoredBoardOne.visibleSeats, ['S'])
 })
 
 test('auto-play pause can be toggled', () => {
@@ -249,4 +304,186 @@ test('auto-play pause can be toggled', () => {
 	})
 	assert.equal(resumed.autoPlayPaused, false)
 	assert.match(resumed.status, /resumed/)
+})
+
+test('loading a PBN preserves an immutable reference and starts a blank South practice auction', () => {
+	const recordedCalls = ['1NT', 'P', '2C', 'P', '2H', 'P', '3NT', 'P', 'P', 'P']
+	const board = {
+		...makeBoard(7, 'N'),
+		auctionDealer: 'N',
+		auction: recordedCalls,
+		contract: '3NT',
+		declarer: 'N',
+	}
+	const state = playerV2Reducer(initialPlayerV2State, {
+		type: 'LOAD_DEALS',
+		deals: [board],
+		name: 'recorded.pbn',
+	})
+
+	assert.equal(state.auctionView, 'practice')
+	assert.deepEqual(state.practiceAuction.calls, [])
+	assert.strictEqual(state.auction, state.practiceAuction)
+	assert.deepEqual(state.recordedAuction.calls, recordedCalls)
+	assert.equal(Object.isFrozen(state.recordedAuction), true)
+	assert.equal(Object.isFrozen(state.recordedAuction.calls), true)
+	assert.deepEqual(state.auctionCursors, { practice: 0, recorded: 0 })
+	assert.equal(state.visibleSeat, 'S')
+	assert.deepEqual(state.visibleSeats, ['S'])
+	assert.equal(getPlayerV2Derived(state).contract, '')
+	assert.equal(getPlayerV2Derived(state).declarer, '')
+})
+
+test('only South can make learner calls and automatic calls reject stale positions', () => {
+	let state = playerV2Reducer(initialPlayerV2State, {
+		type: 'LOAD_DEALS',
+		deals: [makeBoard(1, 'N')],
+	})
+	state = playerV2Reducer(state, { type: 'AUCTION_SOUTH_CALL', call: '1H' })
+	assert.deepEqual(state.practiceAuction.calls, [])
+	assert.match(state.status, /N must bid/)
+
+	state = playerV2Reducer(state, {
+		type: 'AUCTION_AUTO_CALL',
+		call: '1NT',
+		expectedSeat: 'N',
+		expectedRevision: 0,
+		source: 'recorded-prefix',
+	})
+	assert.deepEqual(state.practiceAuction.calls, ['1NT'])
+	assert.equal(state.practiceAuction.revision, 1)
+
+	const stale = playerV2Reducer(state, {
+		type: 'AUCTION_AUTO_CALL',
+		call: 'P',
+		expectedSeat: 'E',
+		expectedRevision: 0,
+	})
+	assert.deepEqual(stale.practiceAuction.calls, ['1NT'])
+	assert.match(stale.status, /stale automatic bid/)
+
+	state = playerV2Reducer(state, {
+		type: 'AUCTION_AUTO_CALL',
+		call: 'P',
+		expectedSeat: 'E',
+		expectedRevision: 1,
+	})
+	state = playerV2Reducer(state, { type: 'AUCTION_SOUTH_CALL', call: '2C' })
+	assert.deepEqual(state.practiceAuction.calls, ['1NT', 'P', '2C'])
+	assert.deepEqual(state.practiceAuction.callSources, [
+		'recorded-prefix',
+		'auto',
+		'south',
+	])
+})
+
+test('recorded comparison has its own cursor and never replaces practice progress', () => {
+	const board = {
+		...makeBoard(2, 'S'),
+		auctionDealer: 'S',
+		auction: ['1NT', 'P', '3NT', 'P', 'P', 'P'],
+		contract: '3NT',
+		declarer: 'S',
+	}
+	let state = playerV2Reducer(initialPlayerV2State, {
+		type: 'LOAD_DEALS',
+		deals: [board],
+	})
+	state = playerV2Reducer(state, { type: 'AUCTION_SOUTH_CALL', call: '1C' })
+	const practiceBefore = state.practiceAuction
+	const recordedBefore = state.recordedAuction
+
+	state = playerV2Reducer(state, { type: 'SET_AUCTION_VIEW', view: 'recorded' })
+	state = playerV2Reducer(state, { type: 'AUCTION_NEXT' })
+	state = playerV2Reducer(state, { type: 'AUCTION_NEXT' })
+	assert.equal(state.auctionCursors.recorded, 2)
+	assert.equal(state.auctionCursors.practice, 1)
+	assert.strictEqual(state.practiceAuction, practiceBefore)
+	assert.strictEqual(state.recordedAuction, recordedBefore)
+
+	state = playerV2Reducer(state, { type: 'AUCTION_RESTORE_PBN' })
+	assert.deepEqual(state.practiceAuction.calls, ['1C'])
+	assert.equal(state.auctionCursors.recorded, board.auction.length)
+
+	state = playerV2Reducer(state, { type: 'RESTART_PRACTICE_AUCTION' })
+	assert.deepEqual(state.practiceAuction.calls, [])
+	assert.strictEqual(state.recordedAuction, recordedBefore)
+	assert.equal(state.auctionView, 'practice')
+	assert.equal(state.practiceAuction.revision, practiceBefore.revision + 1)
+})
+
+test('four opening passes end as passed out and cannot accept another call', () => {
+	let state = playerV2Reducer(initialPlayerV2State, {
+		type: 'LOAD_DEALS',
+		deals: [makeBoard(3, 'N')],
+	})
+	for (const [expectedSeat, isSouth] of [
+		['N', false],
+		['E', false],
+		['S', true],
+		['W', false],
+	]) {
+		state = playerV2Reducer(
+			state,
+			isSouth
+				? { type: 'AUCTION_SOUTH_CALL', call: 'P' }
+				: {
+						type: 'AUCTION_AUTO_CALL',
+						call: 'P',
+						expectedSeat,
+						expectedRevision: state.practiceAuction.revision,
+					},
+		)
+	}
+
+	assert.equal(state.practiceAuction.status, 'passed-out')
+	assert.equal(state.practiceAuction.terminal, true)
+	assert.deepEqual(state.practiceAuction.calls, ['P', 'P', 'P', 'P'])
+	assert.equal(getPlayerV2Derived(state).contract, '')
+	const unchanged = playerV2Reducer(state, { type: 'AUCTION_SOUTH_CALL', call: '1C' })
+	assert.deepEqual(unchanged.practiceAuction.calls, ['P', 'P', 'P', 'P'])
+	assert.match(unchanged.status, /auction has ended/)
+})
+
+test('practice contract remains authoritative while the recorded auction is displayed', () => {
+	const board = {
+		...makeBoard(4, 'S'),
+		auctionDealer: 'S',
+		auction: ['4S', 'P', 'P', 'P'],
+		contract: '4S',
+		declarer: 'S',
+	}
+	let state = playerV2Reducer(initialPlayerV2State, {
+		type: 'LOAD_DEALS',
+		deals: [board],
+	})
+	assert.equal(getPlayerV2Derived(state).contract, '')
+	state = playerV2Reducer(state, { type: 'AUCTION_SOUTH_CALL', call: '1NT' })
+	for (const expectedSeat of ['W', 'N', 'E']) {
+		state = playerV2Reducer(state, {
+			type: 'AUCTION_AUTO_CALL',
+			call: 'P',
+			expectedSeat,
+			expectedRevision: state.practiceAuction.revision,
+		})
+	}
+	assert.equal(getPlayerV2Derived(state).contract, '1NT')
+	assert.equal(getPlayerV2Derived(state).declarer, 'S')
+
+	state = playerV2Reducer(state, { type: 'SET_AUCTION_VIEW', view: 'recorded' })
+	assert.equal(getPlayerV2Derived(state).contract, '1NT')
+	assert.equal(getPlayerV2Derived(state).displayedAuction.contract, '4S')
+})
+
+test('board sessions restore the independent practice auction', () => {
+	let state = playerV2Reducer(initialPlayerV2State, {
+		type: 'LOAD_DEALS',
+		deals: [makeBoard(5, 'S'), makeBoard(6, 'E')],
+	})
+	state = playerV2Reducer(state, { type: 'AUCTION_SOUTH_CALL', call: '1H' })
+	state = playerV2Reducer(state, { type: 'GO_BOARD', index: 1 })
+	assert.deepEqual(state.practiceAuction.calls, [])
+	state = playerV2Reducer(state, { type: 'GO_BOARD', index: 0 })
+	assert.deepEqual(state.practiceAuction.calls, ['1H'])
+	assert.strictEqual(state.auction, state.practiceAuction)
 })
