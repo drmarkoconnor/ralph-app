@@ -12,9 +12,9 @@ export default function PlayerHelp() {
 
 			<p className="leading-6 text-gray-700">
 				The Player is designed for a learner playing South and for a bridge
-				teacher presenting to a room. It loads a PBN, lets South bid the hand
-				before comparing with the recorded auction, then moves into a large-card
-				play table.
+				teacher presenting to a room. It separates the lesson into three clear
+				stages: bid as South, check the resulting contract, then move into the
+				large-card play table.
 			</p>
 
 			<section className="space-y-2">
@@ -24,12 +24,12 @@ export default function PlayerHelp() {
 					<li>Use the board arrows to move through every board in a multi-board file.</li>
 					<li>The player reads board, dealer, vulnerability, deal and auction.</li>
 					<li>
-						If the auction is legal, the contract and declarer are derived
-						automatically.
+						A blank auction is valid. The Player explains that bidding is the first
+						task and waits for Start bidding before any computer seat calls.
 					</li>
 					<li>
-						If you change the auction, the app warns that the resulting
-						contract, trump suit, declarer and opening leader will be updated.
+						If the PBN includes an auction, it is kept as a secondary, read-only
+						comparison; it never replaces South's practice auction.
 					</li>
 				</ul>
 			</section>
@@ -38,30 +38,26 @@ export default function PlayerHelp() {
 				<h2 className="text-lg font-semibold">2. Bidding Classroom</h2>
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>
-						Play as South is the default. South's cards are visible and the other
-						three seats bid automatically until it is South's turn.
+						Play as South is the default. During bidding, the screen concentrates on
+						South's compact hand, the auction and large bidding controls; the full
+						four-hand table is reserved for card play.
+					</li>
+					<li>
+						After Start bidding, North, East and West bid automatically using the
+						guided ACOL rules until it is South's turn.
 					</li>
 					<li>
 						Choose Pass, Double, Redouble or a legal level and denomination for
-						South. Restart begins the practice auction again from the dealer.
+						South. Restart auction begins again from the dealer.
 					</li>
 					<li>
-						Use the N E S W buttons to reveal or hide any hand. Each button is a
-						true toggle.
-					</li>
-					<li>
-						Choose Review recorded PBN to step through the teacher's original
-						auction. Returning to Play as South restores the live practice auction
-						exactly where it was left.
+						When a reference auction exists, Compare recorded auction opens it as a
+						secondary teaching view. Returning to practice preserves the learner's
+						auction exactly where it was left.
 					</li>
 					<li>
 						Return and the arrow keys step calls only in the recorded comparison
 						view. They deliberately do nothing to the live practice auction.
-					</li>
-					<li>
-						The first guided release follows a compatible recorded sequence for
-						computer seats, then falls back to conservative ACOL rules if South
-						chooses another route.
 					</li>
 					<li>
 						The bidding controls enforce legal calls while still allowing a poor
@@ -71,15 +67,24 @@ export default function PlayerHelp() {
 			</section>
 
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">3. Moving Into Play</h2>
+				<h2 className="text-lg font-semibold">3. Check The Contract</h2>
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>
-						Confirm the auction when Ralph is happy with the final teaching
-						contract.
+						When bidding ends, the Player presents a checkpoint showing the final
+						contract, declarer, opening leader and South's learner role.
 					</li>
 					<li>
-						Start Play moves to a green table with all four hand positions in
-						view.
+						Check those four facts before confirming. If necessary, restart the
+						auction before card play begins.
+					</li>
+					<li>
+						Start play then moves to the full green table with all four hand
+						positions in view.
+					</li>
+					<li>
+						If the hand is passed out, there is no card-play phase. Restart the
+						auction or move to another board; a teacher can set a contract instead
+						when the lesson is intended to begin with card play.
 					</li>
 					<li>
 						When North is declarer and South is dummy, the whole table rotates
@@ -134,13 +139,16 @@ export default function PlayerHelp() {
 			<section className="space-y-2">
 				<h2 className="text-lg font-semibold">5. Keyboard Controls</h2>
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
-					<li>Return: next call in the recorded PBN comparison only.</li>
+					<li>Return: next call in the recorded-auction comparison only.</li>
 					<li>
 						Right Arrow: next recorded call; during play, advance one
 						computer-controlled seat when that manual control is available.
 					</li>
 					<li>Left Arrow: previous recorded call, or undo one card in play.</li>
-					<li>Up Arrow: reveal or hide the partner of the current teaching hand.</li>
+					<li>
+						Up Arrow: during card play, reveal or hide the partner of the current
+						teaching hand.
+					</li>
 					<li>
 						Space: show all auction calls before play; during play, toggle all
 						hands visible.
@@ -156,9 +164,9 @@ export default function PlayerHelp() {
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>Use Presentation mode for larger cards, labels and trick information.</li>
 					<li>
-						The dark operator bar keeps board navigation, contract confirmation,
-						teacher pacing, replay, legal-card height, felt and hand visibility
-						available on one line.
+						The active stage keeps only its essential controls prominent. Additional
+						teacher controls remain available without competing with the auction or
+						play table.
 					</li>
 					<li>Fullscreen removes the browser chrome when the display supports it.</li>
 				</ul>
@@ -169,18 +177,8 @@ export default function PlayerHelp() {
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>The Save PBN button exports the current board, not the whole loaded file.</li>
 					<li>
-						A new browser may request one complimentary AI nudge. Further AI calls
-						require an invited sign-in; the ordinary bridge player remains free and
-						does not make paid calls by itself.
-					</li>
-					<li>
-						The complimentary nudge is currently tied to a retained browser cookie.
-						Verified email accounts and server-held entitlements are the planned
-						next step before wider or paid access.
-					</li>
-					<li>
-						The larger Coach notebook remains available for owner review and a future
-						full-hand post-mortem. The small near-hand nudge is the normal live-play aid.
+						AI Coach controls are temporarily removed while bidding, play and replay
+						are simplified. Coaching will return later in a less intrusive form.
 					</li>
 					<li>
 						Player 1 still exists in the codebase as a fallback, but normal app

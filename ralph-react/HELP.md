@@ -19,9 +19,9 @@ Ralph lets you:
     (macOS‑reliable), NESW cross layout, and a centered mini makeables grid
   - A Pages handout (.rtf) designed for Apple Pages (one board per page) with
     full metadata
-- Teach and replay deals interactively in the Player screen: step through the
-  auction, reveal hands selectively, then play the hand with large classroom
-  card visuals
+- Teach and replay deals interactively in the Player screen: bid as South,
+  check the resulting contract, compare with a recorded auction when one is
+  available, then play the hand with large classroom card visuals
 
 Its goal is to reduce prep time and give consistent, well‑explained examples for
 club teaching.
@@ -48,9 +48,10 @@ auction advice applies to PDF if enabled.
 1. Deal Builder (Drag & Drop)
    - Assemble, annotate, and save boards.
 2. Player
-   - Load boards and walk through auction + play for teaching or self‑study.
-     The current Player is the V2 classroom player; the previous implementation
-     remains in the codebase as an unlinked fallback.
+   - Load boards and move through a clear bid, contract-check and card-play
+     sequence for teaching or self-study. The current Player is the V3
+     classroom player; the previous implementation remains in the codebase as
+     an unlinked fallback.
 
 You can prepare at home, then use only the Player view in class.
 
@@ -96,9 +97,10 @@ Why this matters for teaching:
 - Focus – the bullets keep attention on evaluation (fit, point range, plan)
   rather than memorizing sequences.
 
-If you manually entered an auction in the builder, that remains the one shown in
-the Player; the advisor is mainly for the PDF pedagogical layer. (You could
-still discuss the differences if the automated suggestion diverges.)
+If you manually entered an auction in the builder, the Player preserves it as a
+read-only comparison. The learner still begins in the South practice auction;
+the advisor remains mainly a PDF pedagogical layer. You can compare the two
+sequences without replacing or rewinding the learner's work.
 
 ---
 
@@ -116,25 +118,41 @@ still discuss the differences if the automated suggestion diverges.)
 ## 7. Using the Player for Teaching
 
 1. Load a PBN file in the Player.
-2. Begin in the Bidding Classroom. The dealer hand is visible by default, and
-   Ralph can toggle N, E, S, and W independently.
-3. Step through the auction one call at a time. Pause after important calls and
-   ask what the call promises before revealing partner or all hands.
-4. If the class wants to explore a different route, rewind the auction and
-   continue with another legal call. The final contract, declarer, trump suit
-   and opening leader update from the edited auction.
-5. Start Play when the contract is settled. The table switches to large card
-   positions, a central current-trick display, and a Last Trick reference panel.
-6. Hidden defenders auto-play. Revealed hands can be played manually, so Ralph
-   can ask the room “What would you play?” before choosing the card.
+2. If the PBN has no auction, the Player opens with **First task: bid this
+   hand**. Blank auctions are valid input: they are deliberately completed in
+   the Player, not in the Generator.
+3. Choose **Start bidding**. Nothing bids before this acknowledgement. If the
+   lesson is intended to begin with card play, choose **Set a contract instead**.
+4. The bidding workspace shows South's compact hand, the auction and large
+   bidding controls. North, East and West then call automatically using the
+   guided ACOL rules until it is South's turn. The full four-hand table is kept
+   off screen so it cannot obscure the auction.
+5. Choose a legal call for South. Use **Restart auction** if the class wants to
+   explore the hand from the beginning again.
+6. If the PBN contains an auction, **Compare recorded auction** opens it as a
+   secondary, read-only teaching reference. Returning to practice preserves the
+   learner's auction exactly where it was left.
+7. When bidding ends, check the displayed **contract, declarer, opening leader
+   and learner role**, then choose **Confirm contract**.
+8. Choose **Start play** to move to the full four-hand table, central trick area
+   and Last Trick reference panel. Computer-controlled seats play automatically;
+   the learner controls the appropriate North/South cards.
+
+If the practice auction is passed out, there is no card-play phase. Choose
+**Restart auction** to discuss another route or **Next board** to continue the
+lesson. A teacher who needs card play from that deal can instead set a contract.
 
 Keyboard controls:
 
-- Right Arrow: next call or next automatic card.
-- Left Arrow: previous call or undo one card.
-- Up Arrow: reveal/hide partner of the current teaching hand.
-- Space: show all auction calls before play; during play, toggle all hands.
-- R: replay auction or restart play.
+- Return: next call in the recorded-auction comparison only.
+- Right Arrow: next recorded call or, when manual pacing is available, the next
+  automatic card.
+- Left Arrow: previous recorded call or undo one card during play.
+- Up Arrow: during card play, reveal/hide the partner of the current teaching
+  hand.
+- Space: show all recorded-auction calls before play; during play, toggle all
+  hands.
+- R: replay the recorded comparison or restart card play.
 
 Linking auction to play:
 
@@ -194,8 +212,10 @@ vocabulary across lessons (e.g. “Combined HCP” or “Aim for game” cues).
 Q: The PDF shows “No auction advice available (debug).” A: That appears if the
 advisor couldn’t build in time. Re‑export or ensure each seat has 13 cards.
 
-Q: A board passed out. Is that useful? A: Yes – great for opening lead and
-defensive carding practice. The advisor will note which seat held the most HCP.
+Q: The practice auction passed out. What happens? A: A passed-out board has no
+card play. The Player offers **Restart auction** and **Next board**. To use the
+deal for opening-lead or defensive-carding practice, set a teaching contract
+instead.
 
 Q: Unicode suit symbols differ between the hand diagram and auctions. A: For
 reliability, auction bids may show letters (S, H, D, C) where fonts could drop
@@ -206,9 +226,10 @@ Q: Word for Mac isn’t honoring page breaks. A: The app now generates native
 for Mac. For Apple Pages, use the provided .rtf export to avoid conversion
 issues from .docx/HTML.
 
-Q: Can I force a different opening (e.g. aggressive style)? A: Enter the auction
-manually in the builder; the Player will then follow your sequence. The advisor
-output (if generated) can be used to prompt “standard vs aggressive” comparison.
+Q: Can I force a different opening (e.g. aggressive style)? A: South can make
+any legal choice in the practice auction. An auction entered in the builder is
+available separately through **Compare recorded auction**, and the advisor
+output (if generated) can prompt a “standard vs aggressive” discussion.
 
 Q: Why only a few bullets? A: Limiting cognitive load drives retention; you can
 extend in spoken teaching if needed.
@@ -245,6 +266,8 @@ extend in spoken teaching if needed.
 - Optional stronger / weaker style toggles for the advisor
 - Export to alternate teaching formats (HTML slide deck)
 - In‑app replay of recommended line of play with commentary
+- Reintroduce AI coaching only after a less intrusive classroom design is
+  agreed; the current Player deliberately exposes no AI Coach controls
 
 If something here feels unclear, note it—your feedback helps refine both the
 tool and the wording of automation bullets.

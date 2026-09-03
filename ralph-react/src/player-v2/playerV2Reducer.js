@@ -32,6 +32,8 @@ export const initialPlayerV2State = {
 	history: [],
 	completedTricks: [],
 	boardSessions: {},
+	auctionIntroPending: false,
+	manualContractMode: false,
 	autoPlayPaused: false,
 	visibilityMode: 'mimic',
 	status: '',
@@ -135,6 +137,8 @@ function hydrateBoard(deals, index) {
 			play: null,
 			history: [],
 			completedTricks: [],
+			auctionIntroPending: false,
+			manualContractMode: false,
 			autoPlayPaused: false,
 			status: '',
 		}
@@ -161,6 +165,8 @@ function hydrateBoard(deals, index) {
 		play: null,
 		history: [],
 		completedTricks: [],
+		auctionIntroPending: recordedAuction.calls.length === 0,
+		manualContractMode: false,
 		autoPlayPaused: false,
 		status: '',
 	}
@@ -182,6 +188,8 @@ function snapshotBoardSession(state) {
 		play: state.play,
 		history: [...state.history],
 		completedTricks: [...state.completedTricks],
+		auctionIntroPending: !!state.auctionIntroPending,
+		manualContractMode: !!state.manualContractMode,
 		autoPlayPaused: state.autoPlayPaused,
 		status: state.status,
 	}
@@ -230,7 +238,7 @@ export function getPlayerV2Derived(state) {
 		auctionView === 'recorded' ? recordedAuction : practiceAuction
 	const { contract, declarer } = effectiveContract(state)
 	const trump = parseTrump(contract)
-	const openingLeader = declarer ? rightOf(declarer) : state.board?.dealer || 'N'
+	const openingLeader = declarer ? rightOf(declarer) : ''
 	const score =
 		contract && declarer && state.play
 			? computeDuplicateScore(
@@ -315,6 +323,12 @@ function withPracticeCalls(state, calls, notice = '', source = 'manual') {
 
 function appendSouthCall(state, call) {
 	if (state.phase === 'play') return { ...state, status: 'Restart before changing the auction.' }
+	if (state.auctionIntroPending) {
+		return { ...state, status: 'Start the bidding exercise before making South\'s call.' }
+	}
+	if (state.manualContractMode) {
+		return { ...state, status: 'Close manual contract entry before bidding.' }
+	}
 	const practiceAuction = practiceAuctionFor(state)
 	if (!practiceAuction) return { ...state, status: 'Load a board before bidding.' }
 	const progress = auctionProgress(practiceAuction.dealer, practiceAuction.calls)
@@ -339,6 +353,7 @@ function appendSouthCall(state, call) {
 
 function appendAutomaticCall(state, action) {
 	if (state.phase !== 'auction') return state
+	if (state.auctionIntroPending || state.manualContractMode) return state
 	const practiceAuction = practiceAuctionFor(state)
 	if (!practiceAuction) return state
 	const progress = auctionProgress(practiceAuction.dealer, practiceAuction.calls)
@@ -404,6 +419,7 @@ function restartPracticeAuction(state) {
 		auctionCursors: { ...normalizedCursors(state), practice: 0 },
 		auctionCursor: 0,
 		manualContract: emptyManualContract(),
+		manualContractMode: false,
 		contractNotice: '',
 		phase: 'auction',
 		visibleSeat: 'S',
@@ -486,9 +502,14 @@ export function playerV2Reducer(state, action) {
 					: 'Automatic play resumed.',
 			}
 		case 'SET_MANUAL_CONTRACT':
+			if (state.phase === 'play') {
+				return { ...state, status: 'Replay or unload the hand before changing its contract.' }
+			}
 			return {
 				...state,
 				manualContract: { ...state.manualContract, [action.field]: action.value },
+				auctionIntroPending: false,
+				manualContractMode: true,
 				phase: state.phase === 'confirmed' ? 'auction' : state.phase,
 				status:
 					state.phase === 'confirmed'
@@ -520,6 +541,39 @@ export function playerV2Reducer(state, action) {
 			return appendSouthCall(state, action.call)
 		case 'AUCTION_AUTO_CALL':
 			return appendAutomaticCall(state, action)
+		case 'START_PRACTICE_BIDDING': {
+			if (state.phase === 'play') {
+				return { ...state, status: 'Replay or unload the hand before restarting the auction.' }
+			}
+			const next = {
+				...state,
+				auctionIntroPending: false,
+				manualContractMode: false,
+				manualContract: emptyManualContract(),
+				contractNotice: '',
+				auctionView: 'practice',
+				phase: 'auction',
+				status: 'Bidding started. South is the learner seat; the other seats bid automatically.',
+			}
+			if (!practiceAuctionFor(next)?.terminal) return next
+			return {
+				...restartPracticeAuction(next),
+				auctionIntroPending: false,
+				status: 'Auction restarted. South is the learner seat; the other seats bid automatically.',
+			}
+		}
+		case 'OPEN_MANUAL_CONTRACT':
+			if (state.phase === 'play') {
+				return { ...state, status: 'Replay or unload the hand before changing its contract.' }
+			}
+			return {
+				...state,
+				auctionIntroPending: false,
+				manualContractMode: true,
+				auctionView: 'practice',
+				phase: 'auction',
+				status: 'Manual contract entry opened. Check the contract and declarer before play.',
+			}
 		case 'RESTART_PRACTICE_AUCTION':
 		case 'AUCTION_RESTART_PRACTICE':
 			return restartPracticeAuction(state)
@@ -535,7 +589,7 @@ export function playerV2Reducer(state, action) {
 					status: 'Return to Play as South before confirming your practice contract.',
 				}
 			}
-			if (practiceAuctionFor(state)?.status === 'passed-out') {
+			if (practiceAuctionFor(state)?.status === 'passed-out' && !state.manualContractMode) {
 				return { ...state, status: 'This hand was passed out, so there is no contract to play.' }
 			}
 			const derived = getPlayerV2Derived(state)
@@ -546,6 +600,7 @@ export function playerV2Reducer(state, action) {
 			return {
 				...state,
 				phase: 'confirmed',
+				manualContractMode: false,
 				visibleSeat: learnerSeat,
 				visibleSeats: [learnerSeat],
 				status: `Contract confirmed: ${derived.contract} by ${derived.declarer}. Opening lead ${derived.openingLeader}.`,
@@ -634,6 +689,12 @@ export function playerV2Reducer(state, action) {
 				history,
 				play: rebuilt.play,
 				completedTricks: rebuilt.completed,
+				visibleSeat:
+					history.length === 0 ? (derived.declarer === 'N' ? 'N' : 'S') : state.visibleSeat,
+				visibleSeats:
+					history.length === 0
+						? [derived.declarer === 'N' ? 'N' : 'S']
+						: state.visibleSeats,
 				status: 'Undid one card.',
 			}
 		}
@@ -654,6 +715,12 @@ export function playerV2Reducer(state, action) {
 				history,
 				play: rebuilt.play,
 				completedTricks: rebuilt.completed,
+				visibleSeat:
+					history.length === 0 ? (derived.declarer === 'N' ? 'N' : 'S') : state.visibleSeat,
+				visibleSeats:
+					history.length === 0
+						? [derived.declarer === 'N' ? 'N' : 'S']
+						: state.visibleSeats,
 				status: 'Undid one trick.',
 			}
 		}

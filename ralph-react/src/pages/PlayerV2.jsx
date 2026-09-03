@@ -1,16 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import AiCoachPanel from '../components/AiCoachPanel'
-import CoachOwnerAuthForm from '../components/CoachOwnerAuthForm'
-import SouthCoachNudge from '../components/SouthCoachNudge'
-import { useCoachIdentity } from '../hooks/useCoachIdentity'
 import { parsePBN, sanitizePBN } from '../lib/pbn'
 import { BoardZ } from '../schemas/board'
 import { exportBoardPBN } from '../pbn/export'
 import {
 	SEATS,
+	SUIT_ORDER,
 	auctionRows,
 	computeDuplicateScore,
+	groupHand,
 	handHcp,
 	isDefender,
 	isSeatVul,
@@ -27,27 +25,9 @@ import {
 	playerV2Reducer,
 } from '../player-v2/playerV2Reducer'
 import { choosePracticeAutoCall } from '../player-v2/acolPracticeBidder'
-import {
-	COACH_PAID_ACTIONS,
-	COACH_QUICK_ACTIONS,
-	CoachRequestError,
-	buildLearnerCoachContext,
-	coachPhaseId,
-	coachPositionKey,
-	coachReplyText,
-	getBridgeCoachAccess,
-	localCoachFact,
-	requestBridgeCoach,
-	requestBridgeCoachTrial,
-	transcriptEntry,
-} from '../player-v2/coach'
 
 const PLAYER_HANDOFF_KEY = 'ralph-player-handoff-v1'
 const PLAYER_FELT_KEY = 'ralph-player-felt-v1'
-
-function learnerSeatForPosition(phase, declarer) {
-	return (phase === 'confirmed' || phase === 'play') && declarer === 'N' ? 'N' : 'S'
-}
 
 function learnerControlledSeats(phase, declarer) {
 	if (phase !== 'play') return new Set(['S'])
@@ -603,102 +583,126 @@ function HandPanel({
 	)
 }
 
-function AuctionPanel({ auction, cursor, dealer, contract, declarer }) {
+function AuctionPanel({ auction, cursor, dealer, contract, declarer, presentationMode = false }) {
 	const shown = (auction || []).slice(0, cursor)
 	const { columns, rows } = auctionRows(shown, dealer)
 	return (
-		<section className="rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm">
-			<div className="mb-1 flex items-center justify-between">
+		<section className="min-h-0 rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-xl">
+			<div className="mb-3 flex items-center justify-between gap-4">
 				<div>
-					<h2 className="text-sm font-bold text-slate-900">Auction</h2>
-					<p className="text-[11px] font-medium text-slate-500">Dealer {dealer}</p>
+					<h2 className={`${presentationMode ? 'text-3xl' : 'text-2xl'} font-black text-slate-950`}>
+						Auction
+					</h2>
+					<p className={`${presentationMode ? 'text-lg' : 'text-sm'} font-bold text-slate-600`}>
+						Dealer {seatName(dealer)}
+					</p>
 				</div>
-				<div className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+				<div
+					className={`${presentationMode ? 'px-5 py-3 text-2xl' : 'px-4 py-2 text-lg'} rounded-xl bg-slate-950 font-black text-white`}>
 					{contract || 'No contract'} {declarer ? `by ${declarer}` : ''}
 				</div>
 			</div>
-			<table className="w-full table-fixed text-center text-sm">
-				<thead>
-					<tr>
-						{columns.map((seat) => (
-							<th key={seat} className="border-b border-slate-100 py-0.5 text-xs text-slate-500">
-								{seat}
-							</th>
-						))}
-					</tr>
-				</thead>
-				<tbody>
-					{rows.length ? (
-						rows.map((row, rowIndex) => (
-							<tr key={rowIndex}>
-								{columns.map((seat, columnIndex) => {
-									const call = row[columnIndex] || ''
-									const callIndex = rowIndex * 4 + columnIndex
-									const isLast = call && callIndex === shown.length - 1
-									return (
-										<td key={seat} className="py-0.5">
-											<span
-												className={`inline-flex min-h-6 min-w-10 items-center justify-center rounded-md px-2 text-sm font-bold ${
-													isLast
-														? 'bg-emerald-100 text-emerald-900 ring-2 ring-emerald-300'
-														: /^(P|PASS)$/i.test(call)
-															? 'bg-slate-50 text-slate-500'
-															: 'bg-sky-50 text-sky-900'
-												}`}>
-												{call || ''}
-											</span>
-										</td>
-									)
-								})}
-							</tr>
-						))
-					) : (
+			<div className={`${presentationMode ? 'max-h-[360px]' : 'max-h-[300px]'} overflow-y-auto`}>
+				<table className="w-full table-fixed text-center">
+					<thead>
 						<tr>
-							<td colSpan={4} className="py-5 text-sm text-slate-400">
-								No calls shown yet
-							</td>
+							{columns.map((seat) => (
+								<th
+									key={seat}
+									className={`${presentationMode ? 'pb-3 text-xl' : 'pb-2 text-base'} border-b-2 border-slate-200 font-black text-slate-700`}>
+									{seatName(seat)}
+								</th>
+							))}
 						</tr>
-					)}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{rows.length ? (
+							rows.map((row, rowIndex) => (
+								<tr key={rowIndex}>
+									{columns.map((seat, columnIndex) => {
+										const call = row[columnIndex] || ''
+										const callIndex = rowIndex * 4 + columnIndex
+										const isLast = call && callIndex === shown.length - 1
+										return (
+											<td key={seat} className={`${presentationMode ? 'py-2' : 'py-1.5'}`}>
+												<span
+													className={`inline-flex items-center justify-center rounded-xl px-3 font-black ${
+														presentationMode
+															? 'min-h-12 min-w-20 text-2xl'
+															: 'min-h-10 min-w-16 text-xl'
+													} ${
+														isLast
+															? 'bg-emerald-100 text-emerald-950 ring-4 ring-emerald-400'
+															: /^(P|PASS)$/i.test(call)
+																? 'bg-slate-100 text-slate-600'
+																: 'bg-sky-100 text-sky-950'
+													}`}>
+													{call || ''}
+												</span>
+											</td>
+										)
+									})}
+								</tr>
+							))
+						) : (
+							<tr>
+								<td
+									colSpan={4}
+									className={`${presentationMode ? 'py-12 text-2xl' : 'py-10 text-xl'} font-bold text-slate-400`}>
+									No calls yet
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
 		</section>
 	)
 }
 
 function AuctionModeSwitch({ state, derived, dispatch, presentationMode = false }) {
 	const recordedAvailable = (derived.recordedAuction?.calls || []).length > 0
+	if (!recordedAvailable) {
+		return (
+			<section className="flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-amber-300 bg-slate-950 px-4 py-3 text-white shadow-lg">
+				<strong className={presentationMode ? 'text-xl' : 'text-base'}>Live South practice</strong>
+				<span className={`${presentationMode ? 'text-base' : 'text-sm'} font-bold text-slate-200`}>
+					No reference auction in this PBN
+				</span>
+			</section>
+		)
+	}
 	return (
-		<section className="rounded-xl border-2 border-amber-300 bg-slate-950 p-1.5 text-white shadow-lg">
-			<div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Auction experience">
+		<section className="rounded-xl border-2 border-amber-300 bg-slate-950 p-2 text-white shadow-lg">
+			<div className="grid grid-cols-2 gap-2" role="group" aria-label="Auction experience">
 				<button
 					type="button"
 					aria-pressed={derived.auctionView === 'practice'}
 					onClick={() => dispatch({ type: 'SET_AUCTION_VIEW', view: 'practice' })}
-					className={`rounded-lg px-2 py-2 font-black ${
-						presentationMode ? 'text-base' : 'text-sm'
+					className={`rounded-lg px-3 py-2.5 font-black ${
+						presentationMode ? 'text-lg' : 'text-base'
 					} ${
 						derived.auctionView === 'practice'
 							? 'bg-amber-300 text-slate-950'
 							: 'bg-white/10 text-white hover:bg-white/20'
 					}`}>
-					Play as South
+					Bid as South
 				</button>
 				<button
 					type="button"
-					disabled={!recordedAvailable}
 					aria-pressed={derived.auctionView === 'recorded'}
 					onClick={() => dispatch({ type: 'SET_AUCTION_VIEW', view: 'recorded' })}
-					className={`rounded-lg px-2 py-2 font-black disabled:cursor-not-allowed disabled:opacity-35 ${
-						presentationMode ? 'text-base' : 'text-sm'
+					className={`rounded-lg px-3 py-2.5 font-black ${
+						presentationMode ? 'text-lg' : 'text-base'
 					} ${
 						derived.auctionView === 'recorded'
 							? 'bg-sky-300 text-slate-950'
 							: 'bg-white/10 text-white hover:bg-white/20'
 					}`}>
-					{recordedAvailable ? 'Review recorded PBN' : 'No recorded auction'}
+					Compare recorded auction
 				</button>
 			</div>
-			<p className="mt-1 text-center text-[11px] font-bold leading-tight text-slate-200">
+			<p className={`${presentationMode ? 'text-sm' : 'text-xs'} mt-1.5 text-center font-bold leading-tight text-slate-200`}>
 				{derived.auctionView === 'recorded'
 					? 'Comparison only — your practice auction and contract remain safely preserved.'
 					: state.practiceAuction?.calls?.length
@@ -709,7 +713,20 @@ function AuctionModeSwitch({ state, derived, dispatch, presentationMode = false 
 	)
 }
 
-function BiddingEditor({ state, derived, dispatch }) {
+function biddingStrainLabel(strain) {
+	if (strain === 'NT') return 'NT'
+	return suitSymbol(
+		strain === 'S'
+			? 'Spades'
+			: strain === 'H'
+				? 'Hearts'
+				: strain === 'D'
+					? 'Diamonds'
+					: 'Clubs',
+	)
+}
+
+function BiddingEditor({ state, derived, dispatch, presentationMode = false }) {
 	const [level, setLevel] = useState('1')
 	const [strain, setStrain] = useState('S')
 	const auction = state.practiceAuction
@@ -736,155 +753,525 @@ function BiddingEditor({ state, derived, dispatch }) {
 						? `${seatName(derived.nextAuctionSeat)} is bidding…`
 						: 'Waiting for the auction to begin.'
 	return (
-		<section className="rounded-lg border-2 border-slate-200 bg-white p-2 shadow-sm">
-			<div className="mb-1 flex items-center justify-between">
+		<section className="rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-xl">
+			<div className="mb-4 flex items-start justify-between gap-4">
 				<div>
-					<h2 className="text-sm font-black text-slate-900">Your call — South</h2>
-					<p className={`text-xs font-bold ${canBid ? 'text-emerald-700' : 'text-slate-500'}`}>
+					<h2 className={`${presentationMode ? 'text-3xl' : 'text-2xl'} font-black text-slate-950`}>
+						Your call — South
+					</h2>
+					<p
+						className={`${presentationMode ? 'text-xl' : 'text-base'} mt-1 font-bold ${canBid ? 'text-emerald-700' : 'text-slate-600'}`}>
 						{statusMessage}
 					</p>
 				</div>
 				<button
 					type="button"
 					onClick={restart}
-					className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-black text-rose-800">
-					Restart
+					className={`${presentationMode ? 'px-5 py-3 text-base' : 'px-4 py-2 text-sm'} rounded-lg border-2 border-rose-200 bg-rose-50 font-black text-rose-900`}>
+					Restart auction
 				</button>
 			</div>
-			<div className="grid grid-cols-[1fr_1fr_1fr_0.8fr_1fr_auto] gap-1.5">
-				{['P', 'X', 'XX'].map((call) => (
+			<div className="grid gap-3">
+				<div className="grid grid-cols-3 gap-3" aria-label="Special calls">
+				{[
+					['P', 'Pass'],
+					['X', 'Double'],
+					['XX', 'Redouble'],
+				].map(([call, label]) => (
 					<button
 						key={call}
 						type="button"
 						disabled={!legal(call)}
 						onClick={() => dispatch({ type: 'AUCTION_APPEND_CALL', call })}
-						className="min-h-10 rounded-md bg-slate-900 px-2 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-30">
-						{call === 'P' ? 'Pass' : call}
+						className={`${presentationMode ? 'min-h-14 text-xl' : 'min-h-12 text-base'} rounded-xl bg-slate-950 px-3 py-2 font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-30`}>
+						{label}
 					</button>
 				))}
-				<select
-					disabled={!canBid}
-					value={level}
-					onChange={(event) => setLevel(event.target.value)}
-					className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-xs font-black">
+				</div>
+				<div>
+					<div className={`${presentationMode ? 'text-base' : 'text-sm'} mb-2 font-black uppercase tracking-wide text-slate-600`}>
+						Choose level
+					</div>
+					<div className="grid grid-cols-7 gap-2" role="group" aria-label="Bid level">
 					{['1', '2', '3', '4', '5', '6', '7'].map((item) => (
-						<option key={item}>{item}</option>
+						<button
+							key={item}
+							type="button"
+							disabled={!canBid}
+							aria-pressed={level === item}
+							onClick={() => setLevel(item)}
+							className={`${presentationMode ? 'min-h-14 text-2xl' : 'min-h-12 text-xl'} rounded-xl border-2 font-black ${
+								level === item
+									? 'border-sky-700 bg-sky-700 text-white'
+									: 'border-slate-200 bg-slate-50 text-slate-800'
+							} disabled:opacity-35`}>
+							{item}
+						</button>
 					))}
-				</select>
-				<select
-					disabled={!canBid}
-					value={strain}
-					onChange={(event) => setStrain(event.target.value)}
-					className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-xs font-black">
-					{['C', 'D', 'H', 'S', 'NT'].map((item) => (
-						<option key={item}>{item}</option>
-					))}
-				</select>
+					</div>
+				</div>
+				<div>
+					<div className={`${presentationMode ? 'text-base' : 'text-sm'} mb-2 font-black uppercase tracking-wide text-slate-600`}>
+						Choose suit or no-trumps
+					</div>
+					<div className="grid grid-cols-5 gap-2" role="group" aria-label="Bid suit or no-trumps">
+						{['C', 'D', 'H', 'S', 'NT'].map((item) => {
+							const redSuit = item === 'D' || item === 'H'
+							const selected = strain === item
+							return (
+								<button
+									key={item}
+									type="button"
+									disabled={!canBid}
+									aria-label={item === 'NT' ? 'No-trumps' : item === 'C' ? 'Clubs' : item === 'D' ? 'Diamonds' : item === 'H' ? 'Hearts' : 'Spades'}
+									aria-pressed={selected}
+									onClick={() => setStrain(item)}
+									className={`${presentationMode ? 'min-h-14 text-3xl' : 'min-h-12 text-2xl'} rounded-xl border-2 font-black ${
+										selected
+											? redSuit
+												? 'border-sky-700 bg-sky-700 text-rose-100'
+												: 'border-sky-700 bg-sky-700 text-white'
+											: redSuit
+												? 'border-slate-200 bg-slate-50 text-rose-700'
+												: 'border-slate-200 bg-slate-50 text-slate-800'
+									} disabled:opacity-35`}>
+									{biddingStrainLabel(item)}
+								</button>
+							)
+						})}
+					</div>
+				</div>
 				<button
 					type="button"
 					disabled={!legal(`${level}${strain}`)}
 					onClick={() => dispatch({ type: 'AUCTION_APPEND_CALL', call: `${level}${strain}` })}
-					className="min-h-10 rounded-md bg-sky-700 px-3 py-2 text-xs font-black text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-30">
-					Bid
+					aria-label={`Bid ${level} ${strain === 'NT' ? 'no-trumps' : strain}`}
+					className={`${presentationMode ? 'min-h-16 text-2xl' : 'min-h-14 text-xl'} rounded-xl bg-emerald-700 px-5 py-3 font-black text-white shadow-lg hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-30`}>
+					Bid {level}{biddingStrainLabel(strain)}
 				</button>
 			</div>
 		</section>
 	)
 }
 
-function StagePanel({
-	state,
-	derived,
-	dispatch,
-	visualPlay,
-	presentationMode = false,
-	rotated = false,
-}) {
-	if (state.phase === 'play') {
-		return (
-			<TrickPanel
-				play={visualPlay || state.play}
-				presentationMode={presentationMode}
-				rotated={rotated}
-			/>
-		)
+function PlayerProgress({ state, presentationMode = false }) {
+	const auctionFinished = !!state.practiceAuction?.terminal
+	const currentStep =
+		state.phase === 'play'
+			? 3
+			: state.phase === 'confirmed' || auctionFinished || state.manualContractMode
+				? 2
+				: 1
+	const steps = [
+		[1, 'Bid as South'],
+		[2, 'Check contract'],
+		[3, 'Play the hand'],
+	]
+	return (
+		<nav aria-label="Board progress" className="rounded-2xl border border-white/40 bg-slate-950/90 p-2 shadow-xl">
+			<ol className="grid grid-cols-3 gap-2">
+				{steps.map(([number, label]) => {
+					const complete = number < currentStep
+					const active = number === currentStep
+					return (
+						<li
+							key={number}
+							aria-current={active ? 'step' : undefined}
+							className={`${presentationMode ? 'min-h-14 text-lg' : 'min-h-11 text-sm'} flex items-center justify-center gap-2 rounded-xl px-3 font-black ${
+								active
+									? 'bg-amber-300 text-slate-950 ring-2 ring-amber-100'
+									: complete
+										? 'bg-emerald-700 text-white'
+										: 'bg-white/10 text-slate-300'
+							}`}>
+							<span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20">
+								{complete ? '✓' : number}
+							</span>
+							<span>{label}</span>
+						</li>
+					)
+				})}
+			</ol>
+		</nav>
+	)
+}
+
+function CompactSouthHand({ cards, dealer, vul, presentationMode = false }) {
+	const grouped = groupHand(cards || [])
+	const shape = SUIT_ORDER.map((suit) => grouped[suit]?.length || 0).join('–')
+	return (
+		<section className="rounded-2xl border-4 border-amber-300 bg-slate-950 p-4 text-white shadow-2xl">
+			<div className="flex items-start justify-between gap-3 border-b border-white/20 pb-3">
+				<div>
+					<div className={`${presentationMode ? 'text-lg' : 'text-sm'} font-black uppercase tracking-[0.18em] text-amber-200`}>
+						Your hand
+					</div>
+					<h2 className={`${presentationMode ? 'text-4xl' : 'text-3xl'} font-black`}>South</h2>
+				</div>
+				<div className="text-right font-bold text-slate-200">
+					<div className={presentationMode ? 'text-xl' : 'text-base'}>HCP {handHcp(cards || [])}</div>
+					<div className={presentationMode ? 'text-lg' : 'text-sm'}>Shape {shape}</div>
+				</div>
+			</div>
+			<div className="mt-3 grid gap-2">
+				{SUIT_ORDER.map((suit) => {
+					const red = suit === 'Hearts' || suit === 'Diamonds'
+					return (
+						<div
+							key={suit}
+							className={`${presentationMode ? 'min-h-16 text-3xl' : 'min-h-14 text-2xl'} grid grid-cols-[44px_1fr] items-center rounded-xl bg-white px-3 font-black text-slate-950 shadow-inner`}>
+							<span className={red ? 'text-rose-700' : 'text-slate-950'}>{suitSymbol(suit)}</span>
+							<span className="tracking-[0.12em]">
+								{(grouped[suit] || []).map((card) => card.rank).join(' ') || '—'}
+							</span>
+						</div>
+					)
+				})}
+			</div>
+			<div className={`${presentationMode ? 'text-base' : 'text-sm'} mt-3 flex flex-wrap gap-x-4 gap-y-1 font-bold text-slate-200`}>
+				<span>{dealer === 'S' ? 'South deals' : `${seatName(dealer)} deals`}</span>
+				<span>Vulnerability: {vul || 'None'}</span>
+			</div>
+		</section>
+	)
+}
+
+function learnerRoleSummary(declarer) {
+	if (declarer === 'N') return 'You will play North as declarer; South becomes dummy.'
+	if (declarer === 'S') return 'You are declarer; North becomes dummy.'
+	if (declarer === 'E' || declarer === 'W') return 'You remain South and defend; North plays automatically.'
+	return 'Confirm the declarer before play.'
+}
+
+function ContractFacts({ derived, presentationMode = false }) {
+	const facts = [
+		['Final contract', derived.contract || 'Not set'],
+		['Declarer', derived.declarer ? seatName(derived.declarer) : 'Not set'],
+		['Opening leader', derived.openingLeader ? seatName(derived.openingLeader) : 'Not set'],
+	]
+	return (
+		<div className="grid grid-cols-3 gap-2">
+			{facts.map(([label, value]) => (
+				<div key={label} className="rounded-xl bg-slate-100 p-3 text-center">
+					<div className={`${presentationMode ? 'text-sm' : 'text-xs'} font-black uppercase tracking-wide text-slate-500`}>
+						{label}
+					</div>
+					<div className={`${presentationMode ? 'text-3xl' : 'text-2xl'} mt-1 font-black text-slate-950`}>
+						{value}
+					</div>
+				</div>
+			))}
+		</div>
+	)
+}
+
+function ContractCheckpoint({ state, derived, dispatch, presentationMode = false }) {
+	const confirmed = state.phase === 'confirmed'
+	const restart = () => {
+		if (!window.confirm('Restart your practice auction from the first call?')) return
+		dispatch({ type: 'RESTART_PRACTICE_AUCTION' })
 	}
+	return (
+		<section className="rounded-2xl border-4 border-amber-300 bg-white p-5 shadow-2xl">
+			<div className={`${presentationMode ? 'text-base' : 'text-sm'} font-black uppercase tracking-[0.18em] text-emerald-700`}>
+				Step 2 · Check before play
+			</div>
+			<h2 className={`${presentationMode ? 'text-4xl' : 'text-3xl'} mt-1 font-black text-slate-950`}>
+				{confirmed ? 'Contract confirmed' : 'Auction complete'}
+			</h2>
+			<p className={`${presentationMode ? 'text-xl' : 'text-base'} mt-2 font-semibold text-slate-700`}>
+				{confirmed
+					? 'The table is ready. Start play when the room is ready for the opening lead.'
+					: 'Check the contract, declarer and opening leader before setting the table.'}
+			</p>
+			<div className="mt-4">
+				<ContractFacts derived={derived} presentationMode={presentationMode} />
+			</div>
+			<p className={`${presentationMode ? 'text-xl' : 'text-base'} mt-4 rounded-xl bg-amber-50 p-3 font-black text-amber-950`}>
+				{learnerRoleSummary(derived.declarer)}
+			</p>
+			<div className="mt-4 grid gap-2">
+				{confirmed ? (
+					<button
+						type="button"
+						onClick={() => {
+							primeBridgeAudio()
+							dispatch({ type: 'START_PLAY' })
+						}}
+						className={`${presentationMode ? 'min-h-16 text-2xl' : 'min-h-14 text-xl'} rounded-xl bg-emerald-700 px-5 py-3 font-black text-white shadow-lg hover:bg-emerald-800`}>
+						Start play
+					</button>
+				) : (
+					<button
+						type="button"
+						disabled={!derived.contract || !derived.declarer}
+						onClick={() => dispatch({ type: 'CONFIRM_AUCTION' })}
+						className={`${presentationMode ? 'min-h-16 text-2xl' : 'min-h-14 text-xl'} rounded-xl bg-sky-700 px-5 py-3 font-black text-white shadow-lg hover:bg-sky-800 disabled:opacity-35`}>
+						Confirm contract
+					</button>
+				)}
+				<button
+					type="button"
+					onClick={restart}
+					className={`${presentationMode ? 'text-lg' : 'text-base'} rounded-xl border-2 border-rose-200 bg-rose-50 px-4 py-2.5 font-black text-rose-900`}>
+					Restart auction
+				</button>
+			</div>
+		</section>
+	)
+}
+
+function PassedOutPanel({ state, dispatch, onNextBoard, presentationMode = false }) {
+	return (
+		<section className="rounded-2xl border-4 border-amber-300 bg-white p-5 text-center shadow-2xl">
+			<div className={`${presentationMode ? 'text-base' : 'text-sm'} font-black uppercase tracking-[0.18em] text-amber-800`}>
+				Auction complete
+			</div>
+			<h2 className={`${presentationMode ? 'text-4xl' : 'text-3xl'} mt-2 font-black text-slate-950`}>
+				This hand was passed out
+			</h2>
+			<p className={`${presentationMode ? 'text-xl' : 'text-base'} mt-3 font-semibold text-slate-700`}>
+				There is no contract, so there is no card play for this auction.
+			</p>
+			<div className="mt-5 grid gap-2">
+				<button
+					type="button"
+					onClick={() => dispatch({ type: 'RESTART_PRACTICE_AUCTION' })}
+					className={`${presentationMode ? 'min-h-16 text-xl' : 'min-h-14 text-lg'} rounded-xl bg-amber-300 px-5 py-3 font-black text-slate-950`}>
+					Restart auction
+				</button>
+				<button
+					type="button"
+					disabled={state.index >= state.deals.length - 1}
+					onClick={onNextBoard}
+					className={`${presentationMode ? 'min-h-14 text-lg' : 'min-h-12 text-base'} rounded-xl border-2 border-sky-200 bg-sky-50 px-5 py-3 font-black text-sky-900 disabled:opacity-35`}>
+					Next board
+				</button>
+			</div>
+		</section>
+	)
+}
+
+function ManualContractEntry({ state, derived, dispatch, presentationMode = false }) {
+	return (
+		<section className="rounded-2xl border-4 border-sky-300 bg-white p-5 shadow-2xl">
+			<div className={`${presentationMode ? 'text-base' : 'text-sm'} font-black uppercase tracking-[0.18em] text-sky-800`}>
+				Teacher option
+			</div>
+			<h2 className={`${presentationMode ? 'text-3xl' : 'text-2xl'} mt-1 font-black text-slate-950`}>
+				Set a contract instead
+			</h2>
+			<p className={`${presentationMode ? 'text-lg' : 'text-sm'} mt-2 font-semibold text-slate-600`}>
+				Use this only when the lesson is about card play rather than bidding.
+			</p>
+			<div className="mt-4 rounded-xl bg-slate-100 p-3">
+				<ManualContractControls manual={state.manualContract} dispatch={dispatch} />
+			</div>
+			<div className="mt-4">
+				<ContractFacts derived={derived} presentationMode={presentationMode} />
+			</div>
+			<div className="mt-4 grid gap-2">
+				<button
+					type="button"
+					disabled={!derived.contract || !derived.declarer}
+					onClick={() => dispatch({ type: 'CONFIRM_AUCTION' })}
+					className={`${presentationMode ? 'min-h-16 text-xl' : 'min-h-14 text-lg'} rounded-xl bg-sky-700 px-5 py-3 font-black text-white disabled:opacity-35`}>
+					Confirm contract
+				</button>
+				<button
+					type="button"
+					onClick={() => dispatch({ type: 'START_PRACTICE_BIDDING' })}
+					className={`${presentationMode ? 'text-lg' : 'text-base'} rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 font-black text-slate-800`}>
+					Return to bidding
+				</button>
+			</div>
+		</section>
+	)
+}
+
+function RecordedAuctionControls({ derived, dispatch, presentationMode = false }) {
+	const calls = derived.displayedAuctionCalls
+	const cursor = derived.displayedAuctionCursor
+	return (
+		<section className="rounded-2xl border-2 border-sky-200 bg-sky-50 p-4 shadow-xl">
+			<h2 className={`${presentationMode ? 'text-3xl' : 'text-2xl'} font-black text-sky-950`}>
+				Recorded auction
+			</h2>
+			<p className={`${presentationMode ? 'text-lg' : 'text-sm'} mt-1 font-semibold text-sky-900`}>
+				Comparison only. Your South practice auction is preserved.
+			</p>
+			<div className="mt-4 grid grid-cols-3 gap-2">
+				<button
+					disabled={!calls.length}
+					onClick={() => dispatch({ type: 'AUCTION_REPLAY' })}
+					className="rounded-xl border-2 border-sky-200 bg-white px-3 py-3 font-black text-sky-950 disabled:opacity-35">
+					Replay
+				</button>
+				<button
+					disabled={!calls.length || cursor >= calls.length}
+					onClick={() => dispatch({ type: 'AUCTION_NEXT' })}
+					className="rounded-xl border-2 border-sky-200 bg-white px-3 py-3 font-black text-sky-950 disabled:opacity-35">
+					Next call
+				</button>
+				<button
+					disabled={!calls.length}
+					onClick={() => dispatch({ type: 'AUCTION_ALL' })}
+					className="rounded-xl border-2 border-sky-200 bg-white px-3 py-3 font-black text-sky-950 disabled:opacity-35">
+					Show all
+				</button>
+			</div>
+			<button
+				type="button"
+				onClick={() => dispatch({ type: 'SET_AUCTION_VIEW', view: 'practice' })}
+				className={`${presentationMode ? 'min-h-16 text-xl' : 'min-h-14 text-lg'} mt-4 w-full rounded-xl bg-amber-300 px-5 py-3 font-black text-slate-950`}>
+				Return to your auction
+			</button>
+		</section>
+	)
+}
+
+function AuctionWorkspace({ state, derived, dispatch, presentationMode = false, onNextBoard }) {
 	const recordedView = derived.auctionView === 'recorded'
 	const shownAuction = derived.displayedAuction
 	const shownCalls = derived.displayedAuctionCalls
 	const shownCursor = recordedView ? derived.displayedAuctionCursor : shownCalls.length
-
+	const passedOut = !recordedView && state.practiceAuction?.status === 'passed-out'
+	const completed = !recordedView && state.practiceAuction?.status === 'complete'
 	return (
-		<div
-			className={`player-v3-auction grid gap-1.5 ${presentationMode ? 'w-[430px]' : 'w-[390px]'}`}>
-			<AuctionModeSwitch
-				state={state}
-				derived={derived}
-				dispatch={dispatch}
-				presentationMode={presentationMode}
-			/>
-			<div className="rounded-lg border border-sky-200 bg-sky-50 p-1.5">
-				<div className="flex items-center justify-between gap-2">
-					<div>
-						<h2 className="text-sm font-black text-slate-900">
-							{recordedView ? 'Recorded PBN auction' : 'Your practice auction'}
-						</h2>
-						<p className="mt-0.5 text-[11px] font-medium leading-tight text-slate-600">
-							{recordedView
-								? 'Step through the teacher’s recorded sequence.'
-								: derived.nextAuctionSeat === 'S'
-									? 'South to bid.'
-									: derived.nextAuctionSeat
-										? `${seatName(derived.nextAuctionSeat)} is thinking…`
-										: 'Auction complete.'}
-						</p>
-					</div>
-					<div className="rounded-md bg-white px-2 py-1 text-xs font-bold text-sky-900 shadow-sm">
-						{shownCursor}/{shownCalls.length || 0} calls
-					</div>
-				</div>
-				{recordedView && <div className="mt-1 grid grid-cols-3 gap-1">
-					<button
-						disabled={!shownCalls.length}
-						onClick={() => dispatch({ type: 'AUCTION_REPLAY' })}
-						className="rounded-md border border-sky-200 bg-white px-2 py-1.5 text-xs font-bold text-sky-900 disabled:opacity-40">
-						Replay
-					</button>
-					<button
-						disabled={
-							!shownCalls.length ||
-							shownCursor >= shownCalls.length
+		<main
+			className={`mx-auto overflow-y-auto ${
+				presentationMode
+					? 'h-[calc(100vh-72px)] max-w-[1880px] px-8 py-3'
+					: 'h-[calc(100vh-7.4rem)] max-w-[1420px] px-5 py-3'
+			}`}>
+			<PlayerProgress state={state} presentationMode={presentationMode} />
+			<div className="mt-3 grid items-start gap-4 xl:grid-cols-[minmax(250px,0.75fr)_minmax(370px,1fr)_minmax(430px,1.18fr)]">
+				<CompactSouthHand
+					cards={state.hands?.S || []}
+					dealer={state.board?.dealer}
+					vul={state.board?.vul}
+					presentationMode={presentationMode}
+				/>
+				<div className="grid min-h-0 gap-3">
+					<AuctionModeSwitch
+						state={state}
+						derived={derived}
+						dispatch={dispatch}
+						presentationMode={presentationMode}
+					/>
+					<AuctionPanel
+						auction={shownCalls}
+						cursor={shownCursor}
+						dealer={shownAuction?.dealer || state.board?.dealer}
+						contract={
+							recordedView && shownCursor < shownCalls.length
+								? ''
+								: recordedView
+									? shownAuction?.contract
+									: derived.contract
 						}
-						onClick={() => dispatch({ type: 'AUCTION_NEXT' })}
-						className="rounded-md border border-sky-200 bg-white px-2 py-1.5 text-xs font-bold text-sky-900 disabled:opacity-40">
-						Next
+						declarer={
+							recordedView && shownCursor < shownCalls.length
+								? ''
+								: recordedView
+									? shownAuction?.declarer
+									: derived.declarer
+						}
+						presentationMode={presentationMode}
+					/>
+				</div>
+				{recordedView ? (
+					<RecordedAuctionControls
+						derived={derived}
+						dispatch={dispatch}
+						presentationMode={presentationMode}
+					/>
+				) : state.manualContractMode ? (
+					<ManualContractEntry
+						state={state}
+						derived={derived}
+						dispatch={dispatch}
+						presentationMode={presentationMode}
+					/>
+				) : passedOut ? (
+					<PassedOutPanel
+						state={state}
+						dispatch={dispatch}
+						onNextBoard={onNextBoard}
+						presentationMode={presentationMode}
+					/>
+				) : completed || state.phase === 'confirmed' ? (
+					<ContractCheckpoint
+						state={state}
+						derived={derived}
+						dispatch={dispatch}
+						presentationMode={presentationMode}
+					/>
+				) : (
+					<BiddingEditor
+						state={state}
+						derived={derived}
+						dispatch={dispatch}
+						presentationMode={presentationMode}
+					/>
+				)}
+			</div>
+		</main>
+	)
+}
+
+function NoAuctionIntro({ state, dispatch, onOpenManualContract }) {
+	if (!state.auctionIntroPending) return null
+	return (
+		<div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 p-5 backdrop-blur-sm">
+			<section
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="no-auction-title"
+				className="w-full max-w-3xl rounded-3xl border-4 border-amber-300 bg-white p-7 text-center shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+				<div className="text-sm font-black uppercase tracking-[0.22em] text-emerald-700">First task</div>
+				<h1 id="no-auction-title" className="mt-2 text-4xl font-black text-slate-950 sm:text-5xl">
+					Bid Board {state.board?.board || state.index + 1}
+				</h1>
+				<p className="mx-auto mt-4 max-w-2xl text-xl font-semibold leading-relaxed text-slate-700">
+					No auction is recorded for this board. You are South. North, East and West will bid
+					automatically using guided ACOL after you start.
+				</p>
+				<div className="mx-auto mt-5 grid max-w-2xl grid-cols-3 gap-2 text-sm font-black text-slate-700">
+					<div className="rounded-xl bg-amber-100 p-3">1 · Bid</div>
+					<div className="rounded-xl bg-slate-100 p-3">2 · Check contract</div>
+					<div className="rounded-xl bg-slate-100 p-3">3 · Play</div>
+				</div>
+				<div className="mx-auto mt-6 grid max-w-xl gap-3">
+					<button
+						type="button"
+						autoFocus
+						onClick={() => dispatch({ type: 'START_PRACTICE_BIDDING' })}
+						className="min-h-16 rounded-xl bg-emerald-700 px-6 py-3 text-2xl font-black text-white shadow-lg hover:bg-emerald-800">
+						Start bidding
 					</button>
 					<button
-						disabled={!shownCalls.length}
-						onClick={() => dispatch({ type: 'AUCTION_ALL' })}
-						className="rounded-md border border-sky-200 bg-white px-2 py-1.5 text-xs font-bold text-sky-900 disabled:opacity-40">
-						Show All
+						type="button"
+						onClick={onOpenManualContract}
+						className="min-h-12 rounded-xl border-2 border-sky-200 bg-sky-50 px-5 py-3 text-base font-black text-sky-950">
+						Set a contract instead
 					</button>
-				</div>}
-			</div>
-			<AuctionPanel
-				auction={shownCalls}
-				cursor={shownCursor}
-				dealer={shownAuction?.dealer || state.board.dealer}
-				contract={recordedView ? shownAuction?.contract : derived.contract}
-				declarer={recordedView ? shownAuction?.declarer : derived.declarer}
-			/>
-			{recordedView ? (
-				<button
-					type="button"
-					onClick={() => dispatch({ type: 'SET_AUCTION_VIEW', view: 'practice' })}
-					className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-black text-slate-950 shadow-lg">
-					Return to your auction
-				</button>
-			) : (
-				<BiddingEditor state={state} derived={derived} dispatch={dispatch} />
-			)}
+				</div>
+				<p className="mt-4 text-sm font-semibold text-slate-500">
+					Use the second option only for a card-play lesson that deliberately skips bidding.
+				</p>
+			</section>
 		</div>
+	)
+}
+
+function StagePanel({ state, visualPlay, presentationMode = false, rotated = false }) {
+	return (
+		<TrickPanel
+			play={visualPlay || state.play}
+			presentationMode={presentationMode}
+			rotated={rotated}
+		/>
 	)
 }
 
@@ -1149,51 +1536,121 @@ function PlayStatusPanel({ state, derived, settledTrickCount, presentationMode =
 
 function ManualContractControls({ manual, dispatch }) {
 	return (
-		<div className="grid grid-cols-4 gap-2.5">
+		<div className="grid grid-cols-2 gap-2.5">
 			<select
+				aria-label="Declarer"
 				value={manual.declarer}
 				onChange={(event) =>
 					dispatch({ type: 'SET_MANUAL_CONTRACT', field: 'declarer', value: event.target.value })
 				}
-				className="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold">
-				<option value="">Dec</option>
+				className="min-h-12 min-w-0 rounded-lg border-2 border-slate-200 bg-white px-3 py-2 text-base font-bold">
+				<option value="">Declarer</option>
 				{SEATS.map((seat) => (
 					<option key={seat}>{seat}</option>
 				))}
 			</select>
 			<select
+				aria-label="Contract level"
 				value={manual.level}
 				onChange={(event) =>
 					dispatch({ type: 'SET_MANUAL_CONTRACT', field: 'level', value: event.target.value })
 				}
-				className="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold">
-				<option value="">Lvl</option>
+				className="min-h-12 min-w-0 rounded-lg border-2 border-slate-200 bg-white px-3 py-2 text-base font-bold">
+				<option value="">Level</option>
 				{['1', '2', '3', '4', '5', '6', '7'].map((level) => (
 					<option key={level}>{level}</option>
 				))}
 			</select>
 			<select
+				aria-label="Contract strain"
 				value={manual.strain}
 				onChange={(event) =>
 					dispatch({ type: 'SET_MANUAL_CONTRACT', field: 'strain', value: event.target.value })
 				}
-				className="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold">
-				<option value="">Str</option>
+				className="min-h-12 min-w-0 rounded-lg border-2 border-slate-200 bg-white px-3 py-2 text-base font-bold">
+				<option value="">Suit / NT</option>
 				{['C', 'D', 'H', 'S', 'NT'].map((strain) => (
 					<option key={strain}>{strain}</option>
 				))}
 			</select>
 			<select
+				aria-label="Contract double status"
 				value={manual.dbl}
 				onChange={(event) =>
 					dispatch({ type: 'SET_MANUAL_CONTRACT', field: 'dbl', value: event.target.value })
 				}
-				className="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold">
-				<option value="">Dbl</option>
+				className="min-h-12 min-w-0 rounded-lg border-2 border-slate-200 bg-white px-3 py-2 text-base font-bold">
+				<option value="">Not doubled</option>
 				<option value="X">X</option>
 				<option value="XX">XX</option>
 			</select>
 		</div>
+	)
+}
+
+function TeacherToolsDrawer({
+	open,
+	onClose,
+	state,
+	dispatch,
+	feltTheme,
+	onFeltThemeChange,
+	raiseLegalChoices,
+	onToggleLegalChoices,
+	presentationMode = false,
+}) {
+	if (!open) return null
+	return (
+		<aside
+			aria-label="Teacher tools"
+			className={`fixed right-4 z-[65] w-[330px] rounded-2xl border-4 border-amber-300 bg-white p-4 text-slate-950 shadow-[0_24px_70px_rgba(0,0,0,0.45)] ${
+				presentationMode ? 'top-[82px]' : 'top-12'
+			}`}>
+			<div className="flex items-center justify-between gap-3">
+				<div>
+					<div className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Optional</div>
+					<h2 className="text-2xl font-black">Teacher tools</h2>
+				</div>
+				<button
+					type="button"
+					onClick={onClose}
+					className="rounded-lg border-2 border-slate-200 bg-slate-50 px-3 py-2 font-black">
+					Close
+				</button>
+			</div>
+			<div className="mt-4 grid gap-4">
+				<div>
+					<div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Table colour</div>
+					<FeltSwatches value={feltTheme} onChange={onFeltThemeChange} />
+				</div>
+				{state.phase === 'play' && (
+					<>
+						<div>
+							<div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Show hands</div>
+							<SeatVisibilityToggles visibleSeats={state.visibleSeats} dispatch={dispatch} />
+						</div>
+						<button
+							type="button"
+							onClick={onToggleLegalChoices}
+							aria-pressed={raiseLegalChoices}
+							className="rounded-xl border-2 border-amber-200 bg-amber-50 px-4 py-3 font-black text-amber-950">
+							{raiseLegalChoices ? 'Lower legal choices' : 'Raise legal choices'}
+						</button>
+					</>
+				)}
+				{state.phase !== 'play' && (
+					<button
+						type="button"
+						onClick={() => {
+							dispatch({ type: 'OPEN_MANUAL_CONTRACT' })
+							onClose()
+						}}
+						className="rounded-xl border-2 border-sky-200 bg-sky-50 px-4 py-3 font-black text-sky-950">
+						Set a contract instead
+					</button>
+				)}
+			</div>
+		</aside>
 	)
 }
 
@@ -1209,201 +1666,116 @@ function Controls({
 	onAdvanceHidden,
 	canAdvanceHidden,
 	onReplayHand,
-	raiseLegalChoices,
-	onToggleLegalChoices,
+	onToggleTeacherTools,
 }) {
-	const hasAuction = derived.displayedAuctionCalls.length > 0
-	const recordedView = derived.auctionView === 'recorded'
+	const status =
+		state.phase === 'play'
+			? `${seatName(state.play?.turnSeat)} to play · ${derived.contract} by ${derived.declarer}`
+			: state.auctionIntroPending
+				? 'First task: start the bidding exercise'
+				: state.manualContractMode
+					? 'Teacher route: set the contract and declarer, then confirm'
+				: state.phase === 'confirmed'
+					? `${derived.contract} by ${derived.declarer} confirmed · ready to start play`
+					: derived.auctionView === 'recorded'
+						? 'Comparing the recorded auction · your practice is preserved'
+						: derived.nextAuctionSeat === 'S'
+							? 'South to bid'
+							: derived.nextAuctionSeat
+								? `${seatName(derived.nextAuctionSeat)} is bidding…`
+								: state.practiceAuction?.status === 'passed-out'
+									? 'Passed out · choose what to do next'
+									: 'Auction complete · check the contract'
 	return (
-		<aside className="mx-auto flex h-16 w-full max-w-[1420px] items-center gap-3 overflow-visible rounded-xl border border-white/50 bg-white/90 p-2 shadow-2xl backdrop-blur">
-			<div className="flex w-[210px] shrink-0 items-center justify-between gap-1.5">
-				<Link to="/player/help" className="text-xs font-semibold text-sky-700 hover:underline">
+		<aside className="mx-auto flex min-h-16 w-full max-w-[1420px] items-center gap-3 rounded-xl border border-white/50 bg-white/92 p-2 shadow-2xl backdrop-blur">
+			<div className="flex shrink-0 items-center gap-1.5">
+				<Link to="/player/help" className="rounded-md bg-white px-2 py-1.5 text-xs font-bold text-sky-800 shadow-sm">
 					Guide
 				</Link>
 				{returnPath && (
-					<Link to={returnPath} className="rounded-md bg-white px-2 py-1 text-xs font-semibold shadow-sm">
+					<Link to={returnPath} className="rounded-md bg-white px-2 py-1.5 text-xs font-bold shadow-sm">
 						Back
 					</Link>
 				)}
-				<button onClick={onPick} className="rounded-md bg-white px-2 py-1 text-xs font-semibold shadow-sm">
+				<button onClick={onPick} className="rounded-md bg-white px-2 py-1.5 text-xs font-bold shadow-sm">
 					Load PBN
 				</button>
 				<button
 					onClick={onSavePbn}
 					disabled={!state.board}
-					className="rounded-md bg-white px-2 py-1 text-xs font-semibold shadow-sm disabled:opacity-40">
+					className="rounded-md bg-white px-2 py-1.5 text-xs font-bold shadow-sm disabled:opacity-40">
 					Save PBN
 				</button>
 			</div>
-			<div className="w-[175px] shrink-0">
-				<div className="text-xs font-bold uppercase tracking-wide text-slate-500">Board</div>
+			<div className="w-[160px] shrink-0">
 				<div className="flex items-center gap-1">
 					<button
 						onClick={onPreviousBoard}
 						disabled={state.index <= 0}
 						aria-label="Previous board"
-						className="h-7 w-7 rounded-md border border-slate-200 bg-white text-sm font-black disabled:opacity-30">
+						className="h-9 w-9 rounded-md border border-slate-200 bg-white text-lg font-black disabled:opacity-30">
 						‹
 					</button>
-					<div className="min-w-0 flex-1 text-center text-sm font-bold text-slate-900">
-						{state.board?.board || state.index + 1} of {state.deals.length || 0}
+					<div className="min-w-0 flex-1 text-center">
+						<div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Board</div>
+						<div className="text-base font-black text-slate-950">
+							{state.board?.board || state.index + 1} / {state.deals.length || 0}
+						</div>
 					</div>
 					<button
 						onClick={onNextBoard}
 						disabled={state.index >= state.deals.length - 1}
 						aria-label="Next board"
-						className="h-7 w-7 rounded-md border border-slate-200 bg-white text-sm font-black disabled:opacity-30">
+						className="h-9 w-9 rounded-md border border-slate-200 bg-white text-lg font-black disabled:opacity-30">
 						›
 					</button>
 				</div>
-				<div className="text-xs text-slate-500">
-					Dealer {state.board?.dealer || '-'} · Vul {state.board?.vul || '-'}
-				</div>
 			</div>
-			<div className="w-[170px] shrink-0">
-				<div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">
-					Show Hands
-				</div>
-				<SeatVisibilityToggles visibleSeats={state.visibleSeats} dispatch={dispatch} />
+			<div role="status" aria-live="polite" className="min-w-[170px] flex-1 rounded-xl bg-slate-950 px-4 py-2 text-center text-base font-black text-white">
+				{status}
 			</div>
-			{state.phase !== 'play' ? (
-				<div className="w-[270px] shrink-0">
-					<div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">
-						Contract
-					</div>
-					<ManualContractControls manual={state.manualContract} dispatch={dispatch} />
-				</div>
-			) : (
-				<div className="w-[140px] shrink-0 rounded-lg bg-slate-900 px-3 py-2 text-white">
-					<div className="text-[10px] font-black uppercase tracking-wide text-slate-300">Contract</div>
-					<div className="text-lg font-black leading-none">
-						{derived.contract} by {derived.declarer}
-					</div>
-				</div>
-			)}
-			{state.phase !== 'play' && recordedView && (
-				<div className="grid w-[150px] shrink-0 grid-cols-3 gap-1.5">
-					<button
-						disabled={!hasAuction || derived.displayedAuctionCursor <= 0}
-						onClick={() => dispatch({ type: 'AUCTION_PREV' })}
-						className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold disabled:opacity-40">
-						Back
-					</button>
-					<button
-						disabled={
-							!hasAuction ||
-							derived.displayedAuctionCursor >= derived.displayedAuctionCalls.length
-						}
-						onClick={() => dispatch({ type: 'AUCTION_NEXT' })}
-						className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold disabled:opacity-40">
-						Next
-					</button>
-					<button
-						disabled={!hasAuction}
-						onClick={() => dispatch({ type: 'AUCTION_ALL' })}
-						className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold disabled:opacity-40">
-						All
-					</button>
-				</div>
-			)}
-			{state.phase !== 'play' && !recordedView && (
-				<div className="w-[150px] shrink-0">
-					<button
-						type="button"
-						onClick={() => {
-							if (
-								state.practiceAuction?.calls?.length &&
-								!window.confirm('Restart your practice auction from the first call?')
-							) return
-							dispatch({ type: 'RESTART_PRACTICE_AUCTION' })
-						}}
-						className="w-full rounded-md border border-rose-200 bg-rose-50 px-2 py-2 text-xs font-black text-rose-800">
-						Restart auction
-					</button>
-				</div>
-			)}
 			{state.phase === 'play' && (
-				<div className="grid w-[400px] shrink-0 grid-cols-6 gap-1.5">
+				<div className="grid w-[510px] shrink-0 grid-cols-5 gap-1.5">
 					<button
 						onClick={() => dispatch({ type: 'UNDO_CARD' })}
 						disabled={!state.history.length}
-						className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold disabled:opacity-40">
-						Undo
+						className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-black disabled:opacity-35">
+						Undo card
 					</button>
 					<button
 						onClick={() => dispatch({ type: 'UNDO_TRICK' })}
 						disabled={!state.history.length}
-						className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-semibold disabled:opacity-40">
-						Trick
+						className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-black disabled:opacity-35">
+						Undo trick
 					</button>
 					<button
 						onClick={() => dispatch({ type: 'SET_AUTO_PLAY_PAUSED', paused: !state.autoPlayPaused })}
-						className={`rounded-md border px-2 py-2 text-xs font-semibold ${
+						className={`rounded-lg border px-2 py-2 text-xs font-black ${
 							state.autoPlayPaused
-								? 'border-amber-200 bg-amber-50 text-amber-900'
-								: 'border-slate-200 bg-white text-slate-800'
+								? 'border-amber-300 bg-amber-50 text-amber-950'
+								: 'border-rose-300 bg-rose-50 text-rose-950'
 						}`}>
 						{state.autoPlayPaused ? 'Start computers' : 'Pause computers'}
 					</button>
 					<button
 						onClick={onAdvanceHidden}
 						disabled={!canAdvanceHidden}
-						title="Play the computer-controlled seat’s next legal card"
-						className="rounded-md border border-amber-300 bg-amber-50 px-1 py-2 text-xs font-semibold text-amber-950 disabled:opacity-40">
+						className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-2 text-xs font-black text-amber-950 disabled:opacity-35">
 						Computer card
 					</button>
 					<button
 						onClick={onReplayHand}
-						className="rounded-md border border-sky-200 bg-sky-50 px-1 py-2 text-xs font-semibold text-sky-900">
+						className="rounded-lg border border-sky-300 bg-sky-50 px-2 py-2 text-xs font-black text-sky-950">
 						Replay hand
 					</button>
-					<button
-						onClick={onToggleLegalChoices}
-						aria-pressed={raiseLegalChoices}
-						title="Raise or lower the legal cards without playing one"
-						className="rounded-md border border-amber-300 bg-amber-50 px-1 py-2 text-xs font-semibold text-amber-950">
-						{raiseLegalChoices ? 'Lower choices' : 'Raise choices'}
-					</button>
 				</div>
 			)}
-			{state.phase !== 'play' && (
-				<div className="grid w-[180px] shrink-0 grid-cols-2 gap-2">
-					<button
-					disabled={
-						derived.auctionView !== 'practice' ||
-						!derived.contract ||
-						!derived.declarer ||
-						state.phase === 'play' ||
-						state.phase === 'confirmed'
-					}
-					onClick={() => dispatch({ type: 'CONFIRM_AUCTION' })}
-					className="rounded-md bg-sky-700 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
-					Confirm
-					</button>
-					<button
-					disabled={
-						derived.auctionView !== 'practice' ||
-						!derived.contract ||
-						!derived.declarer ||
-						state.phase !== 'confirmed'
-					}
-					onClick={() => {
-						primeBridgeAudio()
-						dispatch({ type: 'START_PLAY' })
-					}}
-					className="rounded-md bg-emerald-700 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
-					Start Play
-					</button>
-				</div>
-			)}
-			{state.status && (
-				<div
-					role="status"
-					aria-live="polite"
-					className="min-w-0 flex-1 truncate rounded-md bg-white px-2 py-2 text-xs font-medium text-slate-600 shadow-sm">
-					{state.status}
-				</div>
-			)}
+			<button
+				type="button"
+				onClick={onToggleTeacherTools}
+				className="shrink-0 rounded-lg border-2 border-amber-300 bg-amber-50 px-3 py-2 text-xs font-black text-amber-950">
+				Teacher tools
+			</button>
 		</aside>
 	)
 }
@@ -1419,16 +1791,16 @@ function PresentationBar({
 	onAdvanceHidden,
 	canAdvanceHidden,
 	onReplayHand,
-	raiseLegalChoices,
-	onToggleLegalChoices,
-	onOpenCoach,
-	feltTheme,
-	onFeltThemeChange,
+	onToggleTeacherTools,
 	dispatch,
 }) {
 	const latestTrick = state.completedTricks[state.completedTricks.length - 1]
 	const status =
-		state.phase === 'play'
+		state.auctionIntroPending
+			? 'First task: start the bidding exercise'
+			: state.manualContractMode
+				? 'Teacher route: set the contract and declarer, then confirm'
+			: state.phase === 'play'
 			? state.play?.trickComplete && latestTrick
 				? `Trick ${state.completedTricks.length} won by ${latestTrick.winner} — held for discussion`
 				: `${seatName(state.play?.turnSeat)} (${state.play?.turnSeat || '-'}) to play${
@@ -1483,32 +1855,6 @@ function PresentationBar({
 					{state.board?.dealer || '-'} · Vul {state.board?.vul || '-'}
 				</div>
 			</div>
-			{state.phase === 'auction' && derived.auctionView === 'practice' && (
-				<button
-					disabled={!derived.contract || !derived.declarer}
-					onClick={() => dispatch({ type: 'CONFIRM_AUCTION' })}
-					className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-black text-white disabled:opacity-35">
-					Confirm contract
-				</button>
-			)}
-			{state.phase !== 'play' && derived.auctionView === 'recorded' && (
-				<button
-					type="button"
-					onClick={() => dispatch({ type: 'SET_AUCTION_VIEW', view: 'practice' })}
-					className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-black text-slate-950">
-					Return to your auction
-				</button>
-			)}
-			{state.phase === 'confirmed' && derived.auctionView === 'practice' && (
-				<button
-					onClick={() => {
-						primeBridgeAudio()
-						dispatch({ type: 'START_PLAY' })
-					}}
-					className="rounded-lg bg-emerald-300 px-4 py-2 text-sm font-black text-emerald-950">
-					Start play
-				</button>
-			)}
 			{state.phase === 'play' && (
 				<>
 					<div className="flex items-center gap-1">
@@ -1537,16 +1883,9 @@ function PresentationBar({
 						Play computer card
 					</button>
 					<button
-						onClick={onReplayHand}
+					onClick={onReplayHand}
 						className="rounded-lg border border-sky-200/60 bg-sky-500/20 px-3 py-2 text-sm font-black text-sky-50">
 						Replay hand
-					</button>
-					<button
-						onClick={onToggleLegalChoices}
-						aria-pressed={raiseLegalChoices}
-						title="Raise or lower the legal cards without playing one"
-						className="rounded-lg border border-amber-300/70 bg-amber-300/15 px-3 py-2 text-sm font-black text-amber-100">
-						{raiseLegalChoices ? 'Lower choices' : 'Raise choices'}
 					</button>
 					<button
 						onClick={() =>
@@ -1563,20 +1902,10 @@ function PresentationBar({
 			)}
 			<button
 				type="button"
-				onClick={onOpenCoach}
-				className="rounded-lg border border-violet-200/70 bg-violet-500/25 px-3 py-2 text-sm font-black text-violet-50">
-				Coach notebook
+				onClick={onToggleTeacherTools}
+				className="rounded-lg border border-amber-300/70 bg-amber-300/15 px-3 py-2 text-sm font-black text-amber-100">
+				Teacher tools
 			</button>
-			<FeltSwatches
-				value={feltTheme}
-				onChange={onFeltThemeChange}
-				presentationMode
-			/>
-			<SeatVisibilityToggles
-				visibleSeats={state.visibleSeats}
-				dispatch={dispatch}
-				presentationMode
-			/>
 			<button
 				onClick={onToggleFullscreen}
 				className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-black hover:bg-white/20">
@@ -1586,29 +1915,12 @@ function PresentationBar({
 	)
 }
 
-function ContractNotice({ notice, dispatch }) {
-	if (!notice) return null
-	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4">
-			<div className="w-full max-w-lg rounded-xl border border-amber-200 bg-white p-5 shadow-2xl">
-				<h2 className="text-lg font-black text-slate-900">Contract Updated</h2>
-				<p className="mt-2 text-sm font-medium leading-6 text-slate-700">{notice}</p>
-				<button
-					onClick={() => dispatch({ type: 'DISMISS_CONTRACT_NOTICE' })}
-					className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white">
-					OK
-				</button>
-			</div>
-		</div>
-	)
-}
-
-function EndResultModal({ result, onBack, onPick, onReplay, onReview }) {
+function EndResultModal({ result, onBack, onPick, onReplay }) {
 	if (!result) return null
 	const positive = result.score >= 0
 	const signedScore = result.score > 0 ? `+${result.score}` : String(result.score)
 	return (
-		<div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/72 p-6">
+		<div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/72 p-6">
 			<div
 				role="dialog"
 				aria-modal="true"
@@ -1646,11 +1958,6 @@ function EndResultModal({ result, onBack, onPick, onReplay, onReview }) {
 				</div>
 				<div className="mt-7 flex flex-wrap justify-center gap-3">
 					<button
-						onClick={onReview}
-						className="rounded-xl bg-violet-200 px-5 py-3 text-sm font-black text-violet-950 shadow-lg hover:bg-violet-100">
-						Coach notebook
-					</button>
-					<button
 						onClick={onReplay}
 						className="rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-amber-200">
 						Replay Hand
@@ -1681,10 +1988,21 @@ function TableSurface({
 	seatIsVisible,
 	onPlay,
 	dispatch,
-	coachNudge = null,
+	onNextBoard,
 	presentationMode = false,
 	raiseLegalChoices = true,
 }) {
+	if (state.phase !== 'play') {
+		return (
+			<AuctionWorkspace
+				state={state}
+				derived={derived}
+				dispatch={dispatch}
+				presentationMode={presentationMode}
+				onNextBoard={onNextBoard}
+			/>
+		)
+	}
 	const rotated = rotatedForNorthDeclarer(state.phase, derived.declarer)
 	const visualSeats = rotated
 		? { top: 'S', left: 'E', right: 'W', bottom: 'N' }
@@ -1745,7 +2063,6 @@ function TableSurface({
 					<HandPanel {...common(visualSeats.right, 'E')} />
 				</div>
 				<div className="absolute bottom-0 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center gap-1">
-					{coachNudge}
 					<HandPanel {...common(visualSeats.bottom, 'S')} />
 				</div>
 				<div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
@@ -1790,21 +2107,7 @@ export default function PlayerV2() {
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [presentationMode, setPresentationMode] = useState(false)
 	const [raiseLegalChoices, setRaiseLegalChoices] = useState(true)
-	const [coachOpen, setCoachOpen] = useState(false)
-	const [coachTranscript, setCoachTranscript] = useState([])
-	const [coachLoading, setCoachLoading] = useState(false)
-	const [coachError, setCoachError] = useState('')
-	const [liveNudge, setLiveNudge] = useState({ state: 'idle', message: '' })
-	const [dismissedNudgePosition, setDismissedNudgePosition] = useState('')
-	const [coachAccess, setCoachAccess] = useState({
-		checked: false,
-		trialAvailable: false,
-		trialStatus: 'checking',
-		access: 'checking',
-	})
-	const [manualTeachingMode, setManualTeachingMode] = useState(true)
-	const [coachUsage, setCoachUsage] = useState({ requests: 0, estimatedUsd: 0 })
-	const [coachSessionVersion, setCoachSessionVersion] = useState(0)
+	const [teacherToolsOpen, setTeacherToolsOpen] = useState(false)
 	const [feltTheme, setFeltTheme] = useState(() => {
 		if (typeof window === 'undefined') return 'green'
 		const saved = window.localStorage.getItem(PLAYER_FELT_KEY)
@@ -1812,30 +2115,11 @@ export default function PlayerV2() {
 	})
 	const fileRef = useRef(null)
 	const audioProgressRef = useRef({ boardIndex: -1, historyLength: 0, completedLength: 0 })
-	const coachRequestRef = useRef(null)
-	const coachCacheRef = useRef(new Map())
-	const latestCoachPositionRef = useRef('')
-	const lastAutomaticCoachRef = useRef('')
-	const coachIdentity = useCoachIdentity()
-	const localCoachPreview =
-		import.meta.env.DEV && new URLSearchParams(window.location.search).get('coach-preview') === '1'
 	const derived = getPlayerV2Derived(state)
-	const learnerSeat = learnerSeatForPosition(state.phase, derived.declarer)
-	const learnerSeatName = seatName(learnerSeat)
 	const controlledSeats = useMemo(
 		() => learnerControlledSeats(state.phase, derived.declarer),
 		[state.phase, derived.declarer],
 	)
-	const coachContext = useMemo(
-		() =>
-			buildLearnerCoachContext(state, {
-				learnerSeat,
-				controlledSeats: [...controlledSeats],
-			}),
-		[state, learnerSeat, controlledSeats],
-	)
-	const coachPositionIdentity = useMemo(() => coachPositionKey(coachContext), [coachContext])
-	latestCoachPositionRef.current = coachPositionIdentity
 	const dummy = derived.declarer ? partnerOf(derived.declarer) : ''
 	const endResult =
 		state.phase === 'play' &&
@@ -1855,255 +2139,6 @@ export default function PlayerV2() {
 	const showEndResult =
 		!!endResult && visibleEndKey === endResultKey && dismissedEndKey !== endResultKey
 	const selectedFelt = FELT_THEMES.find((theme) => theme.key === feltTheme) || FELT_THEMES[0]
-	const coachAuthStatus = localCoachPreview
-		? 'signed-in'
-		: coachIdentity.loading
-			? 'checking'
-			: coachIdentity.flow
-				? 'signed-out'
-				: coachIdentity.user
-					? 'signed-in'
-					: 'signed-out'
-	const coachUsageLabel = coachUsage.requests
-		? `${coachUsage.requests} AI request${coachUsage.requests === 1 ? '' : 's'} sent · returned usage estimate $${coachUsage.estimatedUsd.toFixed(3)}`
-		: 'No AI requests sent in this browser session'
-
-	const addCoachEntry = useCallback((entry) => {
-		setCoachTranscript((current) => [...current, entry])
-	}, [])
-	const openCoach = useCallback(() => setCoachOpen(true), [])
-	const closeCoach = useCallback(() => setCoachOpen(false), [])
-
-	const clearCoachSession = useCallback(() => {
-		coachRequestRef.current?.abort()
-		coachRequestRef.current = null
-		coachCacheRef.current.clear()
-		lastAutomaticCoachRef.current = ''
-		setCoachTranscript([])
-		setLiveNudge({ state: 'idle', message: '' })
-		setDismissedNudgePosition('')
-		setCoachSessionVersion((current) => current + 1)
-		setCoachLoading(false)
-		setCoachError('')
-	}, [])
-
-	const askCoach = useCallback(
-		async (intent, question = '') => {
-			if (!coachIdentity.user) {
-				setCoachError('Sign in with the invited owner account before making a paid Coach call.')
-				return
-			}
-			const baseContext = buildLearnerCoachContext(state, {
-				learnerSeat,
-				controlledSeats: [...controlledSeats],
-			})
-			if (!baseContext) {
-				setCoachError('Load a board before asking the Coach.')
-				return
-			}
-			const trigger =
-				baseContext.phase === 'auction'
-					? 'auction-step'
-					: baseContext.phase === 'opening-lead'
-						? 'opening-lead'
-						: baseContext.facts?.play?.legalFollow?.learnerToPlay
-							? 'learner-turn'
-							: 'manual'
-			const context = buildLearnerCoachContext(state, {
-				trigger,
-				learnerSeat,
-				controlledSeats: [...controlledSeats],
-			})
-			const positionIdentity = coachPositionKey(context)
-			const safeQuestion = String(question || '').trim().slice(0, 500)
-			const cacheKey = JSON.stringify({ positionIdentity, intent, question: safeQuestion.toLowerCase() })
-			if (safeQuestion) {
-				addCoachEntry(
-					transcriptEntry({
-						phase: context.phase,
-						role: 'teacher',
-						label: 'You',
-						text: safeQuestion,
-					}),
-				)
-			}
-			const cached = coachCacheRef.current.get(cacheKey)
-			if (cached) {
-				addCoachEntry(
-					transcriptEntry({
-						phase: context.phase,
-						role: 'coach',
-						label: 'Coach · saved response',
-						text: coachReplyText(cached.coach || cached.reply || cached),
-					}),
-				)
-				return
-			}
-
-			coachRequestRef.current?.abort()
-			const controller = new AbortController()
-			coachRequestRef.current = controller
-			setCoachLoading(true)
-			setCoachError('')
-			setCoachUsage((current) => ({ ...current, requests: current.requests + 1 }))
-			try {
-				const payload = await requestBridgeCoach({
-					context,
-					intent,
-					question: safeQuestion,
-					signal: controller.signal,
-				})
-				const usage = payload?.meta?.usage || {}
-				setCoachUsage((current) => ({
-					...current,
-					estimatedUsd: current.estimatedUsd + (Number(usage.estimatedUsd) || 0),
-				}))
-				if (latestCoachPositionRef.current !== positionIdentity) return
-				coachCacheRef.current.set(cacheKey, payload)
-				addCoachEntry(
-					transcriptEntry({
-						phase: context.phase,
-						role: 'coach',
-						label: 'AI Coach',
-						text: coachReplyText(payload?.coach || payload?.reply || payload),
-					}),
-				)
-			} catch (error) {
-				if (error?.name !== 'AbortError') setCoachError(error?.message || 'The Coach is unavailable.')
-			} finally {
-				if (coachRequestRef.current === controller) {
-					coachRequestRef.current = null
-					setCoachLoading(false)
-				}
-			}
-		},
-		[state, coachIdentity.user, addCoachEntry, learnerSeat, controlledSeats],
-	)
-
-	const requestLiveNudge = useCallback(async () => {
-		if (!coachContext) {
-			setLiveNudge({ state: 'error', message: 'Load a board before asking the Coach.' })
-			return
-		}
-		if (localCoachPreview) {
-			setLiveNudge({
-				state: 'response',
-				message: 'Pause first: count your points or legal cards, recall the public auction, and name the bridge principle before choosing.',
-			})
-			return
-		}
-		if (!coachIdentity.user && coachAccess.checked && !coachAccess.trialAvailable) {
-			setLiveNudge({
-				state: 'access-required',
-				message: 'Your complimentary AI nudge has been used. Sign in or email for access.',
-			})
-			setCoachOpen(true)
-			return
-		}
-
-		const trigger =
-			coachContext.phase === 'auction'
-				? 'auction-step'
-				: coachContext.phase === 'opening-lead'
-					? 'opening-lead'
-					: 'learner-turn'
-		const context = buildLearnerCoachContext(state, {
-			trigger,
-			learnerSeat,
-			controlledSeats: [...controlledSeats],
-		})
-		const positionIdentity = coachPositionKey(context)
-		coachRequestRef.current?.abort()
-		const controller = new AbortController()
-		coachRequestRef.current = controller
-		setLiveNudge({ state: 'loading', message: '' })
-		setCoachLoading(true)
-		setCoachError('')
-		setCoachUsage((current) => ({ ...current, requests: current.requests + 1 }))
-
-		try {
-			const payload = coachIdentity.user
-				? await requestBridgeCoach({ context, intent: 'nudge', signal: controller.signal })
-				: await requestBridgeCoachTrial({ context, signal: controller.signal })
-			if (latestCoachPositionRef.current !== positionIdentity) return
-			const usage = payload?.meta?.usage || {}
-			setCoachUsage((current) => ({
-				...current,
-				estimatedUsd: current.estimatedUsd + (Number(usage.estimatedUsd) || 0),
-			}))
-			const message = coachReplyText(payload?.coach || payload?.reply || payload)
-			setLiveNudge({ state: 'response', message })
-			addCoachEntry(
-				transcriptEntry({
-					phase: context.phase,
-					role: 'coach',
-					label: payload?.meta?.trial ? 'AI Coach · complimentary nudge' : 'AI Coach',
-					text: message,
-				}),
-			)
-			if (payload?.meta?.trialUsed) {
-				setCoachAccess({
-					checked: true,
-					trialAvailable: false,
-					trialStatus: 'used',
-					access: 'access-required',
-				})
-			}
-		} catch (error) {
-			if (error?.name === 'AbortError') return
-			if (error instanceof CoachRequestError && error.accessRequired) {
-				setCoachAccess({
-					checked: true,
-					trialAvailable: false,
-					trialStatus: 'used',
-					access: 'access-required',
-				})
-				setLiveNudge({
-					state: 'access-required',
-					message: 'Your complimentary AI nudge has been used. Sign in or email for access.',
-				})
-				setCoachOpen(true)
-				return
-			}
-			setLiveNudge({
-				state: 'error',
-				message: error?.message || 'The Coach is unavailable just now.',
-			})
-		} finally {
-			if (coachRequestRef.current === controller) {
-				coachRequestRef.current = null
-				setCoachLoading(false)
-			}
-		}
-	}, [
-		coachContext,
-		localCoachPreview,
-		coachIdentity.user,
-		coachAccess,
-		state,
-		learnerSeat,
-		controlledSeats,
-		addCoachEntry,
-	])
-
-	const showLocalCoachFact = useCallback(
-		(actionId) => {
-			const context = buildLearnerCoachContext(state, {
-				learnerSeat,
-				controlledSeats: [...controlledSeats],
-			})
-			const fact = localCoachFact(context, actionId)
-			addCoachEntry(
-				transcriptEntry({
-					phase: context?.phase || 'auction',
-					role: 'fact',
-					label: fact.label,
-					text: fact.text,
-				}),
-			)
-		},
-		[state, addCoachEntry, learnerSeat, controlledSeats],
-	)
 
 	const onFile = (event) => {
 		const file = event.target.files?.[0]
@@ -2113,6 +2148,7 @@ export default function PlayerV2() {
 			const parsed = parsePBN(sanitizePBN(String(reader.result)))
 			dispatch({ type: 'LOAD_DEALS', deals: parsed, name: file.name })
 			setRaiseLegalChoices(true)
+			setTeacherToolsOpen(false)
 			setReturnPath('')
 			if (fileRef.current) fileRef.current.value = ''
 		}
@@ -2185,6 +2221,7 @@ export default function PlayerV2() {
 			if (index < 0 || index >= state.deals.length || index === state.index) return
 			dispatch({ type: 'GO_BOARD', index })
 			setRaiseLegalChoices(true)
+			setTeacherToolsOpen(false)
 		},
 		[state.deals.length, state.index],
 	)
@@ -2200,13 +2237,13 @@ export default function PlayerV2() {
 				return
 			}
 			primeBridgeAudio()
-			clearCoachSession()
 			dispatch({ type: 'START_PLAY' })
 			setRaiseLegalChoices(true)
+			setTeacherToolsOpen(false)
 			setDismissedEndKey('')
 			setVisibleEndKey('')
 		},
-		[state.phase, state.history.length, clearCoachSession],
+		[state.phase, state.history.length],
 	)
 
 	const resetPlayer = useCallback(() => {
@@ -2217,106 +2254,22 @@ export default function PlayerV2() {
 			return
 		}
 		dispatch({ type: 'RESET' })
-		clearCoachSession()
-		setCoachOpen(false)
+		setTeacherToolsOpen(false)
 		setPresentationMode(false)
 		setReturnPath('')
-	}, [state.board, clearCoachSession])
+	}, [state.board])
 
 	useEffect(() => {
 		window.localStorage.setItem(PLAYER_FELT_KEY, feltTheme)
 	}, [feltTheme])
 
 	useEffect(() => {
-		clearCoachSession()
-	}, [state.index, state.selectedName, clearCoachSession])
-
-	useEffect(() => {
-		coachRequestRef.current?.abort()
-		setLiveNudge({ state: 'idle', message: '' })
-	}, [coachPositionIdentity])
-
-	useEffect(() => {
-		if (coachIdentity.flow) setCoachOpen(true)
-	}, [coachIdentity.flow])
-
-	useEffect(() => {
-		if (localCoachPreview || coachIdentity.loading) return undefined
-		if (coachIdentity.user) {
-			setCoachAccess({
-				checked: true,
-				trialAvailable: false,
-				trialStatus: 'not-needed',
-				access: 'owner',
-			})
-			return undefined
-		}
-		const controller = new AbortController()
-		getBridgeCoachAccess({ signal: controller.signal })
-			.then((payload) => {
-				setCoachAccess({
-					checked: true,
-					trialAvailable: !!payload?.trial?.available,
-					trialStatus: payload?.trial?.status || 'unavailable',
-					access: payload?.access || 'access-required',
-				})
-			})
-			.catch((error) => {
-				if (error?.name !== 'AbortError') {
-					setCoachAccess({
-						checked: true,
-						trialAvailable: false,
-						trialStatus: 'unavailable',
-						access: 'access-required',
-					})
-				}
-			})
-		return () => controller.abort()
-	}, [localCoachPreview, coachIdentity.loading, coachIdentity.user])
-
-	useEffect(
-		() => () => {
-			coachRequestRef.current?.abort()
-		},
-		[],
-	)
-
-	const learnerHasDecision =
-		!!coachContext?.auction?.learnerToCall ||
-		!!coachContext?.facts?.play?.legalFollow?.learnerToPlay ||
-		(coachContext?.phase === 'opening-lead' && controlledSeats.has(state.play?.turnSeat))
-
-	useEffect(() => {
-		if (manualTeachingMode) {
-			lastAutomaticCoachRef.current = ''
-			return undefined
-		}
 		if (
-			!coachOpen ||
-			!coachIdentity.user ||
-			!coachContext ||
-			!learnerHasDecision ||
-			coachLoading ||
-			lastAutomaticCoachRef.current === coachPositionIdentity
+			state.phase !== 'auction' ||
+			derived.auctionView !== 'practice' ||
+			state.auctionIntroPending ||
+			state.manualContractMode
 		) {
-			return undefined
-		}
-		lastAutomaticCoachRef.current = coachPositionIdentity
-		const timer = window.setTimeout(() => askCoach('nudge'), 350)
-		return () => window.clearTimeout(timer)
-	}, [
-		manualTeachingMode,
-		coachOpen,
-		coachIdentity.user,
-		coachContext,
-		coachPositionIdentity,
-		learnerHasDecision,
-		coachLoading,
-		askCoach,
-	])
-
-	useEffect(() => {
-		if (state.phase !== 'auction' || derived.auctionView !== 'practice' || coachOpen) {
 			return undefined
 		}
 		const seat = derived.nextAuctionSeat
@@ -2346,9 +2299,10 @@ export default function PlayerV2() {
 		state.recordedAuction,
 		state.hands,
 		state.board,
+		state.auctionIntroPending,
+		state.manualContractMode,
 		derived.auctionView,
 		derived.nextAuctionSeat,
-		coachOpen,
 		presentationMode,
 	])
 
@@ -2361,6 +2315,7 @@ export default function PlayerV2() {
 			if (parsed.length) {
 				dispatch({ type: 'LOAD_DEALS', deals: parsed, name: payload.name || 'Generator handoff' })
 				setRaiseLegalChoices(true)
+				setTeacherToolsOpen(false)
 				setReturnPath(payload.sourcePath || '')
 			}
 		} catch (error) {
@@ -2438,7 +2393,6 @@ export default function PlayerV2() {
 	useEffect(() => {
 		if (state.phase !== 'play') return
 		if (state.autoPlayPaused) return
-		if (coachOpen) return
 		const turnSeat = state.play?.turnSeat
 		if (!turnSeat || !derived.declarer || controlledSeats.has(turnSeat)) return
 		const trickForChoice = state.play.trickComplete ? [] : state.play.trick
@@ -2456,7 +2410,6 @@ export default function PlayerV2() {
 	}, [
 		state.phase,
 		state.autoPlayPaused,
-		coachOpen,
 		state.play?.turnSeat,
 		state.play?.trick,
 		state.play?.remaining,
@@ -2473,12 +2426,12 @@ export default function PlayerV2() {
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
-			if (coachOpen) return
 			const interactiveTarget = event.target?.closest?.(
 				'button, a, input, select, textarea, [contenteditable="true"]',
 			)
 			if (interactiveTarget) return
 			if (!state.board) return
+			if (state.auctionIntroPending) return
 			if (
 				event.key === 'Enter' &&
 				state.phase !== 'play' &&
@@ -2565,7 +2518,7 @@ export default function PlayerV2() {
 		return () => window.removeEventListener('keydown', onKeyDown)
 	}, [
 		state.board,
-		coachOpen,
+		state.auctionIntroPending,
 		state.phase,
 		state.play,
 		state.visibleSeats,
@@ -2580,121 +2533,33 @@ export default function PlayerV2() {
 		replayCurrentHand,
 	])
 
-	const coachNudge =
-		learnerHasDecision &&
-		!coachOpen &&
-		dismissedNudgePosition !== coachPositionIdentity ? (
-			<SouthCoachNudge
-				state={liveNudge.state}
-				message={liveNudge.message}
-				onRequest={requestLiveNudge}
-				onMore={openCoach}
-				onClose={() => {
-					setLiveNudge({ state: 'idle', message: '' })
-					setDismissedNudgePosition(coachPositionIdentity)
-				}}
-				disabled={
-					coachLoading ||
-					!coachContext ||
-					(!localCoachPreview && !coachIdentity.user && !coachAccess.checked)
-				}
-				presentationMode={presentationMode}
-				focusSeat={learnerSeat}
-				focusSeatName={learnerSeatName}
-				requestLabel={
-					!localCoachPreview && !coachIdentity.user && !coachAccess.checked
-						? 'Checking access…'
-						: !coachIdentity.user && coachAccess.trialAvailable
-						? 'Free AI nudge'
-						: 'Coach nudge'
-				}
-				moreLabel="Coach notebook"
-			/>
-		) : null
-
 	return (
 		<div
 			style={{ background: selectedFelt.background }}
 			className={`h-screen overflow-hidden text-slate-900 ${
 				presentationMode ? 'player-v3-present' : ''
 			}`}>
-			<ContractNotice notice={state.contractNotice} dispatch={dispatch} />
 			<EndResultModal
 				result={showEndResult ? endResult : null}
 				onBack={() => setDismissedEndKey(endResultKey)}
 				onPick={() => fileRef.current?.click()}
 				onReplay={() => replayCurrentHand({ confirm: false })}
-				onReview={() => {
-					setDismissedEndKey(endResultKey)
-					openCoach()
-				}}
 			/>
-			<AiCoachPanel
-				sessionKey={coachSessionVersion}
-				isOpen={coachOpen}
-				onClose={closeCoach}
-				authStatus={coachAuthStatus}
-				authMessage={coachIdentity.error}
-				authContent={
-					<>
-						<a
-							className="ai-coach-access-email"
-							href="mailto:bridge@markoconnor.ai?subject=AI%20Coach%20access%20request">
-							Email bridge@markoconnor.ai for an access code
-						</a>
-						<CoachOwnerAuthForm
-							identityAvailable={coachIdentity.identityAvailable}
-							flow={coachIdentity.flow}
-							loading={coachIdentity.loading}
-							onSignIn={coachIdentity.signIn}
-							onAcceptInvite={coachIdentity.acceptOwnerInvite}
-							onFinishRecovery={coachIdentity.finishPasswordRecovery}
-							onSendRecovery={coachIdentity.sendPasswordRecovery}
-						/>
-					</>
-				}
-				authTitle={
-					!coachAccess.checked
-						? 'Checking AI Coach access'
-						: coachAccess.trialStatus === 'used'
-							? 'Your complimentary AI nudge has been used'
-							: coachAccess.trialAvailable
-						? 'Sign in to continue with AI Coach'
-						: 'AI Coach access required'
-				}
-				authDescription="The bridge player remains free for everyone. Email the teacher to request a personal access code or invitation, then sign in with the account you receive."
-				ownerLabel={
-					localCoachPreview
-						? 'Local layout preview · no paid calls'
-						: coachIdentity.user
-							? 'Private owner signed in'
-							: 'AI Coach access'
-				}
-				onLogout={
-					localCoachPreview
-						? undefined
-						: async () => {
-								await coachIdentity.signOut()
-								clearCoachSession()
-							}
-				}
-				focusSeat={learnerSeat}
-				focusSeatName={learnerSeatName}
-				activePhase={coachPhaseId(coachContext?.phase)}
-				manualTeachingMode={manualTeachingMode}
-				onManualTeachingModeChange={localCoachPreview ? undefined : setManualTeachingMode}
-				transcript={coachTranscript}
-				loading={coachLoading}
-				error={coachError}
-				quickActions={COACH_QUICK_ACTIONS}
-				onQuickAction={showLocalCoachFact}
-				paidActions={COACH_PAID_ACTIONS}
-				onPaidAction={localCoachPreview ? undefined : askCoach}
-				onSubmitFollowUp={
-					localCoachPreview ? undefined : (question) => askCoach('explain', question)
-				}
-				usageLabel={coachUsageLabel}
-				actionsDisabled={!coachContext}
+			<NoAuctionIntro
+				state={state}
+				dispatch={dispatch}
+				onOpenManualContract={() => dispatch({ type: 'OPEN_MANUAL_CONTRACT' })}
+			/>
+			<TeacherToolsDrawer
+				open={teacherToolsOpen}
+				onClose={() => setTeacherToolsOpen(false)}
+				state={state}
+				dispatch={dispatch}
+				feltTheme={feltTheme}
+				onFeltThemeChange={setFeltTheme}
+				raiseLegalChoices={raiseLegalChoices}
+				onToggleLegalChoices={() => setRaiseLegalChoices((current) => !current)}
+				presentationMode={presentationMode}
 			/>
 			<input ref={fileRef} type="file" accept=".pbn,text/plain" onChange={onFile} className="hidden" />
 			{!presentationMode && (
@@ -2721,12 +2586,6 @@ export default function PlayerV2() {
 								Home
 							</Link>
 							<button
-								type="button"
-								onClick={openCoach}
-								className="rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-black text-violet-900">
-								Coach notebook
-							</button>
-							<button
 								onClick={() => setPresentationMode(true)}
 								disabled={!state.board}
 								className="rounded-md bg-amber-300 px-3 py-1.5 text-sm font-black text-slate-950 disabled:opacity-40">
@@ -2737,7 +2596,6 @@ export default function PlayerV2() {
 								className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold">
 								{isFullscreen ? 'Window' : 'Fullscreen'}
 							</button>
-							<FeltSwatches value={feltTheme} onChange={setFeltTheme} />
 							<button
 								onClick={resetPlayer}
 								className="rounded-md border border-rose-200 bg-white px-3 py-1.5 text-sm font-semibold text-rose-800">
@@ -2759,11 +2617,7 @@ export default function PlayerV2() {
 					onAdvanceHidden={advanceHiddenHand}
 					canAdvanceHidden={canAdvanceHidden}
 					onReplayHand={() => replayCurrentHand()}
-					raiseLegalChoices={raiseLegalChoices}
-					onToggleLegalChoices={() => setRaiseLegalChoices((current) => !current)}
-					onOpenCoach={openCoach}
-					feltTheme={feltTheme}
-					onFeltThemeChange={setFeltTheme}
+					onToggleTeacherTools={() => setTeacherToolsOpen((current) => !current)}
 					dispatch={dispatch}
 				/>
 			)}
@@ -2786,10 +2640,7 @@ export default function PlayerV2() {
 								onAdvanceHidden={advanceHiddenHand}
 								canAdvanceHidden={canAdvanceHidden}
 								onReplayHand={() => replayCurrentHand()}
-								raiseLegalChoices={raiseLegalChoices}
-								onToggleLegalChoices={() =>
-									setRaiseLegalChoices((current) => !current)
-								}
+								onToggleTeacherTools={() => setTeacherToolsOpen((current) => !current)}
 							/>
 						</div>
 					)}
@@ -2800,10 +2651,10 @@ export default function PlayerV2() {
 						seatIsVisible={seatIsVisible}
 						onPlay={onPlay}
 						dispatch={dispatch}
-						coachNudge={coachNudge}
-							presentationMode={presentationMode}
-							raiseLegalChoices={raiseLegalChoices}
-						/>
+						onNextBoard={() => goToBoard(state.index + 1)}
+						presentationMode={presentationMode}
+						raiseLegalChoices={raiseLegalChoices}
+					/>
 				</>
 			)}
 		</div>

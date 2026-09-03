@@ -1,15 +1,50 @@
-# Player V3: South Practice, Rotated Declarer View, and Coach Access
+# Player V3: South Practice and Simplified Classroom Workflow
 
-This note records the approved design and first implementation for the learner-facing Player V3 work completed on 7 August 2026.
+This note records the learner-facing Player V3 decisions first implemented on
+7 August 2026 and the simplified classroom workflow approved on 3 September
+2026.
 
 ## Product decisions
 
-- A loaded board begins in **Play as South**, not in a replay of the PBN auction.
-- The recorded PBN auction is a separate, read-only comparison track. Switching views never replaces or rewinds the learner's practice auction.
-- South makes only South's calls. North, East, and West bid automatically until South is next to act.
+- The Player has three visible phases: **Bid**, **Check contract**, and **Play**.
+- A loaded board begins in **Bid as South**, not in a replay of the PBN auction.
+- A blank or absent PBN auction remains valid. The Generator is unchanged and is
+  not required to manufacture an auction.
+- When an auction is absent, the Player presents **First task: bid this hand**.
+  It explains that South is the learner seat and that a completed auction or a
+  teacher-set contract is needed before card play.
+- North, East, and West do not call behind the first-task message. They begin
+  automatic guided ACOL bidding only after **Start bidding**.
+- **Set a contract instead** remains available as a secondary teacher route for
+  lessons intended to begin directly with card play.
+- During bidding, the main workspace contains South's compact hand, the auction
+  and large bidding controls. The other three hands and the full card table are
+  removed from this phase so they cannot obscure the bidding task on a projected
+  display.
+- South makes only South's calls. North, East, and West bid automatically until
+  South is next to act.
+- The recorded PBN auction is a secondary, read-only **Compare recorded
+  auction** track. It is offered only when recorded calls exist. Switching views
+  never replaces or rewinds the learner's practice auction.
 - The first release is deliberately guided rather than a complete bridge robot. A computer seat follows the recorded PBN while the practice auction still matches it; after a divergence, it uses a small conservative ACOL ruleset based only on its own hand and the public auction.
 - The configured teaching style is ACOL with a 12–14 balanced 1NT, basic Stayman and transfers, and conservative natural continuations. Unsupported competitive or advanced sequences default safely to Pass.
 - Return, arrows, Space, and R can pace the recorded comparison, but cannot mutate the live practice auction. This prevents the earlier accidental Return-key confusion.
+
+## Contract checkpoint and phase change
+
+- When bidding ends, the Player replaces the bidding controls with a single
+  checkpoint showing the **contract, declarer, opening leader, and learner
+  role**.
+- **Restart auction** remains available before play if the class wants to review
+  a different route.
+- **Confirm contract** records the teacher's check. **Start play** then performs
+  a deliberate transition to the full four-hand card table.
+- A passed-out auction has no card-play phase. The Player explains this and
+  offers **Restart auction** and **Next board**; the separate teacher-set
+  contract route remains available when required.
+- The full N/E/S/W table, hand-reveal controls, trick area, and card-play tools
+  appear only in the Play phase. Each preceding phase gives screen space to its
+  essential task.
 
 ## Learner ownership and table position
 
@@ -24,23 +59,29 @@ The learner normally occupies South at the bottom of the screen.
 
 Dummy is exposed after the opening lead according to normal play. The full 180-degree rotation for a North declarer keeps the acting declarer nearest the learner and avoids asking the learner to play from the far side of a hall display.
 
-## Live Coach experience
+## AI Coach status
 
-- The normal in-play aid is a compact **Coach nudge** attached near the learner's hand and shown only when the learner has a real bidding or card-play decision.
-- The nudge asks for a short principle-led prompt. It must use only information legally available to the learner and must not reveal hidden hands or solve the position outright.
-- **Coach notebook** opens the larger transcript and detailed controls. This is intentionally secondary during play and is the natural home for a future end-of-hand post-mortem.
-- Local deterministic fact buttons remain free and make no API call.
+- AI Coach, Coach notebook, near-hand nudge, sign-in prompts, and trial controls
+  are temporarily removed from the Player interface.
+- The immediate product priority is dependable bidding, contract confirmation,
+  card play, and replay with maximum classroom clarity.
+- Ordinary Player use therefore exposes no control that can start a paid AI
+  request.
+- Keep `COACH_TRIAL_ENABLED=false` in the deployed Netlify environment while
+  the trial interface is retired; this also closes the anonymous trial endpoint
+  against direct calls.
+- The existing server-side access and cost-control groundwork may remain dormant
+  for a later redesign. Any reintroduction must fit the phase-based classroom
+  layout and must not cover the learner's hand, bidding controls, or play table.
+- Possible future forms include a very small decision-time nudge and a separate
+  end-of-hand post-mortem workspace. Neither is part of the current Player.
 
-## AI access and cost control
+## Dormant AI access groundwork
 
-The ordinary bridge player remains public. AI spending is isolated behind Netlify Functions; the OpenAI key is server-side and must never use a `VITE_` environment variable.
-
-Current access model:
-
-1. A retained browser can make one complimentary anonymous `nudge` request.
-2. The trial is enabled only when `COACH_TRIAL_ENABLED=true`; a durable daily cap and the OpenAI project budget are independent cost backstops.
-3. After the complimentary nudge, a further Coach request opens the access panel and asks the visitor to email the teacher. At present this means a manual, invite-only Netlify Identity account; there is no shared master password or reusable client-side code.
-4. The owner route still requires an authenticated Identity user, the server-controlled `coach-owner` role, and an exact `COACH_OWNER_EMAIL` match.
+If AI coaching returns, spending must remain isolated behind server-side
+functions. Provider keys must never use a `VITE_` environment variable or be
+sent to the browser. The earlier browser-trial and invite-only Identity work is
+retained only as groundwork, not as an active Player access model.
 
 ### Required next access milestone
 
@@ -52,12 +93,19 @@ Before a public paid launch, replace browser-only trial identity with verified e
 - add payment only after that entitlement layer exists (for example, a hosted payment checkout plus a verified webhook);
 - retain a global daily cap, an immediate kill switch, and provider-level spend limits.
 
-The current cookie trial is a measured preview, not proof of one use per human: clearing cookies or changing devices can create another browser identity. The global daily cap bounds that known limitation until verified accounts replace it.
+Any future complimentary trial must not treat a browser cookie as proof of one
+use per person: clearing cookies or changing devices creates another browser
+identity. A global daily cap, immediate kill switch, and provider-level spend
+limits remain necessary even after verified accounts are introduced.
 
 ## Deferred work
 
 - Expand the guided bidder progressively with tested ACOL competitive auctions, rebids, opener continuations, doubles, and convention choices.
-- Add a post-game teaching workspace using the full screen, complete public play history, trick-by-trick navigation, and separate perspectives for declarer and defence.
+- Continue simplifying restart and replay for both the auction and the hand.
+- Reconsider AI coaching only after the core workflow is classroom-tested. A
+  future post-game workspace may use the full screen, complete public play
+  history, trick-by-trick navigation, and separate perspectives for declarer
+  and defence.
 - Add teacher-managed learner accounts, entitlement/credit administration, and verified-email access.
 - Consider payments only after the entitlement and audit trail are in place.
 
