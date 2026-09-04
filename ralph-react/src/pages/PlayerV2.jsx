@@ -1,4 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import React, {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useReducer,
+	useRef,
+	useState,
+} from 'react'
 import { Link } from 'react-router-dom'
 import { parsePBN, sanitizePBN } from '../lib/pbn'
 import { BoardZ } from '../schemas/board'
@@ -27,6 +35,7 @@ import {
 import { choosePracticeAutoCall } from '../player-v2/acolPracticeBidder'
 import {
 	exitPlayerFullscreen,
+	playerAcquiredFullscreen,
 	requestPlayerFullscreen,
 } from '../player-v2/playerPresentation'
 
@@ -49,6 +58,7 @@ const FELT_THEMES = [
 		key: 'green',
 		label: 'Classic green',
 		swatch: '#0b6b43',
+		canvas: '#03281d',
 		background:
 			'radial-gradient(circle at 50% 42%, #147b4c 0%, #075236 48%, #03281d 100%)',
 	},
@@ -56,6 +66,7 @@ const FELT_THEMES = [
 		key: 'blue',
 		label: 'Tournament blue',
 		swatch: '#155e75',
+		canvas: '#082b38',
 		background:
 			'radial-gradient(circle at 50% 42%, #19718a 0%, #104b61 48%, #082b38 100%)',
 	},
@@ -63,6 +74,7 @@ const FELT_THEMES = [
 		key: 'burgundy',
 		label: 'Burgundy',
 		swatch: '#7f1d3b',
+		canvas: '#340d20',
 		background:
 			'radial-gradient(circle at 50% 42%, #96304f 0%, #661c37 48%, #340d20 100%)',
 	},
@@ -70,6 +82,7 @@ const FELT_THEMES = [
 		key: 'charcoal',
 		label: 'Charcoal',
 		swatch: '#334155',
+		canvas: '#111827',
 		background:
 			'radial-gradient(circle at 50% 42%, #475569 0%, #263548 48%, #111827 100%)',
 	},
@@ -277,7 +290,7 @@ function CardButton({
 			onClick={onClick}
 			aria-label={`${card.rank} of ${card.suit}${playable ? ', legal play' : ''}`}
 			style={{ zIndex: stackIndex + 1 }}
-			className={`player-v3-card relative flex shrink-0 flex-col items-start justify-between overflow-hidden rounded-lg border-2 bg-white font-black shadow-[0_12px_20px_rgba(0,0,0,0.4)] ring-1 ring-slate-100 transition-[transform,box-shadow,filter] duration-150 ${
+			className={`player-v3-card relative flex shrink-0 flex-col items-start justify-between overflow-hidden rounded-lg border-2 bg-white font-black shadow-[0_8px_14px_rgba(0,0,0,0.36)] ring-1 ring-slate-100 transition-[transform,box-shadow,background-color] duration-150 ${
 				presentationMode
 					? 'h-[166px] w-[118px] px-3 py-3 text-[40px]'
 					: 'h-[144px] w-[102px] px-2.5 py-2.5 text-[32px]'
@@ -297,11 +310,11 @@ function CardButton({
 					: ''
 			} ${
 				playable
-					? `cursor-pointer ring-4 ring-amber-300 shadow-[0_20px_30px_rgba(0,0,0,0.46)] hover:brightness-105 ${
+					? `cursor-pointer ring-4 ring-amber-300 shadow-[0_14px_22px_rgba(0,0,0,0.42)] hover:bg-amber-50 ${
 							raisePlayable ? playableMotion : ''
 						}`
 					: disabled
-						? 'cursor-default brightness-[0.98] saturate-95'
+						? 'cursor-default'
 						: 'cursor-pointer hover:-translate-y-1 hover:shadow-2xl'
 			}`}>
 			<span className="flex flex-col items-center leading-none">
@@ -357,35 +370,47 @@ function rankFromKey(event) {
 }
 
 let bridgeAudioContext = null
+let bridgeAudioDisabled = false
 
 function primeBridgeAudio() {
-	if (typeof window === 'undefined') return null
-	const AudioContextCtor = window.AudioContext || window.webkitAudioContext
-	if (!AudioContextCtor) return null
-	if (!bridgeAudioContext) bridgeAudioContext = new AudioContextCtor()
-	if (bridgeAudioContext.state === 'suspended') {
-		bridgeAudioContext.resume().catch(() => {})
+	if (typeof window === 'undefined' || bridgeAudioDisabled) return null
+	try {
+		const AudioContextCtor = window.AudioContext || window.webkitAudioContext
+		if (!AudioContextCtor) return null
+		if (!bridgeAudioContext) bridgeAudioContext = new AudioContextCtor()
+		if (bridgeAudioContext.state === 'suspended') {
+			bridgeAudioContext.resume().catch(() => {})
+		}
+		return bridgeAudioContext
+	} catch (error) {
+		bridgeAudioDisabled = true
+		console.warn('Bridge Player audio is unavailable', error)
+		return null
 	}
-	return bridgeAudioContext
 }
 
 function playBridgeNotes(notes, { type = 'sine', duration = 0.1, gap = 0.035, gain = 0.035 } = {}) {
 	const context = primeBridgeAudio()
 	if (!context) return
-	const now = context.currentTime
-	notes.forEach((frequency, index) => {
-		const start = now + index * (duration + gap)
-		const oscillator = context.createOscillator()
-		const gainNode = context.createGain()
-		oscillator.type = type
-		oscillator.frequency.setValueAtTime(frequency, start)
-		gainNode.gain.setValueAtTime(0.0001, start)
-		gainNode.gain.exponentialRampToValueAtTime(gain, start + 0.012)
-		gainNode.gain.exponentialRampToValueAtTime(0.0001, start + duration)
-		oscillator.connect(gainNode).connect(context.destination)
-		oscillator.start(start)
-		oscillator.stop(start + duration + 0.02)
-	})
+	try {
+		const now = context.currentTime
+		notes.forEach((frequency, index) => {
+			const start = now + index * (duration + gap)
+			const oscillator = context.createOscillator()
+			const gainNode = context.createGain()
+			oscillator.type = type
+			oscillator.frequency.setValueAtTime(frequency, start)
+			gainNode.gain.setValueAtTime(0.0001, start)
+			gainNode.gain.exponentialRampToValueAtTime(gain, start + 0.012)
+			gainNode.gain.exponentialRampToValueAtTime(0.0001, start + duration)
+			oscillator.connect(gainNode).connect(context.destination)
+			oscillator.start(start)
+			oscillator.stop(start + duration + 0.02)
+		})
+	} catch (error) {
+		bridgeAudioDisabled = true
+		console.warn('Bridge Player sound was disabled after an audio error', error)
+	}
 }
 
 function playCardSound() {
@@ -444,12 +469,12 @@ function ConcealedSeat({
 			aria-label={`${seatName(seat)}, ${role}, concealed, ${count} ${cardLabel} remaining${
 				isTurn ? ', to play' : ''
 			}`}
-			className={`player-v3-concealed-seat relative flex items-center gap-3 rounded-2xl border-2 backdrop-blur-sm transition-[background-color,border-color,box-shadow,transform] duration-150 ${
+			className={`player-v3-concealed-seat relative flex items-center gap-3 rounded-2xl border-2 transition-[background-color,border-color,box-shadow] duration-150 ${
 				presentationMode ? 'min-h-[76px] min-w-[174px] px-4 py-3' : 'min-h-[64px] min-w-[148px] px-3 py-2'
 			} ${
 				isTurn
-					? 'z-30 scale-105 border-amber-300 bg-amber-200 text-slate-950 shadow-[0_0_38px_rgba(251,191,36,0.42)]'
-					: 'border-white/25 bg-slate-950/72 text-white shadow-[0_12px_28px_rgba(0,0,0,0.28)]'
+					? 'z-30 border-amber-300 bg-amber-200 text-slate-950 shadow-[0_0_20px_rgba(251,191,36,0.34)]'
+					: 'border-white/25 bg-slate-950/90 text-white shadow-[0_10px_20px_rgba(0,0,0,0.26)]'
 			}`}>
 			<div
 				className={`flex shrink-0 items-center justify-center rounded-xl bg-emerald-600 font-black text-white shadow-inner ${
@@ -547,17 +572,15 @@ function HandPanel({
 
 	return (
 		<section
-			className={`player-v3-visible-hand ${isSideSeat ? 'player-v3-side-hand' : ''} relative flex w-fit max-w-full flex-col items-center justify-center rounded-2xl transition-[background-color,box-shadow,padding,transform] duration-150 ${
+			className={`player-v3-visible-hand ${isSideSeat ? 'player-v3-side-hand' : ''} relative flex w-fit max-w-full flex-col items-center justify-center rounded-2xl p-1 transition-[background-color,box-shadow] duration-150 ${
 				isTurn
 					? presentationMode
-						? 'z-30 scale-[1.015] bg-amber-200/22 p-2.5 ring-4 ring-amber-300 shadow-[0_0_46px_rgba(251,191,36,0.34)]'
-						: 'z-30 scale-[1.015] bg-amber-200/24 p-2 ring-4 ring-amber-300 shadow-[0_0_40px_rgba(251,191,36,0.32)]'
-					: presentationMode
-						? 'p-1'
-						: 'p-0.5'
+						? 'z-30 bg-amber-200/25 ring-4 ring-amber-300 shadow-[0_0_22px_rgba(251,191,36,0.3)]'
+						: 'z-30 bg-amber-200/30 ring-4 ring-amber-300 shadow-[0_0_20px_rgba(251,191,36,0.28)]'
+					: ''
 			} ${
 				active && !isTurn ? 'ring-4 ring-amber-300/80' : ''
-			} ${isPartnership ? 'shadow-[0_0_35px_rgba(14,165,233,0.16)]' : ''}`}>
+			} ${isPartnership ? 'shadow-[0_0_18px_rgba(14,165,233,0.14)]' : ''}`}>
 			<div className="mb-0.5 flex flex-wrap items-center justify-center gap-1.5 text-center">
 				<SeatLabel
 					seat={seat}
@@ -1174,8 +1197,8 @@ function AuctionWorkspace({ state, derived, dispatch, presentationMode = false, 
 		<main
 			className={`mx-auto overflow-y-auto ${
 				presentationMode
-					? 'h-[100dvh] max-w-[1880px] px-8 py-3'
-					: 'h-[calc(100vh-7.4rem)] max-w-[1420px] px-5 py-3'
+					? 'h-[100vh] max-w-[1880px] px-8 py-3'
+					: 'h-[calc(100dvh-7.4rem)] max-w-[1420px] px-5 py-3'
 			}`}>
 			<PlayerProgress state={state} presentationMode={presentationMode} />
 			<div className="mt-3 grid items-start gap-4 xl:grid-cols-[minmax(250px,0.75fr)_minmax(370px,1fr)_minmax(430px,1.18fr)]">
@@ -1256,7 +1279,7 @@ function AuctionWorkspace({ state, derived, dispatch, presentationMode = false, 
 function NoAuctionIntro({ state, dispatch, onOpenManualContract }) {
 	if (!state.auctionIntroPending) return null
 	return (
-		<div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 p-5 backdrop-blur-sm">
+		<div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/90 p-5">
 			<section
 				role="dialog"
 				aria-modal="true"
@@ -1773,7 +1796,7 @@ function Controls({
 									? 'Passed out · choose what to do next'
 									: 'Auction complete · check the contract'
 	return (
-		<aside className="mx-auto flex min-h-16 w-full max-w-[1420px] items-center gap-3 rounded-xl border border-white/50 bg-white/92 p-2 shadow-2xl backdrop-blur">
+		<aside className="mx-auto flex min-h-16 w-full max-w-[1420px] items-center gap-3 rounded-xl border border-white/50 bg-white p-2 shadow-xl">
 			<div className="flex shrink-0 items-center gap-1.5">
 				<Link to="/player/help" className="rounded-md bg-white px-2 py-1.5 text-xs font-bold text-sky-800 shadow-sm">
 					Guide
@@ -1873,7 +1896,7 @@ function PresentationRestore({ onRestore, notice, buttonRef, restoring = false }
 				<div
 					role="status"
 					aria-live="polite"
-					className="rounded-xl border border-amber-300/70 bg-slate-950/92 px-4 py-2 text-right text-sm font-bold text-amber-100 shadow-2xl backdrop-blur-sm">
+					className="rounded-xl border border-amber-300/70 bg-slate-950 px-4 py-2 text-right text-sm font-bold text-amber-100 shadow-xl">
 					{notice}
 				</div>
 			)}
@@ -1884,7 +1907,7 @@ function PresentationRestore({ onRestore, notice, buttonRef, restoring = false }
 				disabled={restoring}
 				aria-label="Restore normal view; Escape"
 				title="Restore normal view (Esc)"
-				className="min-h-12 rounded-xl border-2 border-amber-300 bg-slate-950/88 px-4 py-2 text-sm font-black text-white shadow-[0_16px_38px_rgba(0,0,0,0.42)] backdrop-blur-sm transition-colors hover:bg-slate-900 focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:cursor-wait disabled:opacity-80">
+				className="min-h-12 rounded-xl border-2 border-amber-300 bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-[0_12px_24px_rgba(0,0,0,0.38)] transition-colors hover:bg-slate-900 focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:cursor-wait disabled:opacity-80">
 				{restoring ? 'Restoring…' : 'Restore normal view'}
 				<span className="ml-2 rounded-md bg-white/14 px-2 py-1 text-xs text-amber-100">Esc</span>
 			</button>
@@ -2055,7 +2078,7 @@ function TableSurface({
 		<main
 			className={`mx-auto ${
 				presentationMode
-					? 'h-[100dvh] max-w-[1880px] px-8 py-2'
+					? 'h-[100vh] max-w-[1880px] px-8 py-2'
 					: 'h-[calc(100dvh-8.125rem)] max-w-[1420px] px-5 py-2'
 			}`}>
 			<div
@@ -2131,6 +2154,7 @@ export default function PlayerV2() {
 	const playerMountedRef = useRef(true)
 	const presentationSessionRef = useRef(0)
 	const presentationOwnsFullscreenRef = useRef(false)
+	const presentationEnterPendingRef = useRef(false)
 	const presentationExitPendingRef = useRef(false)
 	const audioProgressRef = useRef({ boardIndex: -1, historyLength: 0, completedLength: 0 })
 	const derived = getPlayerV2Derived(state)
@@ -2157,6 +2181,19 @@ export default function PlayerV2() {
 	const showEndResult =
 		!!endResult && visibleEndKey === endResultKey && dismissedEndKey !== endResultKey
 	const selectedFelt = FELT_THEMES.find((theme) => theme.key === feltTheme) || FELT_THEMES[0]
+
+	useLayoutEffect(() => {
+		const documentElement = document.documentElement
+		documentElement.classList.add('player-display-active')
+		return () => {
+			documentElement.classList.remove('player-display-active')
+			documentElement.style.removeProperty('--player-display-canvas')
+		}
+	}, [])
+
+	useLayoutEffect(() => {
+		document.documentElement.style.setProperty('--player-display-canvas', selectedFelt.canvas)
+	}, [selectedFelt.canvas])
 
 	const onFile = (event) => {
 		const file = event.target.files?.[0]
@@ -2189,16 +2226,19 @@ export default function PlayerV2() {
 
 	const exitPresentation = useCallback(async ({ restoreFocus = true } = {}) => {
 		if (presentationExitPendingRef.current) return
+		const ownsFullscreen = presentationOwnsFullscreenRef.current
 		presentationExitPendingRef.current = true
 		presentationSessionRef.current += 1
 		setPresentationRestoring(true)
 		setPresentationNotice(document.fullscreenElement ? 'Restoring normal view…' : '')
 		setTeacherToolsOpen(false)
-		const fullscreenResult = await exitPlayerFullscreen(document)
+		const fullscreenResult = ownsFullscreen
+			? await exitPlayerFullscreen(document)
+			: { ok: true, outcome: 'not-owned' }
 		if (!playerMountedRef.current) return
 		presentationExitPendingRef.current = false
 		setPresentationRestoring(false)
-		if (!fullscreenResult.ok && document.fullscreenElement) {
+		if (ownsFullscreen && !fullscreenResult.ok && document.fullscreenElement) {
 			presentationOwnsFullscreenRef.current = true
 			setPresentationMode(true)
 			setPresentationNotice('Press Escape to leave browser fullscreen, then restore the normal view.')
@@ -2214,27 +2254,58 @@ export default function PlayerV2() {
 	}, [])
 
 	const enterPresentation = useCallback(async () => {
-		if (!state.board || presentationExitPendingRef.current) return
+		if (
+			!state.board ||
+			presentationEnterPendingRef.current ||
+			presentationExitPendingRef.current
+		) {
+			return
+		}
+		presentationEnterPendingRef.current = true
 		const session = presentationSessionRef.current + 1
 		presentationSessionRef.current = session
 		presentationOwnsFullscreenRef.current = false
 		setTeacherToolsOpen(false)
 		setPresentationRestoring(false)
 		setPresentationNotice('')
-		setPresentationMode(true)
 
 		const fullscreenResult = await requestPlayerFullscreen(document)
 		if (!playerMountedRef.current || presentationSessionRef.current !== session) {
+			presentationEnterPendingRef.current = false
 			if (fullscreenResult.ok && fullscreenResult.outcome === 'success') {
 				await exitPlayerFullscreen(document)
 			}
 			return
 		}
 
-		presentationOwnsFullscreenRef.current = fullscreenResult.ok
+		const fullscreenWasAcquired = fullscreenResult.ok && fullscreenResult.outcome === 'success'
+		presentationOwnsFullscreenRef.current = playerAcquiredFullscreen(
+			fullscreenResult,
+			document.fullscreenElement,
+			document.documentElement,
+		)
+		if (fullscreenWasAcquired && !presentationOwnsFullscreenRef.current) {
+			presentationEnterPendingRef.current = false
+			setPresentationMode(false)
+			setPresentationNotice('')
+			return
+		}
+		if (presentationOwnsFullscreenRef.current) {
+			await new Promise((resolve) => window.requestAnimationFrame(resolve))
+			if (!playerMountedRef.current || presentationSessionRef.current !== session) {
+				presentationEnterPendingRef.current = false
+				return
+			}
+		}
+		presentationEnterPendingRef.current = false
+		setPresentationMode(true)
 		if (!fullscreenResult.ok) {
 			setPresentationNotice(
 				'Browser controls could not be hidden; the clean table view is still active.',
+			)
+		} else if (fullscreenResult.outcome === 'already-active') {
+			setPresentationNotice(
+				'Fullscreen was already active. Restore changes the table layout; use Escape to leave browser fullscreen.',
 			)
 		}
 		window.setTimeout(() => restorePresentationButtonRef.current?.focus(), 0)
@@ -2385,7 +2456,18 @@ export default function PlayerV2() {
 
 	useEffect(() => {
 		const onFullscreenChange = () => {
-			if (document.fullscreenElement || !presentationOwnsFullscreenRef.current) return
+			if (document.fullscreenElement) return
+			if (presentationEnterPendingRef.current) {
+				presentationEnterPendingRef.current = false
+				presentationOwnsFullscreenRef.current = false
+				presentationSessionRef.current += 1
+				setPresentationMode(false)
+				setPresentationNotice('')
+				setPresentationRestoring(false)
+				setTeacherToolsOpen(false)
+				return
+			}
+			if (!presentationOwnsFullscreenRef.current) return
 			presentationOwnsFullscreenRef.current = false
 			presentationSessionRef.current += 1
 			setPresentationMode(false)
@@ -2403,8 +2485,7 @@ export default function PlayerV2() {
 		return () => {
 			playerMountedRef.current = false
 			presentationSessionRef.current += 1
-			const ownsDocumentFullscreen =
-				presentationOwnsFullscreenRef.current || document.fullscreenElement === document.documentElement
+			const ownsDocumentFullscreen = presentationOwnsFullscreenRef.current
 			presentationOwnsFullscreenRef.current = false
 			if (ownsDocumentFullscreen) void exitPlayerFullscreen(document)
 		}
@@ -2510,6 +2591,7 @@ export default function PlayerV2() {
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
+			if (event.repeat && (event.key === 'Escape' || event.key.toLowerCase() === 'p')) return
 			if (showEndResult) {
 				if (event.key === 'Escape') {
 					event.preventDefault()
@@ -2637,8 +2719,8 @@ export default function PlayerV2() {
 
 	return (
 		<div
-			style={{ background: selectedFelt.background }}
-			className={`h-[100dvh] overflow-hidden text-slate-900 ${
+			style={{ backgroundColor: selectedFelt.canvas, backgroundImage: selectedFelt.background }}
+			className={`${presentationMode ? 'h-[100vh]' : 'h-[100dvh]'} overflow-hidden text-slate-900 ${
 				presentationMode ? 'player-v3-present' : ''
 			}`}>
 			<EndResultModal

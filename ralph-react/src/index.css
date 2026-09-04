@@ -10,6 +10,19 @@ body {
 	margin: 0;
 }
 
+/* Keep a felt-coloured canvas behind the Player while Chromium/Brave swaps
+   fullscreen surfaces. Without this, a slow compositor frame exposes the
+   browser's default white page between table paints. */
+html.player-display-active,
+html.player-display-active body,
+html.player-display-active #root,
+html.player-display-active:fullscreen,
+html.player-display-active:fullscreen body,
+html.player-display-active:fullscreen #root,
+html.player-display-active:fullscreen::backdrop {
+	background-color: var(--player-display-canvas, #03281d);
+}
+
 .player-v3-table-info-compact .player-v3-last-trick-detail,
 .player-v3-table-info-compact .player-v3-play-status-detail {
 	display: none !important;

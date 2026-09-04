@@ -31,6 +31,19 @@ export async function requestPlayerFullscreen(documentRef) {
 }
 
 /**
+ * A successful request is owned by the Player only when it actually caused
+ * fullscreen. An already-fullscreen document belongs to the browser or the
+ * surrounding page and must not be exited by the Player's restore control.
+ */
+export function playerAcquiredFullscreen(fullscreenResult, fullscreenElement, requestedElement) {
+	return (
+		fullscreenResult?.ok === true &&
+		fullscreenResult.outcome === 'success' &&
+		fullscreenElement === requestedElement
+	)
+}
+
+/**
  * Leave fullscreen when it is active. Calling this while already windowed is a
  * successful no-op, which keeps restore controls safe to use repeatedly.
  */

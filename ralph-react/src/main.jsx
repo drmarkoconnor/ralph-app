@@ -9,6 +9,7 @@ import PlayerV2 from './pages/PlayerV2.jsx'
 import PlayerHelp from './pages/PlayerHelp.jsx'
 import GeneratorV2 from './pages/GeneratorV2.jsx'
 import HomeConcepts from './pages/HomeConcepts.jsx'
+import PlayerDisplayBoundary from './components/PlayerDisplayBoundary.jsx'
 
 const COACH_AUTH_HASH_PATTERN =
 	/^#(confirmation_token|recovery_token|invite_token|email_change_token|access_token)=/
@@ -31,8 +32,22 @@ const router = createBrowserRouter([
 	{ path: '/generator-v2', element: <GeneratorV2 /> },
 	{ path: '/generator2', element: <GeneratorV2 /> },
 	{ path: '/picker', element: <GeneratorV2 /> },
-	{ path: '/player', element: <PlayerV2 /> },
-	{ path: '/player-v2', element: <PlayerV2 /> },
+	{
+		path: '/player',
+		element: (
+			<PlayerDisplayBoundary>
+				<PlayerV2 />
+			</PlayerDisplayBoundary>
+		),
+	},
+	{
+		path: '/player-v2',
+		element: (
+			<PlayerDisplayBoundary>
+				<PlayerV2 />
+			</PlayerDisplayBoundary>
+		),
+	},
 	{ path: '/player/help', element: <PlayerHelp /> },
 	{ path: '/instructions', element: <Instructions /> },
 	{ path: '/sources', element: <Sources /> },

@@ -2,8 +2,38 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
 	exitPlayerFullscreen,
+	playerAcquiredFullscreen,
 	requestPlayerFullscreen,
 } from './playerPresentation.js'
+
+test('playerAcquiredFullscreen distinguishes a new fullscreen surface from an existing one', () => {
+	const requestedElement = {}
+	assert.equal(
+		playerAcquiredFullscreen({ ok: true, outcome: 'success' }, requestedElement, requestedElement),
+		true,
+	)
+	assert.equal(
+		playerAcquiredFullscreen({ ok: true, outcome: 'success' }, null, requestedElement),
+		false,
+	)
+	assert.equal(
+		playerAcquiredFullscreen({ ok: true, outcome: 'success' }, {}, requestedElement),
+		false,
+	)
+	assert.equal(
+		playerAcquiredFullscreen(
+			{ ok: true, outcome: 'already-active' },
+			requestedElement,
+			requestedElement,
+		),
+		false,
+	)
+	assert.equal(
+		playerAcquiredFullscreen({ ok: false, outcome: 'denied' }, null, requestedElement),
+		false,
+	)
+	assert.equal(playerAcquiredFullscreen(null, null, requestedElement), false)
+})
 
 test('requestPlayerFullscreen requests fullscreen on the document element', async () => {
 	let receiver = null
