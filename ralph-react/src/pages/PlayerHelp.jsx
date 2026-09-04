@@ -39,8 +39,8 @@ export default function PlayerHelp() {
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>
 						Play as South is the default. During bidding, the screen concentrates on
-						South's compact hand, the auction and large bidding controls; the full
-						four-hand table is reserved for card play.
+						South's compact hand, the auction and large bidding controls; the
+						four-seat table is reserved for card play.
 					</li>
 					<li>
 						After Start bidding, North, East and West bid automatically using the
@@ -117,6 +117,14 @@ export default function PlayerHelp() {
 						reference without covering the hands.
 					</li>
 					<li>
+						A concealed seat is a compact marker showing only its seat and number of
+						cards remaining. It shows no card backs and no HCP information.
+					</li>
+					<li>
+						Only the learner's hand, a hand deliberately revealed by the teacher,
+						and dummy after the opening lead remain as full card displays.
+					</li>
+					<li>
 						Dummy places trumps at the left of the screen. In no-trumps, clubs
 						occupy that position; the remaining suits alternate red and black.
 					</li>
@@ -154,21 +162,29 @@ export default function PlayerHelp() {
 						hands visible.
 					</li>
 					<li>R: replay the recorded auction, or restart play from the first trick.</li>
-					<li>P: enter or leave Presentation Mode.</li>
+					<li>P: present the table, or restore the normal Player view.</li>
 					<li>Page Up / Page Down, or [ / ]: previous or next board.</li>
 				</ul>
 			</section>
 
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">6. Presentation Mode</h2>
+				<h2 className="text-lg font-semibold">6. Present The Table</h2>
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
-					<li>Use Presentation mode for larger cards, labels and trick information.</li>
 					<li>
-						The active stage keeps only its essential controls prominent. Additional
-						teacher controls remain available without competing with the auction or
-						play table.
+						Choose Present table once to enlarge the table and request browser
+						fullscreen.
 					</li>
-					<li>Fullscreen removes the browser chrome when the display supports it.</li>
+					<li>
+						The clean presentation view hides the app header, navigation and Player
+						toolbars so the hands and central trick use the projected screen.
+					</li>
+					<li>
+						Restore normal view · Esc remains available as the single exit control.
+					</li>
+					<li>
+						If the browser denies fullscreen, the same clean table stays available
+						inside the page; card play is not interrupted.
+					</li>
 				</ul>
 			</section>
 

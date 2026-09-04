@@ -25,6 +25,10 @@ import {
 	playerV2Reducer,
 } from '../player-v2/playerV2Reducer'
 import { choosePracticeAutoCall } from '../player-v2/acolPracticeBidder'
+import {
+	exitPlayerFullscreen,
+	requestPlayerFullscreen,
+} from '../player-v2/playerPresentation'
 
 const PLAYER_HANDOFF_KEY = 'ralph-player-handoff-v1'
 const PLAYER_FELT_KEY = 'ralph-player-felt-v1'
@@ -314,45 +318,6 @@ function CardButton({
 	)
 }
 
-function CardBack({ overlap = false, side = false, presentationMode = false }) {
-	return (
-		<div
-			className={`player-v3-card-back shrink-0 rounded-lg border border-slate-400 bg-[repeating-linear-gradient(135deg,#111827_0,#111827_4px,#374151_4px,#374151_8px)] shadow-[0_10px_20px_rgba(0,0,0,0.38)] ring-1 ring-white/35 ${
-				presentationMode ? 'h-[166px] w-[118px]' : 'h-[144px] w-[102px]'
-			} ${
-				overlap
-					? presentationMode
-						? side
-							? '-mt-[88px] first:mt-0'
-							: '-ml-[62px] first:ml-0'
-						: side
-							? '-mt-[75px] first:mt-0'
-							: '-ml-[50px] first:ml-0'
-					: ''
-			}`}>
-			<div
-				className={`player-v3-card-back-inner ${presentationMode ? 'h-[146px]' : 'h-[124px]'} m-2 rounded-md border border-white/30`}
-			/>
-		</div>
-	)
-}
-
-function HiddenHand({ count = 13, split = false, presentationMode = false }) {
-	const indexes = Array.from({ length: count }, (_, index) => index)
-	const rows = split ? [indexes.slice(0, 6), indexes.slice(6)] : [indexes]
-	return (
-		<div className={`flex items-center justify-center ${split ? 'flex-col gap-2' : ''}`}>
-			{rows.map((row, rowIndex) => (
-				<div key={rowIndex} className="flex justify-center">
-					{row.map((index) => (
-						<CardBack key={index} overlap presentationMode={presentationMode} />
-					))}
-				</div>
-			))}
-		</div>
-	)
-}
-
 const playableMotionBySeat = {
 	N: 'origin-top translate-y-4 hover:translate-y-5',
 	E: 'origin-right -translate-x-4 hover:-translate-x-5',
@@ -463,6 +428,68 @@ function SeatLabel({ seat, dealer, vul, role, active, presentationMode = false }
 	)
 }
 
+function ConcealedSeat({
+	seat,
+	count,
+	dealer,
+	vul,
+	role,
+	isTurn,
+	openingLeader,
+	presentationMode = false,
+}) {
+	const cardLabel = count === 1 ? 'card' : 'cards'
+	return (
+		<section
+			aria-label={`${seatName(seat)}, ${role}, concealed, ${count} ${cardLabel} remaining${
+				isTurn ? ', to play' : ''
+			}`}
+			className={`player-v3-concealed-seat relative flex items-center gap-3 rounded-2xl border-2 backdrop-blur-sm transition-[background-color,border-color,box-shadow,transform] duration-150 ${
+				presentationMode ? 'min-h-[76px] min-w-[174px] px-4 py-3' : 'min-h-[64px] min-w-[148px] px-3 py-2'
+			} ${
+				isTurn
+					? 'z-30 scale-105 border-amber-300 bg-amber-200 text-slate-950 shadow-[0_0_38px_rgba(251,191,36,0.42)]'
+					: 'border-white/25 bg-slate-950/72 text-white shadow-[0_12px_28px_rgba(0,0,0,0.28)]'
+			}`}>
+			<div
+				className={`flex shrink-0 items-center justify-center rounded-xl bg-emerald-600 font-black text-white shadow-inner ${
+					presentationMode ? 'h-12 w-12 text-2xl' : 'h-10 w-10 text-xl'
+				}`}>
+				{seat}
+			</div>
+			<div className="min-w-0 leading-tight">
+				<div className={`${presentationMode ? 'text-lg' : 'text-sm'} font-black`}>
+					{seatName(seat)}
+				</div>
+				<div className={`${presentationMode ? 'text-base' : 'text-[11px]'} font-bold opacity-75`}>
+					{role} · {count} {cardLabel}
+				</div>
+				<div className="mt-1 flex flex-wrap items-center gap-1">
+					{isTurn && (
+						<span
+							role="status"
+							aria-live="polite"
+							className={`${presentationMode ? 'text-xs' : 'text-[10px]'} rounded bg-slate-950 px-1.5 py-0.5 font-black uppercase tracking-wide text-amber-200`}>
+							To play
+						</span>
+					)}
+					{openingLeader && (
+						<span className={`${presentationMode ? 'text-xs' : 'text-[10px]'} rounded bg-amber-300 px-1.5 py-0.5 font-black uppercase tracking-wide text-slate-950`}>
+							Opening lead
+						</span>
+					)}
+					{dealer === seat && (
+						<span className={`${presentationMode ? 'text-xs' : 'text-[10px]'} rounded bg-white/20 px-1.5 py-0.5 font-black`}>D</span>
+					)}
+					{vul && (
+						<span className={`${presentationMode ? 'text-xs' : 'text-[10px]'} rounded bg-rose-600 px-1.5 py-0.5 font-black text-white`}>V</span>
+					)}
+				</div>
+			</div>
+		</section>
+	)
+}
+
 function HandPanel({
 	seat,
 	cards,
@@ -503,10 +530,24 @@ function HandPanel({
 		() => new Set(legalCardsForTurn(play, seat).map((card) => card.id)),
 		[play, seat],
 	)
+	if (!visible) {
+		return (
+			<ConcealedSeat
+				seat={seat}
+				count={(cards || []).length}
+				dealer={dealer}
+				vul={vul}
+				role={role}
+				isTurn={isTurn}
+				openingLeader={openingLeader === seat}
+				presentationMode={presentationMode}
+			/>
+		)
+	}
 
 	return (
 		<section
-			className={`relative flex w-fit max-w-full flex-col items-center justify-center rounded-2xl transition-[background-color,box-shadow,padding,transform] duration-150 ${
+			className={`player-v3-visible-hand ${isSideSeat ? 'player-v3-side-hand' : ''} relative flex w-fit max-w-full flex-col items-center justify-center rounded-2xl transition-[background-color,box-shadow,padding,transform] duration-150 ${
 				isTurn
 					? presentationMode
 						? 'z-30 scale-[1.015] bg-amber-200/22 p-2.5 ring-4 ring-amber-300 shadow-[0_0_46px_rgba(251,191,36,0.34)]'
@@ -517,7 +558,7 @@ function HandPanel({
 			} ${
 				active && !isTurn ? 'ring-4 ring-amber-300/80' : ''
 			} ${isPartnership ? 'shadow-[0_0_35px_rgba(14,165,233,0.16)]' : ''}`}>
-			<div className="mb-0.5 text-center">
+			<div className="mb-0.5 flex flex-wrap items-center justify-center gap-1.5 text-center">
 				<SeatLabel
 					seat={seat}
 					dealer={dealer}
@@ -527,57 +568,49 @@ function HandPanel({
 					presentationMode={presentationMode}
 				/>
 				{isTurn && (
-					<div
+					<span
 						role="status"
 						aria-live="polite"
-						className={`${presentationMode ? 'text-base' : 'text-sm'} mt-1 rounded-full bg-amber-300 px-4 py-1 font-black uppercase tracking-wide text-slate-950 shadow-lg`}>
-						{seatName(seat)} to play
-					</div>
+						className={`${presentationMode ? 'text-sm' : 'text-[11px]'} rounded-full bg-amber-300 px-3 py-1 font-black uppercase tracking-wide text-slate-950 shadow-lg`}>
+						To play
+					</span>
 				)}
 				{openingLeader === seat && (
-					<div
-						className={`${presentationMode ? 'text-base' : 'text-xs'} mt-1 font-black uppercase tracking-wide text-amber-200`}>
+					<span
+						className={`${presentationMode ? 'text-sm' : 'text-[11px]'} rounded-full bg-slate-950/80 px-3 py-1 font-black uppercase tracking-wide text-amber-200`}>
 						Opening lead
-					</div>
+					</span>
 				)}
 			</div>
 			<div className="flex items-center">
-				{visible ? (
-					<div className={`flex items-center justify-center ${isSideSeat ? 'flex-col gap-3' : ''}`}>
-						{cardRows.map((row, rowIndex) => (
-							<div key={rowIndex} className="flex justify-center">
-								{row.map((card, cardIndex) => {
-									const legal = !!onPlay && isTurn && legalCardIds.has(card.id)
-									return (
-										<CardButton
-											key={card.id}
-											card={card}
-											disabled={!legal}
-											onClick={() => onPlay(seat, card.id)}
-											overlap
-											playable={legal}
-											playableMotion={playableMotion}
-											spreadHand={spreadHand}
-											presentationMode={presentationMode}
-											raisePlayable={raiseLegalChoices}
-											stackIndex={cardIndex}
-										/>
-									)
-								})}
-							</div>
-						))}
-					</div>
-				) : (
-					<HiddenHand
-						count={(cards || []).length}
-						split={isSideSeat}
-						presentationMode={presentationMode}
-					/>
-				)}
+				<div className={`flex items-center justify-center ${isSideSeat ? 'flex-col gap-3' : ''}`}>
+					{cardRows.map((row, rowIndex) => (
+						<div key={rowIndex} className="flex justify-center">
+							{row.map((card, cardIndex) => {
+								const legal = !!onPlay && isTurn && legalCardIds.has(card.id)
+								return (
+									<CardButton
+										key={card.id}
+										card={card}
+										disabled={!legal}
+										onClick={() => onPlay(seat, card.id)}
+										overlap
+										playable={legal}
+										playableMotion={playableMotion}
+										spreadHand={spreadHand}
+										presentationMode={presentationMode}
+										raisePlayable={raiseLegalChoices}
+										stackIndex={cardIndex}
+									/>
+								)
+							})}
+						</div>
+					))}
+				</div>
 			</div>
 			<footer
-				className={`${presentationMode ? 'text-sm' : 'text-[11px]'} mt-1 rounded bg-slate-950 px-2 py-0.5 font-black text-white`}>
-				HCP {visible ? handHcp(originalCards || cards) : '?'}
+				className={`player-v3-hand-hcp ${presentationMode ? 'text-sm' : 'text-[11px]'} mt-1 rounded bg-slate-950 px-2 py-0.5 font-black text-white`}>
+				HCP {handHcp(originalCards || cards)}
 			</footer>
 		</section>
 	)
@@ -1141,7 +1174,7 @@ function AuctionWorkspace({ state, derived, dispatch, presentationMode = false, 
 		<main
 			className={`mx-auto overflow-y-auto ${
 				presentationMode
-					? 'h-[calc(100vh-72px)] max-w-[1880px] px-8 py-3'
+					? 'h-[100dvh] max-w-[1880px] px-8 py-3'
 					: 'h-[calc(100vh-7.4rem)] max-w-[1420px] px-5 py-3'
 			}`}>
 			<PlayerProgress state={state} presentationMode={presentationMode} />
@@ -1302,7 +1335,8 @@ function TrickCardSlot({ seat, position = seat, trick, winner, size = 'md' }) {
 	if (!item) {
 		return (
 			<div
-				className={`${dims.card} ${dims.radius} border-2 border-dashed border-white/28 bg-white/8 shadow-inner`}
+				aria-label={`${seatName(seat)} trick position empty`}
+				className={`player-v3-trick-card ${dims.card} ${dims.radius} border-2 border-dashed border-white/28 bg-white/8 shadow-inner`}
 			/>
 		)
 	}
@@ -1314,7 +1348,8 @@ function TrickCardSlot({ seat, position = seat, trick, winner, size = 'md' }) {
 	const borderClass = red ? 'border-rose-200' : 'border-slate-200'
 	return (
 		<div
-			className={`relative ${dims.card} ${dims.radius} ${rotateClass} ${borderClass} flex items-center justify-center overflow-hidden border-2 bg-white ${suitClass} ${
+			aria-label={`${seatName(item.seat)} played ${item.card.rank} of ${item.card.suit}${isWinner ? ', trick winner' : ''}`}
+			className={`player-v3-trick-card relative ${dims.card} ${dims.radius} ${rotateClass} ${borderClass} flex items-center justify-center overflow-hidden border-2 bg-white ${suitClass} ${
 				isWinner ? 'z-20 scale-105 ring-4 ring-amber-300' : ''
 			} ${isDimmed ? 'opacity-55' : ''}`}
 			style={{
@@ -1328,13 +1363,13 @@ function TrickCardSlot({ seat, position = seat, trick, winner, size = 'md' }) {
 						'repeating-linear-gradient(135deg, #000 0, #000 1px, transparent 1px, transparent 6px)',
 				}}
 			/>
-			<div className={`absolute left-1.5 top-1 ${dims.suit} font-black`}>
+			<div className={`player-v3-trick-suit absolute left-1.5 top-1 ${dims.suit} font-black`}>
 				{suitSymbol(item.card.suit)}
 			</div>
-			<div className={`absolute bottom-1 right-1.5 ${dims.suit} rotate-180 font-black`}>
+			<div className={`player-v3-trick-suit absolute bottom-1 right-1.5 ${dims.suit} rotate-180 font-black`}>
 				{suitSymbol(item.card.suit)}
 			</div>
-			<div className={`${dims.rank} font-black leading-none drop-shadow-sm`}>
+			<div className={`player-v3-trick-rank ${dims.rank} font-black leading-none drop-shadow-sm`}>
 				{item.card.rank}
 				<span className="ml-0.5">{suitSymbol(item.card.suit)}</span>
 			</div>
@@ -1390,7 +1425,7 @@ function CrossTrick({
 			</div>
 			{showStatus && (
 				<div
-					className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-amber-300 bg-slate-950 text-center font-black uppercase leading-tight tracking-wide text-amber-100 ${
+					className={`player-v3-trick-status absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-amber-300 bg-slate-950 text-center font-black uppercase leading-tight tracking-wide text-amber-100 ${
 						large ? 'h-24 w-24 px-2 text-sm' : 'h-16 w-16 text-[9px]'
 					}`}>
 					{winner ? `Won by ${winner}` : turnSeat ? `Turn ${turnSeat}` : `${played}/4`}
@@ -1406,10 +1441,16 @@ function TrickPanel({ play, presentationMode = false, rotated = false }) {
 	return (
 		<section
 			className={`player-v3-trick-panel flex flex-col rounded-2xl border-2 border-amber-400 bg-emerald-950 p-2 text-white shadow-[0_18px_40px_rgba(0,0,0,0.34)] ${
-				presentationMode ? 'w-[390px]' : 'w-[328px]'
+				presentationMode
+					? 'w-[clamp(460px,40vw,580px)]'
+					: 'w-[clamp(420px,36vw,560px)]'
 			}`}>
 			<div
-				className={`player-v3-trick-cross mx-auto ${presentationMode ? 'h-[368px] w-[368px]' : 'h-[306px] w-[306px]'}`}>
+				className={`player-v3-trick-cross mx-auto w-full ${
+					presentationMode
+					? 'h-[clamp(300px,38vh,400px)]'
+						: 'h-[clamp(260px,35vh,380px)]'
+				}`}>
 				<CrossTrick
 					trick={trick}
 					winner={winner}
@@ -1424,11 +1465,11 @@ function TrickPanel({ play, presentationMode = false, rotated = false }) {
 	)
 }
 
-function LastTrickPanel({ trick, presentationMode = false, rotated = false }) {
+function LastTrickPanel({ trick, presentationMode = false, rotated = false, compact = false }) {
 	return (
 		<aside
-			className={`rounded-2xl border-2 border-amber-400 bg-emerald-950 p-2 text-white shadow-2xl ${
-				presentationMode ? 'w-[254px]' : 'w-[238px]'
+			className={`player-v3-last-trick player-v3-table-info ${compact ? 'player-v3-table-info-compact' : ''} rounded-2xl border-2 border-amber-400 bg-emerald-950 p-2 text-white shadow-2xl ${
+				presentationMode ? 'w-[clamp(210px,14vw,254px)]' : 'w-[238px]'
 			}`}>
 			<div className="mb-1 flex items-center justify-between">
 				<h2
@@ -1440,7 +1481,7 @@ function LastTrickPanel({ trick, presentationMode = false, rotated = false }) {
 					{trick?.winner ? `To ${trick.winner}` : '-'}
 				</div>
 			</div>
-			<div className="h-[198px] w-full">
+			<div className="player-v3-last-trick-detail h-[198px] w-full">
 				{trick ? (
 					<CrossTrick
 						trick={trick.cards}
@@ -1456,11 +1497,35 @@ function LastTrickPanel({ trick, presentationMode = false, rotated = false }) {
 					</div>
 				)}
 			</div>
+			<div className="player-v3-last-trick-summary hidden min-h-9 items-center gap-1.5 overflow-hidden rounded-xl border border-white/20 bg-white/8 px-2 py-1.5 text-sm font-black">
+				{trick ? (
+					trick.cards.map((item) => (
+						<span
+							key={`${item.seat}-${item.card.id}`}
+							className={`rounded-md bg-white px-2 py-1 ${
+								item.card.suit === 'Hearts' || item.card.suit === 'Diamonds'
+									? 'text-rose-700'
+									: 'text-slate-950'
+							}`}>
+							{item.seat} {item.card.rank}
+							{suitSymbol(item.card.suit)}
+						</span>
+					))
+				) : (
+					<span className="text-emerald-100">No previous trick</span>
+				)}
+			</div>
 		</aside>
 	)
 }
 
-function PlayStatusPanel({ state, derived, settledTrickCount, presentationMode = false }) {
+function PlayStatusPanel({
+	state,
+	derived,
+	settledTrickCount,
+	presentationMode = false,
+	compact = false,
+}) {
 	const shownTricks = (state.completedTricks || []).slice(0, settledTrickCount)
 	const counts = countTricksBySide(shownTricks, derived.declarer)
 	const level = Number(String(derived.contract || '').match(/^([1-7])/)?.[1] || 0)
@@ -1478,56 +1543,77 @@ function PlayStatusPanel({ state, derived, settledTrickCount, presentationMode =
 			: null
 	return (
 		<aside
-			className={`rounded-2xl border-2 border-amber-400 bg-emerald-950 p-3 text-white shadow-2xl ${
-				presentationMode ? 'w-[254px]' : 'w-[238px]'
+			className={`player-v3-play-status player-v3-table-info ${compact ? 'player-v3-table-info-compact' : ''} rounded-2xl border-2 border-amber-400 bg-emerald-950 p-3 text-white shadow-2xl ${
+				presentationMode ? 'w-[clamp(210px,14vw,254px)]' : 'w-[238px]'
 			}`}>
-			<div className="flex items-start justify-between gap-2">
+			<div className="player-v3-play-status-compact hidden items-center justify-between gap-3">
 				<div>
-					<div
-						className={`${presentationMode ? 'text-base' : 'text-xs'} font-black uppercase tracking-wide text-amber-100`}>
+					<div className="text-[10px] font-black uppercase tracking-wide text-amber-100">
 						Contract
 					</div>
-					<div className="text-[44px] font-black leading-none text-white">
-						{derived.contract || '-'}
-					</div>
-					<div className={`${presentationMode ? 'text-base' : 'text-xs'} mt-1 font-bold text-emerald-100`}>
-						Declarer {derived.declarer || '-'}
+					<div className="text-2xl font-black leading-none">
+						{derived.contract || '-'} <span className="text-sm text-emerald-100">by {derived.declarer || '-'}</span>
 					</div>
 				</div>
-				<div className="rounded-xl bg-amber-300 px-2 py-1 text-center text-slate-950">
-					<div className="text-[10px] font-black uppercase tracking-wide">Done</div>
-					<div className="text-2xl font-black leading-none">{settledTrickCount}</div>
+				<div className="text-right">
+					<div className="text-[10px] font-black uppercase tracking-wide text-emerald-100">
+						Decl–Def · Done
+					</div>
+					<div className="text-xl font-black leading-none">
+						{counts.declarer}–{counts.defence} · {settledTrickCount}/13
+					</div>
 				</div>
 			</div>
-
-			<div className="mt-3 grid grid-cols-2 gap-2 text-center">
-				<div className="rounded-xl bg-white/10 p-2 shadow-inner">
-					<div className="text-[10px] font-black uppercase tracking-wide text-emerald-100">
-						Decl
+			<div className="player-v3-play-status-detail">
+				<div className="flex items-start justify-between gap-2">
+					<div>
+						<div
+							className={`${presentationMode ? 'text-base' : 'text-xs'} font-black uppercase tracking-wide text-amber-100`}>
+							Contract
+						</div>
+						<div className="text-[44px] font-black leading-none text-white">
+							{derived.contract || '-'}
+						</div>
+						<div
+							className={`${presentationMode ? 'text-base' : 'text-xs'} mt-1 font-bold text-emerald-100`}>
+							Declarer {derived.declarer || '-'}
+						</div>
 					</div>
-					<div className="text-3xl font-black leading-none">{counts.declarer}</div>
-				</div>
-				<div className="rounded-xl bg-white/10 p-2 shadow-inner">
-					<div className="text-[10px] font-black uppercase tracking-wide text-emerald-100">
-						Def
+					<div className="rounded-xl bg-amber-300 px-2 py-1 text-center text-slate-950">
+						<div className="text-[10px] font-black uppercase tracking-wide">Done</div>
+						<div className="text-2xl font-black leading-none">{settledTrickCount}</div>
 					</div>
-					<div className="text-3xl font-black leading-none">{counts.defence}</div>
 				</div>
-			</div>
 
-			<div className="mt-2 rounded-xl bg-slate-950 px-3 py-2 shadow-inner">
-				<div
-					className={`${presentationMode ? 'text-sm' : 'text-[10px]'} font-black uppercase tracking-wide text-emerald-100`}>
-					{isComplete ? 'Final Result' : `Target ${target || '-'}`}
+				<div className="mt-3 grid grid-cols-2 gap-2 text-center">
+					<div className="rounded-xl bg-white/10 p-2 shadow-inner">
+						<div className="text-[10px] font-black uppercase tracking-wide text-emerald-100">
+							Decl
+						</div>
+						<div className="text-3xl font-black leading-none">{counts.declarer}</div>
+					</div>
+					<div className="rounded-xl bg-white/10 p-2 shadow-inner">
+						<div className="text-[10px] font-black uppercase tracking-wide text-emerald-100">
+							Def
+						</div>
+						<div className="text-3xl font-black leading-none">{counts.defence}</div>
+					</div>
 				</div>
-				<div className={`${presentationMode ? 'text-3xl' : 'text-2xl'} font-black leading-tight`}>
-					{isComplete && finalScore && !finalScore.partial
-						? finalScore.resultText
-						: tricksNeeded > 0
-							? `Needs ${tricksNeeded}`
-							: target
-								? 'Contract made'
-								: '-'}
+
+				<div className="mt-2 rounded-xl bg-slate-950 px-3 py-2 shadow-inner">
+					<div
+						className={`${presentationMode ? 'text-sm' : 'text-[10px]'} font-black uppercase tracking-wide text-emerald-100`}>
+						{isComplete ? 'Final Result' : `Target ${target || '-'}`}
+					</div>
+					<div className={`${presentationMode ? 'text-3xl' : 'text-2xl'} font-black leading-tight`}>
+						{isComplete && finalScore && !finalScore.partial
+							? finalScore.resultText
+							: tricksNeeded > 0
+								? `Needs ${tricksNeeded}`
+								: target
+									? 'Contract made'
+									: '-'}
+					</div>
 				</div>
 			</div>
 		</aside>
@@ -1780,147 +1866,54 @@ function Controls({
 	)
 }
 
-function PresentationBar({
-	state,
-	derived,
-	isFullscreen,
-	onExitPresentation,
-	onToggleFullscreen,
-	onPreviousBoard,
-	onNextBoard,
-	onAdvanceHidden,
-	canAdvanceHidden,
-	onReplayHand,
-	onToggleTeacherTools,
-	dispatch,
-}) {
-	const latestTrick = state.completedTricks[state.completedTricks.length - 1]
-	const status =
-		state.auctionIntroPending
-			? 'First task: start the bidding exercise'
-			: state.manualContractMode
-				? 'Teacher route: set the contract and declarer, then confirm'
-			: state.phase === 'play'
-			? state.play?.trickComplete && latestTrick
-				? `Trick ${state.completedTricks.length} won by ${latestTrick.winner} — held for discussion`
-				: `${seatName(state.play?.turnSeat)} (${state.play?.turnSeat || '-'}) to play${
-						state.autoPlayPaused ? ' · computer players paused' : ' · computer players on'
-					}`
-			: state.phase === 'confirmed'
-				? `${derived.contract} by ${derived.declarer} confirmed — ready to start play`
-				: derived.auctionView === 'recorded'
-					? `Recorded PBN ${derived.displayedAuctionCursor} of ${derived.displayedAuctionCalls.length} calls — your auction is saved`
-					: derived.nextAuctionSeat === 'S'
-						? `South to bid · ${derived.auctionCalls.length} calls so far`
-						: derived.nextAuctionSeat
-							? `${seatName(derived.nextAuctionSeat)} is bidding…`
-							: `Your auction is complete · ${derived.auctionCalls.length} calls`
-
+function PresentationRestore({ onRestore, notice, buttonRef, restoring = false }) {
 	return (
-		<div className="mx-auto flex h-[72px] w-full max-w-[1880px] items-center gap-3 border-b-2 border-amber-300 bg-slate-950 px-4 text-white shadow-2xl">
-			<button
-				onClick={onExitPresentation}
-				className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-black hover:bg-white/20">
-				Exit presentation
-			</button>
-			<div className="flex items-center gap-1 rounded-xl bg-white/10 p-1">
-				<button
-					onClick={onPreviousBoard}
-					disabled={state.index <= 0}
-					aria-label="Previous board"
-					className="h-10 w-10 rounded-lg bg-white text-xl font-black text-slate-950 disabled:opacity-25">
-					‹
-				</button>
-				<div className="min-w-[112px] px-2 text-center">
-					<div className="text-[11px] font-black uppercase tracking-widest text-amber-200">Board</div>
-					<div className="text-xl font-black leading-none">
-						{state.board?.board || state.index + 1} / {state.deals.length}
-					</div>
+		<div className="fixed bottom-4 right-4 z-[70] flex max-w-md flex-col items-end gap-2">
+			{notice && (
+				<div
+					role="status"
+					aria-live="polite"
+					className="rounded-xl border border-amber-300/70 bg-slate-950/92 px-4 py-2 text-right text-sm font-bold text-amber-100 shadow-2xl backdrop-blur-sm">
+					{notice}
 				</div>
-				<button
-					onClick={onNextBoard}
-					disabled={state.index >= state.deals.length - 1}
-					aria-label="Next board"
-					className="h-10 w-10 rounded-lg bg-white text-xl font-black text-slate-950 disabled:opacity-25">
-					›
-				</button>
-			</div>
-			<div
-				role="status"
-				aria-live="polite"
-				className="min-w-0 flex-1 rounded-xl bg-emerald-900 px-4 py-2 text-center ring-1 ring-emerald-500">
-				<div className="truncate text-xl font-black">{status}</div>
-				<div className="text-sm font-bold text-emerald-100">
-					{derived.contract || 'No contract'} {derived.declarer ? `by ${derived.declarer}` : ''} · Dealer{' '}
-					{state.board?.dealer || '-'} · Vul {state.board?.vul || '-'}
-				</div>
-			</div>
-			{state.phase === 'play' && (
-				<>
-					<div className="flex items-center gap-1">
-						<button
-							onClick={() => dispatch({ type: 'UNDO_CARD' })}
-							disabled={!state.history.length}
-							aria-label="Undo one card"
-							title="Undo one card"
-							className="h-10 w-10 rounded-lg border border-white/30 bg-white/10 text-xl font-black disabled:opacity-25">
-							↶
-						</button>
-						<button
-							onClick={() => dispatch({ type: 'UNDO_TRICK' })}
-							disabled={!state.history.length}
-							aria-label="Undo current trick"
-							title="Undo current trick"
-							className="h-10 w-10 rounded-lg border border-white/30 bg-white/10 text-sm font-black disabled:opacity-25">
-							↶4
-						</button>
-					</div>
-					<button
-						onClick={onAdvanceHidden}
-						disabled={!canAdvanceHidden}
-						title="Play the computer-controlled seat’s next legal card"
-						className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-black text-slate-950 disabled:opacity-35">
-						Play computer card
-					</button>
-					<button
-					onClick={onReplayHand}
-						className="rounded-lg border border-sky-200/60 bg-sky-500/20 px-3 py-2 text-sm font-black text-sky-50">
-						Replay hand
-					</button>
-					<button
-						onClick={() =>
-							dispatch({ type: 'SET_AUTO_PLAY_PAUSED', paused: !state.autoPlayPaused })
-						}
-						className={`rounded-lg px-3 py-2 text-sm font-black ${
-							state.autoPlayPaused
-								? 'bg-white text-slate-950'
-								: 'bg-rose-500 text-white'
-						}`}>
-						{state.autoPlayPaused ? 'Start computer players' : 'Pause computer players'}
-					</button>
-				</>
 			)}
 			<button
+				ref={buttonRef}
 				type="button"
-				onClick={onToggleTeacherTools}
-				className="rounded-lg border border-amber-300/70 bg-amber-300/15 px-3 py-2 text-sm font-black text-amber-100">
-				Teacher tools
-			</button>
-			<button
-				onClick={onToggleFullscreen}
-				className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-black hover:bg-white/20">
-				{isFullscreen ? 'Window' : 'Fullscreen'}
+				onClick={onRestore}
+				disabled={restoring}
+				aria-label="Restore normal view; Escape"
+				title="Restore normal view (Esc)"
+				className="min-h-12 rounded-xl border-2 border-amber-300 bg-slate-950/88 px-4 py-2 text-sm font-black text-white shadow-[0_16px_38px_rgba(0,0,0,0.42)] backdrop-blur-sm transition-colors hover:bg-slate-900 focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:cursor-wait disabled:opacity-80">
+				{restoring ? 'Restoring…' : 'Restore normal view'}
+				<span className="ml-2 rounded-md bg-white/14 px-2 py-1 text-xs text-amber-100">Esc</span>
 			</button>
 		</div>
 	)
 }
 
-function EndResultModal({ result, onBack, onPick, onReplay }) {
+function EndResultModal({ result, onBack, onPick, onReplay, replayButtonRef }) {
 	if (!result) return null
 	const positive = result.score >= 0
 	const signedScore = result.score > 0 ? `+${result.score}` : String(result.score)
+	const keepFocusInDialog = (event) => {
+		if (event.key !== 'Tab') return
+		const controls = [...event.currentTarget.querySelectorAll('button:not([disabled])')]
+		if (!controls.length) return
+		const first = controls[0]
+		const last = controls[controls.length - 1]
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault()
+			last.focus()
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault()
+			first.focus()
+		}
+	}
 	return (
-		<div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/72 p-6">
+		<div
+			onKeyDown={keepFocusInDialog}
+			className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/72 p-6">
 			<div
 				role="dialog"
 				aria-modal="true"
@@ -1958,6 +1951,8 @@ function EndResultModal({ result, onBack, onPick, onReplay }) {
 				</div>
 				<div className="mt-7 flex flex-wrap justify-center gap-3">
 					<button
+						ref={replayButtonRef}
+						autoFocus
 						onClick={onReplay}
 						className="rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-amber-200">
 						Replay Hand
@@ -2017,6 +2012,20 @@ function TableSurface({
 			: null
 	const visualPlay =
 		state.play ? { ...state.play, visualWinner: latestWinner } : null
+	const leftSeatVisible = seatIsVisible(visualSeats.left)
+	const rightSeatVisible = seatIsVisible(visualSeats.right)
+	const opposingHandsVisible =
+		seatIsVisible(visualSeats.top) && seatIsVisible(visualSeats.bottom)
+	const centreWidth = presentationMode
+		? 'clamp(460px, 40vw, 580px)'
+		: 'clamp(420px, 36vw, 560px)'
+	const sideHandWidth = presentationMode ? '454px' : '414px'
+	const concealedWidth = presentationMode ? '174px' : '148px'
+	const stageColumns = leftSeatVisible
+		? `minmax(${sideHandWidth}, 1.15fr) ${centreWidth} minmax(${concealedWidth}, 0.7fr)`
+		: rightSeatVisible
+			? `minmax(${concealedWidth}, 0.7fr) ${centreWidth} minmax(${sideHandWidth}, 1.15fr)`
+			: `minmax(${concealedWidth}, 1fr) ${centreWidth} minmax(${concealedWidth}, 1fr)`
 	const common = (seat, position) => ({
 		seat,
 		position,
@@ -2046,26 +2055,25 @@ function TableSurface({
 		<main
 			className={`mx-auto ${
 				presentationMode
-					? 'h-[calc(100vh-72px)] max-w-[1880px] px-12 py-3'
-					: 'h-[calc(100vh-7.4rem)] max-w-[1420px] px-5 py-2'
+					? 'h-[100dvh] max-w-[1880px] px-8 py-2'
+					: 'h-[calc(100dvh-8.125rem)] max-w-[1420px] px-5 py-2'
 			}`}>
 			<div
-				className={`player-v3-stage relative h-full ${
-					presentationMode ? 'min-h-[650px]' : 'min-h-[610px]'
-				}`}>
-				<div className="absolute left-1/2 top-0 z-20 -translate-x-1/2">
+				style={{ gridTemplateColumns: stageColumns }}
+				className={`player-v3-stage ${opposingHandsVisible ? 'player-v3-opposing-hands' : ''} relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] items-center gap-x-3`}>
+				<div className="col-start-2 row-start-1 z-20 self-start justify-self-center">
 					<HandPanel {...common(visualSeats.top, 'N')} />
 				</div>
-				<div className="absolute left-0 top-1/2 z-20 -translate-y-1/2">
+				<div className="col-start-1 row-start-2 z-20 self-center justify-self-start">
 					<HandPanel {...common(visualSeats.left, 'W')} />
 				</div>
-				<div className="absolute right-0 top-1/2 z-20 -translate-y-1/2">
+				<div className="col-start-3 row-start-2 z-20 self-center justify-self-end">
 					<HandPanel {...common(visualSeats.right, 'E')} />
 				</div>
-				<div className="absolute bottom-0 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center gap-1">
+				<div className="col-start-2 row-start-3 z-40 flex flex-col items-center gap-1 self-end justify-self-center">
 					<HandPanel {...common(visualSeats.bottom, 'S')} />
 				</div>
-				<div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+				<div className="col-start-2 row-start-2 z-10 self-center justify-self-center">
 					<StagePanel
 						state={state}
 						derived={derived}
@@ -2081,6 +2089,7 @@ function TableSurface({
 							trick={lastTrick}
 							presentationMode={presentationMode}
 							rotated={rotated}
+							compact={leftSeatVisible}
 						/>
 					</div>
 				)}
@@ -2091,6 +2100,7 @@ function TableSurface({
 							derived={derived}
 							settledTrickCount={completedCount}
 							presentationMode={presentationMode}
+							compact={rightSeatVisible}
 						/>
 					</div>
 				)}
@@ -2104,8 +2114,9 @@ export default function PlayerV2() {
 	const [dismissedEndKey, setDismissedEndKey] = useState('')
 	const [visibleEndKey, setVisibleEndKey] = useState('')
 	const [returnPath, setReturnPath] = useState('')
-	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [presentationMode, setPresentationMode] = useState(false)
+	const [presentationNotice, setPresentationNotice] = useState('')
+	const [presentationRestoring, setPresentationRestoring] = useState(false)
 	const [raiseLegalChoices, setRaiseLegalChoices] = useState(true)
 	const [teacherToolsOpen, setTeacherToolsOpen] = useState(false)
 	const [feltTheme, setFeltTheme] = useState(() => {
@@ -2114,6 +2125,13 @@ export default function PlayerV2() {
 		return FELT_THEMES.some((theme) => theme.key === saved) ? saved : 'green'
 	})
 	const fileRef = useRef(null)
+	const presentButtonRef = useRef(null)
+	const restorePresentationButtonRef = useRef(null)
+	const endResultReplayButtonRef = useRef(null)
+	const playerMountedRef = useRef(true)
+	const presentationSessionRef = useRef(0)
+	const presentationOwnsFullscreenRef = useRef(false)
+	const presentationExitPendingRef = useRef(false)
 	const audioProgressRef = useRef({ boardIndex: -1, historyLength: 0, completedLength: 0 })
 	const derived = getPlayerV2Derived(state)
 	const controlledSeats = useMemo(
@@ -2169,18 +2187,58 @@ export default function PlayerV2() {
 		}
 	}
 
-	const toggleFullscreen = async () => {
-		try {
-			if (document.fullscreenElement) {
-				await document.exitFullscreen()
-				return
-			}
-			await document.documentElement.requestFullscreen()
-		} catch (error) {
-			console.error('Fullscreen request failed', error)
-			dispatch({ type: 'SET_STATUS', status: 'Fullscreen is not available in this browser window.' })
+	const exitPresentation = useCallback(async ({ restoreFocus = true } = {}) => {
+		if (presentationExitPendingRef.current) return
+		presentationExitPendingRef.current = true
+		presentationSessionRef.current += 1
+		setPresentationRestoring(true)
+		setPresentationNotice(document.fullscreenElement ? 'Restoring normal view…' : '')
+		setTeacherToolsOpen(false)
+		const fullscreenResult = await exitPlayerFullscreen(document)
+		if (!playerMountedRef.current) return
+		presentationExitPendingRef.current = false
+		setPresentationRestoring(false)
+		if (!fullscreenResult.ok && document.fullscreenElement) {
+			presentationOwnsFullscreenRef.current = true
+			setPresentationMode(true)
+			setPresentationNotice('Press Escape to leave browser fullscreen, then restore the normal view.')
+			window.setTimeout(() => restorePresentationButtonRef.current?.focus(), 0)
+			return
 		}
-	}
+		presentationOwnsFullscreenRef.current = false
+		setPresentationMode(false)
+		setPresentationNotice('')
+		if (restoreFocus) {
+			window.setTimeout(() => presentButtonRef.current?.focus(), 0)
+		}
+	}, [])
+
+	const enterPresentation = useCallback(async () => {
+		if (!state.board || presentationExitPendingRef.current) return
+		const session = presentationSessionRef.current + 1
+		presentationSessionRef.current = session
+		presentationOwnsFullscreenRef.current = false
+		setTeacherToolsOpen(false)
+		setPresentationRestoring(false)
+		setPresentationNotice('')
+		setPresentationMode(true)
+
+		const fullscreenResult = await requestPlayerFullscreen(document)
+		if (!playerMountedRef.current || presentationSessionRef.current !== session) {
+			if (fullscreenResult.ok && fullscreenResult.outcome === 'success') {
+				await exitPlayerFullscreen(document)
+			}
+			return
+		}
+
+		presentationOwnsFullscreenRef.current = fullscreenResult.ok
+		if (!fullscreenResult.ok) {
+			setPresentationNotice(
+				'Browser controls could not be hidden; the clean table view is still active.',
+			)
+		}
+		window.setTimeout(() => restorePresentationButtonRef.current?.focus(), 0)
+	}, [state.board])
 
 	const seatIsVisible = useCallback(
 		(seat) => (state.visibleSeats || []).includes(seat),
@@ -2255,9 +2313,9 @@ export default function PlayerV2() {
 		}
 		dispatch({ type: 'RESET' })
 		setTeacherToolsOpen(false)
-		setPresentationMode(false)
+		void exitPresentation({ restoreFocus: false })
 		setReturnPath('')
-	}, [state.board])
+	}, [state.board, exitPresentation])
 
 	useEffect(() => {
 		window.localStorage.setItem(PLAYER_FELT_KEY, feltTheme)
@@ -2326,10 +2384,30 @@ export default function PlayerV2() {
 	}, [])
 
 	useEffect(() => {
-		const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement)
-		onFullscreenChange()
+		const onFullscreenChange = () => {
+			if (document.fullscreenElement || !presentationOwnsFullscreenRef.current) return
+			presentationOwnsFullscreenRef.current = false
+			presentationSessionRef.current += 1
+			setPresentationMode(false)
+			setPresentationNotice('')
+			setPresentationRestoring(false)
+			setTeacherToolsOpen(false)
+			window.setTimeout(() => presentButtonRef.current?.focus(), 0)
+		}
 		document.addEventListener('fullscreenchange', onFullscreenChange)
 		return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+	}, [])
+
+	useEffect(() => {
+		playerMountedRef.current = true
+		return () => {
+			playerMountedRef.current = false
+			presentationSessionRef.current += 1
+			const ownsDocumentFullscreen =
+				presentationOwnsFullscreenRef.current || document.fullscreenElement === document.documentElement
+			presentationOwnsFullscreenRef.current = false
+			if (ownsDocumentFullscreen) void exitPlayerFullscreen(document)
+		}
 	}, [])
 
 	useEffect(() => {
@@ -2342,6 +2420,12 @@ export default function PlayerV2() {
 		const timer = window.setTimeout(() => setVisibleEndKey(endResultKey), 900)
 		return () => window.clearTimeout(timer)
 	}, [endResultKey])
+
+	useEffect(() => {
+		if (!showEndResult) return undefined
+		const timer = window.setTimeout(() => endResultReplayButtonRef.current?.focus(), 0)
+		return () => window.clearTimeout(timer)
+	}, [showEndResult])
 
 	useEffect(() => {
 		const progress = audioProgressRef.current
@@ -2426,6 +2510,18 @@ export default function PlayerV2() {
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
+			if (showEndResult) {
+				if (event.key === 'Escape') {
+					event.preventDefault()
+					setDismissedEndKey(endResultKey)
+				}
+				return
+			}
+			if (event.key === 'Escape' && presentationMode) {
+				event.preventDefault()
+				void exitPresentation()
+				return
+			}
 			const interactiveTarget = event.target?.closest?.(
 				'button, a, input, select, textarea, [contenteditable="true"]',
 			)
@@ -2503,7 +2599,8 @@ export default function PlayerV2() {
 			}
 			if (event.key.toLowerCase() === 'p') {
 				event.preventDefault()
-				setPresentationMode((current) => !current)
+				if (presentationMode) void exitPresentation()
+				else void enterPresentation()
 			}
 			if (event.key === 'PageUp' || event.key === '[') {
 				event.preventDefault()
@@ -2531,12 +2628,17 @@ export default function PlayerV2() {
 		advanceHiddenHand,
 		goToBoard,
 		replayCurrentHand,
+		presentationMode,
+		enterPresentation,
+		exitPresentation,
+		showEndResult,
+		endResultKey,
 	])
 
 	return (
 		<div
 			style={{ background: selectedFelt.background }}
-			className={`h-screen overflow-hidden text-slate-900 ${
+			className={`h-[100dvh] overflow-hidden text-slate-900 ${
 				presentationMode ? 'player-v3-present' : ''
 			}`}>
 			<EndResultModal
@@ -2544,6 +2646,7 @@ export default function PlayerV2() {
 				onBack={() => setDismissedEndKey(endResultKey)}
 				onPick={() => fileRef.current?.click()}
 				onReplay={() => replayCurrentHand({ confirm: false })}
+				replayButtonRef={endResultReplayButtonRef}
 			/>
 			<NoAuctionIntro
 				state={state}
@@ -2551,7 +2654,7 @@ export default function PlayerV2() {
 				onOpenManualContract={() => dispatch({ type: 'OPEN_MANUAL_CONTRACT' })}
 			/>
 			<TeacherToolsDrawer
-				open={teacherToolsOpen}
+				open={teacherToolsOpen && !presentationMode}
 				onClose={() => setTeacherToolsOpen(false)}
 				state={state}
 				dispatch={dispatch}
@@ -2586,15 +2689,12 @@ export default function PlayerV2() {
 								Home
 							</Link>
 							<button
-								onClick={() => setPresentationMode(true)}
+								ref={presentButtonRef}
+								onClick={enterPresentation}
 								disabled={!state.board}
+								title="Hide controls and present the table fullscreen"
 								className="rounded-md bg-amber-300 px-3 py-1.5 text-sm font-black text-slate-950 disabled:opacity-40">
-								Presentation mode
-							</button>
-							<button
-								onClick={toggleFullscreen}
-								className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold">
-								{isFullscreen ? 'Window' : 'Fullscreen'}
+								Present table
 							</button>
 							<button
 								onClick={resetPlayer}
@@ -2606,19 +2706,11 @@ export default function PlayerV2() {
 				</header>
 			)}
 			{presentationMode && state.board && (
-				<PresentationBar
-					state={state}
-					derived={derived}
-					isFullscreen={isFullscreen}
-					onExitPresentation={() => setPresentationMode(false)}
-					onToggleFullscreen={toggleFullscreen}
-					onPreviousBoard={() => goToBoard(state.index - 1)}
-					onNextBoard={() => goToBoard(state.index + 1)}
-					onAdvanceHidden={advanceHiddenHand}
-					canAdvanceHidden={canAdvanceHidden}
-					onReplayHand={() => replayCurrentHand()}
-					onToggleTeacherTools={() => setTeacherToolsOpen((current) => !current)}
-					dispatch={dispatch}
+				<PresentationRestore
+					onRestore={() => void exitPresentation()}
+					notice={presentationNotice}
+					buttonRef={restorePresentationButtonRef}
+					restoring={presentationRestoring}
 				/>
 			)}
 

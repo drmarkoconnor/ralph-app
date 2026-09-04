@@ -125,7 +125,7 @@ sequences without replacing or rewinding the learner's work.
    lesson is intended to begin with card play, choose **Set a contract instead**.
 4. The bidding workspace shows South's compact hand, the auction and large
    bidding controls. North, East and West then call automatically using the
-   guided ACOL rules until it is South's turn. The full four-hand table is kept
+   guided ACOL rules until it is South's turn. The four-seat play table is kept
    off screen so it cannot obscure the auction.
 5. Choose a legal call for South. Use **Restart auction** if the class wants to
    explore the hand from the beginning again.
@@ -134,9 +134,15 @@ sequences without replacing or rewinding the learner's work.
    learner's auction exactly where it was left.
 7. When bidding ends, check the displayed **contract, declarer, opening leader
    and learner role**, then choose **Confirm contract**.
-8. Choose **Start play** to move to the full four-hand table, central trick area
+8. Choose **Start play** to move to the four-seat table, central trick area
    and Last Trick reference panel. Computer-controlled seats play automatically;
    the learner controls the appropriate North/South cards.
+
+During card play, a concealed hand is represented by a compact seat marker and
+the number of cards remaining. It never displays decorative card backs or an
+HCP total. Full cards are reserved for the learner's hand, any hand deliberately
+revealed by the teacher, and exposed dummy. Played cards remain in the central
+current-trick area so the action stays easy to follow across a room.
 
 If the practice auction is passed out, there is no card-play phase. Choose
 **Restart auction** to discuss another route or **Next board** to continue the
@@ -153,6 +159,17 @@ Keyboard controls:
 - Space: show all recorded-auction calls before play; during play, toggle all
   hands.
 - R: replay the recorded comparison or restart card play.
+- P: choose **Present table**, or restore the normal Player view.
+
+Presenting the play table:
+
+- Choose **Present table** once; it enters the clean table view and asks the
+  browser for fullscreen.
+- The app header, navigation and Player toolbars are hidden so the table and
+  central trick occupy the projected display.
+- **Restore normal view · Esc** remains as the only presentation control.
+- If fullscreen is unavailable or denied, the clean table view still works
+  inside the browser page and play continues normally.
 
 Linking auction to play:
 

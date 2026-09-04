@@ -10,6 +10,16 @@ body {
 	margin: 0;
 }
 
+.player-v3-table-info-compact .player-v3-last-trick-detail,
+.player-v3-table-info-compact .player-v3-play-status-detail {
+	display: none !important;
+}
+
+.player-v3-table-info-compact .player-v3-last-trick-summary,
+.player-v3-table-info-compact .player-v3-play-status-compact {
+	display: flex !important;
+}
+
 .player-v3-present .player-v3-auction h2 {
 	font-size: 1.15rem;
 }
@@ -33,8 +43,7 @@ body {
 /* Keep 720p projection crisp by changing integral component dimensions rather
    than fractionally scaling the whole table. */
 @media (max-height: 820px) {
-	.player-v3-present .player-v3-card,
-	.player-v3-present .player-v3-card-back {
+	.player-v3-present .player-v3-card {
 		height: 152px !important;
 		width: 108px !important;
 	}
@@ -43,21 +52,95 @@ body {
 		font-size: 38px !important;
 	}
 
-	.player-v3-present .player-v3-card-back-inner {
+	.player-v3-side-hand .player-v3-card {
 		height: 132px !important;
+		width: 94px !important;
 	}
 
-	.player-v3-present .player-v3-trick-panel {
-		width: 352px !important;
+	.player-v3-present .player-v3-side-hand .player-v3-card {
+		height: 140px !important;
+		width: 100px !important;
+		font-size: 34px !important;
 	}
 
-	.player-v3-present .player-v3-trick-cross {
-		height: 330px !important;
-		width: 330px !important;
+	.player-v3-opposing-hands .player-v3-card {
+		height: 120px !important;
+		width: 92px !important;
+		font-size: 30px !important;
 	}
 
-	.player-v3-present .player-v3-stage {
-		min-height: 620px !important;
+	.player-v3-present .player-v3-opposing-hands .player-v3-card {
+		height: 132px !important;
+		width: 96px !important;
+		font-size: 34px !important;
+	}
+
+	.player-v3-opposing-hands .player-v3-trick-cross {
+		height: 224px !important;
+	}
+
+	.player-v3-present .player-v3-opposing-hands .player-v3-trick-cross {
+		height: 264px !important;
+	}
+
+	.player-v3-trick-panel .player-v3-trick-card {
+		height: 92px !important;
+		width: 64px !important;
+	}
+
+	.player-v3-trick-panel .player-v3-trick-rank {
+		font-size: 1.875rem !important;
+	}
+
+	.player-v3-trick-panel .player-v3-trick-suit {
+		font-size: 0.7rem !important;
+	}
+
+	.player-v3-trick-panel .player-v3-trick-status {
+		height: 3.5rem !important;
+		width: 3.5rem !important;
+		font-size: 0.55rem !important;
+	}
+
+	.player-v3-present .player-v3-trick-panel .player-v3-trick-card {
+		height: 108px !important;
+		width: 74px !important;
+	}
+
+	.player-v3-present .player-v3-trick-panel .player-v3-trick-rank {
+		font-size: 2.25rem !important;
+	}
+
+	.player-v3-present .player-v3-trick-panel .player-v3-trick-suit {
+		font-size: 0.75rem !important;
+	}
+
+	.player-v3-present .player-v3-trick-panel .player-v3-trick-status {
+		height: 5rem !important;
+		width: 5rem !important;
+		font-size: 0.75rem !important;
+	}
+
+	.player-v3-last-trick-detail,
+	.player-v3-play-status-detail {
+		display: none !important;
+	}
+
+	.player-v3-last-trick-summary,
+	.player-v3-play-status-compact {
+		display: flex !important;
+	}
+
+	.player-v3-present .player-v3-table-info {
+		width: 238px !important;
+	}
+
+	.player-v3-present .player-v3-visible-hand {
+		padding: 0.25rem !important;
+	}
+
+	.player-v3-hand-hcp {
+		display: none !important;
 	}
 }
 

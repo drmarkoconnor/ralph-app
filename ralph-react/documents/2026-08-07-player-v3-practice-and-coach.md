@@ -38,7 +38,7 @@ This note records the learner-facing Player V3 decisions first implemented on
 - **Restart auction** remains available before play if the class wants to review
   a different route.
 - **Confirm contract** records the teacher's check. **Start play** then performs
-  a deliberate transition to the full four-hand card table.
+  a deliberate transition to the four-seat card table.
 - A passed-out auction has no card-play phase. The Player explains this and
   offers **Restart auction** and **Next board**; the separate teacher-set
   contract route remains available when required.
@@ -58,6 +58,32 @@ The learner normally occupies South at the bottom of the screen.
 | East/West declaring | South | Normal compass layout | South; all other seats play automatically |
 
 Dummy is exposed after the opening lead according to normal play. The full 180-degree rotation for a North declarer keeps the acting declarer nearest the learner and avoids asking the learner to play from the far side of a hall display.
+
+## Play-table information policy
+
+- A concealed seat renders as a compact marker containing its seat and current
+  card count. It does not render a fan of card backs and does not expose HCP.
+- The only full card displays are the learner-controlled hand, a hand the
+  teacher has deliberately revealed, and dummy after it is legally exposed by
+  the opening lead.
+- Played cards remain in the central current-trick area. Reducing concealed
+  hands must not move the trick away from the visual centre of the table.
+- These rules apply in both normal and presentation views. They reduce clutter
+  while preserving the public information needed to teach the hand.
+
+## Present table
+
+- Presentation is one action labelled **Present table**, rather than separate
+  presentation and fullscreen controls.
+- The action immediately enters a clean table layout and attempts browser
+  fullscreen. App chrome, navigation, utility bars, and Player toolbars are
+  hidden so the projected screen is reserved for play.
+- The clean layout retains one unobtrusive **Restore normal view · Esc** control.
+- A denied or unavailable fullscreen request is not an error state. The Player
+  remains in the same clean in-page table mode and card play continues without
+  interruption.
+- Restoring normal view returns the ordinary Player chrome and controls without
+  changing the board, trick, visibility choices, or play history.
 
 ## AI Coach status
 
