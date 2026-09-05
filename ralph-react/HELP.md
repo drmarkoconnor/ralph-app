@@ -22,6 +22,8 @@ Ralph lets you:
 - Teach and replay deals interactively in the Player screen: bid as South,
   check the resulting contract, compare with a recorded auction when one is
   available, then play the hand with large classroom card visuals
+- Open free, attributed competition replays and compare your North–South score
+  with the published expert tables
 
 Its goal is to reduce prep time and give consistent, well‑explained examples for
 club teaching.
@@ -43,7 +45,7 @@ auction advice applies to PDF if enabled.
 
 ---
 
-## 3. Two Main Screens
+## 3. Three Main Screens
 
 1. Deal Builder (Drag & Drop)
    - Assemble, annotate, and save boards.
@@ -52,6 +54,10 @@ auction advice applies to PDF if enabled.
      sequence for teaching or self-study. The current Player is the V3
      classroom player; the previous implementation remains in the codebase as
      an unlinked fallback.
+3. Competition Replays
+   - Choose a reviewed event, start at its first board or pick a random one,
+     then use the normal Player and compare your finished score with the
+     published expert tables.
 
 You can prepare at home, then use only the Player view in class.
 
@@ -171,6 +177,18 @@ Presenting the play table:
 - If fullscreen is unavailable or denied, the clean table view still works
   inside the browser page and play continues normally.
 
+Competition replays and the optional AI Coach:
+
+- Choose **Play a famous final** on the Home screen. Opening a pack, bidding,
+  card play, replay and the published result comparison are all free and do not
+  require an account.
+- The AI Coach appears only at a genuine learner decision and never runs by
+  itself. Without authorised access, it shows a small contact/sign-in card on
+  the Player rather than a large pop-up over the table.
+- AI nudges require the normal signed-in owner or subscriber access. Dismissing
+  the contact card leaves a small locked Coach button and does not affect play.
+- Every competition pack retains an official-source link and attribution.
+
 Linking auction to play:
 
 - If the auction suggests a major fit, ask how that affects trump management.
@@ -283,8 +301,10 @@ extend in spoken teaching if needed.
 - Optional stronger / weaker style toggles for the advisor
 - Export to alternate teaching formats (HTML slide deck)
 - In‑app replay of recommended line of play with commentary
-- Reintroduce AI coaching only after a less intrusive classroom design is
-  agreed; the current Player deliberately exposes no AI Coach controls
+- Expand the compact, manual AI nudge only after classroom testing; a larger
+  post-game analysis workspace remains a separate future feature
+- Add more reviewed, attributed competition packs after their reuse position
+  has been checked
 
 If something here feels unclear, note it—your feedback helps refine both the
 tool and the wording of automation bullets.

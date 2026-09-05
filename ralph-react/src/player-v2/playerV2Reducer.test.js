@@ -304,6 +304,37 @@ test('board navigation restores each board session without leaking hand reveals'
 	assert.deepEqual(restoredBoardOne.visibleSeats, ['S'])
 })
 
+test('competition handoff starts on the requested board and preserves its attribution', () => {
+	const competition = {
+		kind: 'competition',
+		packId: 'open-usbc-final-2026-s1',
+		attribution: 'United States Bridge Federation',
+	}
+	let state = playerV2Reducer(initialPlayerV2State, {
+		type: 'LOAD_DEALS',
+		deals: [makeBoard(1, 'N'), makeBoard(2, 'E'), makeBoard(3, 'S')],
+		name: 'Open USBC Final',
+		startIndex: 2,
+		content: competition,
+	})
+
+	assert.equal(state.index, 2)
+	assert.equal(state.board.board, 3)
+	assert.deepEqual(state.content, competition)
+
+	state = playerV2Reducer(state, { type: 'GO_BOARD', index: 0 })
+	assert.equal(state.index, 0)
+	assert.deepEqual(state.content, competition)
+
+	state = playerV2Reducer(state, {
+		type: 'LOAD_DEALS',
+		deals: [makeBoard(4, 'W')],
+		name: 'ordinary.pbn',
+	})
+	assert.equal(state.index, 0)
+	assert.equal(state.content, null)
+})
+
 test('auto-play pause can be toggled', () => {
 	const paused = playerV2Reducer(initialPlayerV2State, {
 		type: 'SET_AUTO_PLAY_PAUSED',

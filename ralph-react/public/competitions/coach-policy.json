@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "policy": "authenticated-entitlement",
+  "coachAllowed": true,
+  "anonymousTrialAllowed": false,
+  "fingerprintAlgorithm": "ralph-player-coach-canonical-deal-v1-sha256",
+  "dealCount": 30,
+  "entries": [
+    {
+      "fingerprint": "02ad088b3208956f24c50221e61346d67d89929e05d00a515fdaf049115d57dd",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 15
+    },
+    {
+      "fingerprint": "0d72f818bb5559b5e276933469f7346724333b3086082706e1467fd6cdacd03b",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 27
+    },
+    {
+      "fingerprint": "14a704776818d7ef128afdfff6b3ccec826782339a1b443a9ac302fc98e43c61",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 29
+    },
+    {
+      "fingerprint": "29ba0b5f9c19d516c7ec80b354f10faf5b0d0fdb41a5b3ddc5d8bade5d31a3df",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 25
+    },
+    {
+      "fingerprint": "2ded971ce07525fdcbb08c65457cabbd3a9aa539f69bf801a3c136d52529dccc",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 12
+    },
+    {
+      "fingerprint": "35574d0a52ba11d1096e073300897153cc694a44f1257901019c5e23c7627351",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 18
+    },
+    {
+      "fingerprint": "4180b15c8c472415e703e1792aea8b638f929aca1eb0d06f12aa1bf96ec6c0f0",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 16
+    },
+    {
+      "fingerprint": "4953f9d9c847213fd349daadc27e98bd617344526dec58a96c003805faa2ecf6",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 9
+    },
+    {
+      "fingerprint": "51fc69f102c624ff964c7633493a0d244a13d271443e12b3f6dd8dc89a0e4c23",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 19
+    },
+    {
+      "fingerprint": "5cb2b5b34aa8e2498480c17af956d4ae45ce3b3391e886cd759693146415b763",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 11
+    },
+    {
+      "fingerprint": "6f96b22d714f080af9d0c32882078868c7894b3a556e0bddf471ceb8561ce95c",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 10
+    },
+    {
+      "fingerprint": "80a914aa40c0ccef0b371d1bd35ba50ef9954d7339364a28c4e27bdd5523709e",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 28
+    },
+    {
+      "fingerprint": "84001d43db2c38834aa154cfbf9e9b6ec2a26b89cb8176768d08ce723440b8ea",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 24
+    },
+    {
+      "fingerprint": "85995430b51edfc2187c7f480c2ff39bcebf72c8bdeea501b7c3b1308f197f17",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 22
+    },
+    {
+      "fingerprint": "8b1dd3cf5344daed02805b3c68ec9e49154fc51f6871f9c6bb1951982b8a5e4b",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 17
+    },
+    {
+      "fingerprint": "8c180b9c02ee3fa14cb7acf4e6b20f833a21ff1ba08912502aafca1952adcd15",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 7
+    },
+    {
+      "fingerprint": "8ff5b38da52927eea5ea8989fbf3899be0ad8e8cda4975c68bc95dba5da734fe",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 5
+    },
+    {
+      "fingerprint": "99d6f603374a3ca49792821168fdb53b07022cfde623349078c7e4014971c54a",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 26
+    },
+    {
+      "fingerprint": "9b058130c8202a50d9d909e730ed400b2aa4ece2a37e8a00d4628570f9a2cd6e",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 3
+    },
+    {
+      "fingerprint": "a05e239e172f46f5c2dac7873793ff73637d2ac2276e86f9127e7aca40374316",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 4
+    },
+    {
+      "fingerprint": "afa4e92660f249de9e74457f2ce584bf5ec57cf290b3a4b5b098431e5afa44f4",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 8
+    },
+    {
+      "fingerprint": "b319589a3312226da0cd94e45437bb574dbc613cce548d133511a0f47d3c270b",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 23
+    },
+    {
+      "fingerprint": "b6beef253ce8dfbeac3b17ffaf178f50c0f472a40418c9ca41c2e55ffcbebee1",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 14
+    },
+    {
+      "fingerprint": "bdd9c31554483d2aff481c007cf1ce2eee4a093ef1d64fed689dcfc234252096",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 13
+    },
+    {
+      "fingerprint": "bf52b63cba99a9849f2817cdc3d5fbec1c2e598b7052e2d4283370fe1eda97ba",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 2
+    },
+    {
+      "fingerprint": "d41157e3f30f07067847564421be4622087ecee29041ef756dd5eae35091109e",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 1
+    },
+    {
+      "fingerprint": "db898e838544fb45f374b2880a037eae6d78d47f10180c6482686b129ae9c144",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 20
+    },
+    {
+      "fingerprint": "dc06f8bca7f3ab3bebd5e9f8cd03229af50081d512360206379ab163af2cb166",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 21
+    },
+    {
+      "fingerprint": "e79698df41127b72644888e50511aec36da3455b7f8510f137556ad1443a5b46",
+      "packId": "usbf-2026-open-final-segment-1",
+      "boardNumber": 6
+    },
+    {
+      "fingerprint": "f5c818d6e21dbef4cf6a437381fd042ed537f493523bab1b01a85647b875316d",
+      "packId": "usbf-2019-open-quarterfinal-segment-4",
+      "boardNumber": 30
+    }
+  ]
+}

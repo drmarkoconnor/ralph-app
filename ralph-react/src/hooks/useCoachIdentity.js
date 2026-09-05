@@ -12,11 +12,11 @@ import {
 
 function friendlyAuthError(error) {
 	if (error?.name === 'MissingIdentityError') {
-		return 'Owner sign-in becomes available on the Netlify preview or production site.'
+		return 'Coach sign-in becomes available on the Netlify preview or production site.'
 	}
 	if (error?.status === 401) return 'That email or password was not accepted.'
-	if (error?.status === 403) return 'This account is not permitted to use the private Coach.'
-	return error?.message || 'Owner sign-in is temporarily unavailable.'
+	if (error?.status === 403) return 'This account is not permitted to use the Coach.'
+	return error?.message || 'Coach sign-in is temporarily unavailable.'
 }
 
 let authBootstrapPromise = null
@@ -31,14 +31,18 @@ function bootstrapCoachIdentity() {
 	return authBootstrapPromise
 }
 
-export function useCoachIdentity() {
+export function useCoachIdentity({ enabled = true } = {}) {
 	const [user, setUser] = useState(null)
-	const [loading, setLoading] = useState(true)
+	const [loading, setLoading] = useState(enabled)
 	const [identityAvailable, setIdentityAvailable] = useState(true)
 	const [flow, setFlow] = useState(null)
 	const [error, setError] = useState('')
 
 	useEffect(() => {
+		if (!enabled) {
+			setLoading(false)
+			return undefined
+		}
 		let active = true
 		const unsubscribe = onAuthChange((event, currentUser) => {
 			if (!active) return
@@ -74,7 +78,7 @@ export function useCoachIdentity() {
 			active = false
 			unsubscribe()
 		}
-	}, [])
+	}, [enabled])
 
 	const runAuthAction = useCallback(async (action) => {
 		setLoading(true)

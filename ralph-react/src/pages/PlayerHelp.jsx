@@ -189,12 +189,35 @@ export default function PlayerHelp() {
 			</section>
 
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">7. Current Limits</h2>
+				<h2 className="text-lg font-semibold">7. Competition Replays And Coach</h2>
+				<ul className="ml-5 list-disc space-y-1 text-gray-700">
+					<li>
+						Choose Play a famous final on the Home screen to practise a reviewed
+						competition set or start on a random board.
+					</li>
+					<li>
+						After a competition hand, your North–South score is compared with the
+						published Open and Closed room scores.
+					</li>
+					<li>
+						Competition replay and expert comparison are free and clearly attributed.
+						At an eligible South or learner-controlled North decision, the same compact,
+						manual AI nudge is available only through an authorised Coach account.
+					</li>
+					<li>
+						Without Coach access, the Player shows a small contact or sign-in offer rather
+						than interrupting the hand. AI never runs automatically.
+					</li>
+				</ul>
+			</section>
+
+			<section className="space-y-2">
+				<h2 className="text-lg font-semibold">8. Current Limits</h2>
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>The Save PBN button exports the current board, not the whole loaded file.</li>
 					<li>
-						AI Coach controls are temporarily removed while bidding, play and replay
-						are simplified. Coaching will return later in a less intrusive form.
+						The automatic practice bidder uses a guided ACOL foundation and does not yet
+						model every competitive auction or convention.
 					</li>
 					<li>
 						Player 1 still exists in the codebase as a fallback, but normal app

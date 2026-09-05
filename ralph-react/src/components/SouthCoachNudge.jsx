@@ -35,6 +35,7 @@ export default function SouthCoachNudge({
 	requestLabel = 'Ask for a nudge',
 	loadingLabel = '',
 	moreLabel = 'More',
+	usageLabel = '',
 	className = '',
 }) {
 	const labelId = useId()
@@ -50,6 +51,7 @@ export default function SouthCoachNudge({
 	const announcement = announcementFor(safeState, resolvedMessage, displayedSeatName)
 	const showMore = safeState !== 'idle' && safeState !== 'loading' && !!onMore
 	const showRetry = safeState === 'error' && !!onRequest
+	const showActions = showRetry || showMore || !!onClose
 	const effectiveMoreLabel =
 		safeState === 'access-required' && moreLabel === 'More' ? 'Open Coach' : moreLabel
 
@@ -84,6 +86,7 @@ export default function SouthCoachNudge({
 							? 'Coach unavailable'
 							: 'AI Coach'}
 				</strong>
+				{usageLabel && <span className="south-coach-nudge__usage">{usageLabel}</span>}
 			</div>
 
 			{safeState === 'idle' ? (
@@ -104,30 +107,32 @@ export default function SouthCoachNudge({
 				</div>
 			)}
 
-			<div
-				className="south-coach-nudge__actions"
-				aria-label={`AI Coach nudge actions for ${displayedSeatName}`}
-				aria-describedby={safeState === 'idle' ? undefined : messageId}>
-				{showRetry && (
-					<button type="button" onClick={onRequest} disabled={disabled}>
-						Try again
-					</button>
-				)}
-				{showMore && (
-					<button type="button" onClick={onMore} disabled={disabled}>
-						{effectiveMoreLabel}
-					</button>
-				)}
-				{onClose && (
-					<button
-						type="button"
-						className="south-coach-nudge__close"
-						onClick={onClose}
-						aria-label={`Dismiss AI Coach nudge for ${displayedSeatName}`}>
-						Close
-					</button>
-				)}
-			</div>
+			{showActions && (
+				<div
+					className="south-coach-nudge__actions"
+					aria-label={`AI Coach nudge actions for ${displayedSeatName}`}
+					aria-describedby={safeState === 'idle' ? undefined : messageId}>
+					{showRetry && (
+						<button type="button" onClick={onRequest} disabled={disabled}>
+							Try again
+						</button>
+					)}
+					{showMore && (
+						<button type="button" onClick={onMore} disabled={disabled}>
+							{effectiveMoreLabel}
+						</button>
+					)}
+					{onClose && (
+						<button
+							type="button"
+							className="south-coach-nudge__close"
+							onClick={onClose}
+							aria-label={`Dismiss AI Coach nudge for ${displayedSeatName}`}>
+							Close
+						</button>
+					)}
+				</div>
+			)}
 		</aside>
 	)
 }

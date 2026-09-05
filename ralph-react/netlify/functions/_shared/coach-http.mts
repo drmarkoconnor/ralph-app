@@ -2,9 +2,9 @@ import { coachRequestSchema, validationIssues, type CoachRequest } from './coach
 
 export const MAX_COACH_REQUEST_BYTES = 32_768
 
-type CoachSchema = {
+type CoachSchema<T> = {
 	safeParse(value: unknown):
-		| { success: true; data: CoachRequest }
+		| { success: true; data: T }
 		| { success: false; error: Parameters<typeof validationIssues>[0] }
 }
 
@@ -24,10 +24,10 @@ export function coachJson(data: unknown, status = 200, headers: Record<string, s
 	})
 }
 
-export async function readCoachRequest(
+export async function readCoachRequest<T = CoachRequest>(
 	request: Request,
-	schema: CoachSchema = coachRequestSchema,
-): Promise<{ ok: true; data: CoachRequest } | { ok: false; response: Response }> {
+	schema: CoachSchema<T> = coachRequestSchema as CoachSchema<T>,
+): Promise<{ ok: true; data: T } | { ok: false; response: Response }> {
 	if (!request.headers.get('content-type')?.toLowerCase().includes('application/json')) {
 		return { ok: false, response: coachJson({ error: 'Content-Type must be application/json.' }, 415) }
 	}

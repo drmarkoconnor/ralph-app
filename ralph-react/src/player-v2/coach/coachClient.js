@@ -1,6 +1,7 @@
 const ERROR_BY_STATUS = {
-	401: 'Please sign in with the invited owner account.',
-	403: 'This signed-in account does not have Coach-owner access.',
+	401: 'Please sign in with your invited Coach account.',
+	403: 'This signed-in account does not have active Coach access.',
+	409: 'This Coach request could not be completed safely. Please try again.',
 	429: 'The Coach request limit has been reached. Please wait a minute and try again.',
 }
 
@@ -40,12 +41,26 @@ async function coachFetch(path, options) {
 	return payload
 }
 
-export async function requestBridgeCoach({ context, intent, question = '', signal }) {
+export async function requestBridgeCoach({
+	context,
+	dealFingerprint,
+	intent,
+	question = '',
+	signal,
+}) {
 	if (!context) throw new Error('Load a board before asking the Coach.')
+	if (!/^[a-f0-9]{64}$/.test(String(dealFingerprint || ''))) {
+		throw new Error('The Coach could not identify this deal safely.')
+	}
 	return coachFetch('/api/coach', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ intent, ...(question ? { question } : {}), context }),
+		body: JSON.stringify({
+			intent,
+			...(question ? { question } : {}),
+			dealFingerprint,
+			context,
+		}),
 		signal,
 	})
 }

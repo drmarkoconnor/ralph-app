@@ -6,6 +6,7 @@ export const LEGACY_SOUTH_COACH_PROFILE_ID = 'south-acol-12-14-safe-v1'
 export const LEARNER_COACH_PROFILE_ID = 'learner-acol-12-14-safe-v2'
 
 export const COACH_INTENTS = ['nudge', 'explain', 'compare', 'remember'] as const
+export const COACH_DEAL_FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/
 
 const SEATS = ['N', 'E', 'S', 'W'] as const
 const LEARNER_SEATS = ['N', 'S'] as const
@@ -416,6 +417,12 @@ export const coachRequestSchema = z
 	})
 	.strict()
 
+export const coachApiRequestSchema = coachRequestSchema
+	.extend({
+		dealFingerprint: z.string().regex(COACH_DEAL_FINGERPRINT_PATTERN),
+	})
+	.strict()
+
 export const coachTrialRequestSchema = z
 	.object({
 		intent: z.literal('nudge'),
@@ -424,7 +431,16 @@ export const coachTrialRequestSchema = z
 	.strict()
 
 export type CoachRequest = z.infer<typeof coachRequestSchema>
+export type CoachApiRequest = z.infer<typeof coachApiRequestSchema>
 export type CoachTrialRequest = z.infer<typeof coachTrialRequestSchema>
+
+export function coachModelRequest(request: CoachApiRequest): CoachRequest {
+	return {
+		intent: request.intent,
+		...(request.question ? { question: request.question } : {}),
+		context: request.context,
+	}
+}
 
 export type CoachOutput = {
 	message: string
@@ -520,10 +536,17 @@ export function parseCoachModelOutput(outputText: string): CoachOutput {
 }
 
 export function isCoachOwner(
-	user: { email?: string; roles?: string[]; appMetadata?: Record<string, unknown> } | null,
+	user: {
+		email?: string
+		confirmedAt?: string
+		roles?: string[]
+		appMetadata?: Record<string, unknown>
+	} | null,
 	ownerEmailSetting = '',
 ) {
-	if (!user) return false
+	if (!user || typeof user.confirmedAt !== 'string' || Number.isNaN(Date.parse(user.confirmedAt))) {
+		return false
+	}
 	const appMetadataRoles = Array.isArray(user.appMetadata?.roles)
 		? user.appMetadata.roles.filter((role): role is string => typeof role === 'string')
 		: []
@@ -545,18 +568,22 @@ export function validationIssues(error: z.ZodError) {
 	}))
 }
 
-export function buildCoachInstructions() {
+export function buildCoachInstructions(intent: (typeof COACH_INTENTS)[number] = 'nudge') {
+	const lengthInstruction =
+		intent === 'nudge'
+			? 'For a nudge, write about 35-45 words: give one public observation, then one bridge principle or thinking question. Never name the final bid or card.'
+			: 'Keep the full response concise and no more than about 90 words.'
 	return `You are Ralph's bridge teaching coach for the selected learner seat. The selected seat is supplied in profile.learnerSeat and must exactly match perspective.seat.
 
 Teaching system: traditional ACOL with a 12-14 balanced 1NT opening. That range applies only when 1NT is the opening bid, not an overcall or rebid. Stayman is 2C asking for a four-card major. Do not silently substitute another bidding system.
 
 Use only the supplied learner-perspective JSON. It has already removed hidden hands and future auction calls. Never guess or claim the exact location, length, void, honour, or remaining holding of an unseen hand. Never use double-dummy knowledge. Treat a card location as known only when it appears in perspective.knownHands or public playedCards. Distinguish a fact, a certain deduction, a likelihood, and something unknown. Auction inferences remain likelihoods unless the ACOL agreement logically promises them.
 
-Do not give the game away. For nudge, ask a short thinking question and do not name the final bid or card. For explain, teach the relevant idea using the current public facts. For compare, compare only choices actually visible in the learner's hand/legalCards or legal ACOL calls; do not guarantee an outcome. For remember, give a brief memory/counting checklist. If the teacher asks for hidden information, explain that it is unknown and suggest a safe count instead.
+Do not give the game away. ${lengthInstruction} For explain, teach the relevant idea using the current public facts. For compare, compare only choices actually visible in the learner's hand/legalCards or legal ACOL calls; do not guarantee an outcome. For remember, give a brief memory/counting checklist. If the teacher asks for hidden information, explain that it is unknown and suggest a safe count instead.
 
 At bidding consider HCP, shape, partnership range, forcing status, fit and rebid plan. At opening lead use only the learner's hand, contract and visible auction; dummy is not yet visible. During play consider follow-suit legality, winners or losers, entries, the current trick, partner's publicly observed lead, trumps and cards already played. Statistical statements must be framed as prior odds, not certainty.
 
-Write for a learner: calm, specific, plain English, and no more than about 90 words. Return only the required structured fields. factsUsed must cite at most three supplied facts. suggestedChecks must contain at most three short questions or counting actions.`
+Write for a learner in calm, specific, plain English. Return only the required structured fields. factsUsed must cite at most three supplied facts. suggestedChecks must contain at most three short questions or counting actions.`
 }
 
 export function buildCoachInput(request: CoachRequest) {

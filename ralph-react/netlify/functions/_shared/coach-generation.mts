@@ -45,10 +45,10 @@ export function coachUsageSummary(usage: {
 	)
 	const regularInputTokens = Math.max(0, inputTokens - cachedTokens - cacheWriteTokens)
 
-	// GPT-5.6 Luna estimate: $1/M uncached input, $0.10/M cached input,
-	// $1.25/M cache writes, and $6/M output.
+	// GPT-5.6 Luna estimate: $0.20/M uncached input, $0.02/M cached input,
+	// $0.25/M cache writes, and $1.20/M output.
 	const estimatedUsd =
-		(regularInputTokens + cachedTokens * 0.1 + cacheWriteTokens * 1.25 + outputTokens * 6) /
+		(regularInputTokens * 0.2 + cachedTokens * 0.02 + cacheWriteTokens * 0.25 + outputTokens * 1.2) /
 		1_000_000
 	return { inputTokens, outputTokens, estimatedUsd: Number(estimatedUsd.toFixed(6)) }
 }
@@ -64,7 +64,7 @@ export async function generateCoach(
 	const response = await client.responses.create(
 		{
 			model: COACH_MODEL,
-			instructions: buildCoachInstructions(),
+			instructions: buildCoachInstructions(request.intent),
 			input: buildCoachInput(request),
 			max_output_tokens: maxOutputTokens,
 			reasoning: { effort: 'none', context: 'current_turn' },

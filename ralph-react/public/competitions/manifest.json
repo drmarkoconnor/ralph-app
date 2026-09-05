@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "ralph-usbf-competition-importer-v1",
+  "generatedFromReviewedSourcesOn": "2026-09-05",
+  "runtimeNetworkRequired": false,
+  "coachPolicy": "authenticated-entitlement",
+  "packCount": 2,
+  "dealCount": 30,
+  "packs": [
+    {
+      "id": "usbf-2026-open-final-segment-1",
+      "title": "2026 Open USBC Final — Segment 1",
+      "shortTitle": "Play the 2026 US Final",
+      "event": "Open United States Bridge Championship Final",
+      "date": "2026-04-20",
+      "organizer": "United States Bridge Federation",
+      "format": "teams",
+      "scoring": "IMP",
+      "boardCount": 15,
+      "boardNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "pbnPath": "/competitions/usbf-2026-open-final-segment-1.pbn",
+      "metadataPath": "/competitions/usbf-2026-open-final-segment-1.json",
+      "pbnSha256": "310f255e5e690f632f9a84db242515962c51ff6cb4686617dfac120efc3360a1",
+      "source": {
+        "url": "https://www.usbf.org/docs/2026usbc/lb_files/2026_open_f/2026_open_f_s1_Final1.pbn",
+        "resolvedUrl": "https://www.usbf.org/docs/2026usbc/lb_files/2026_open_f/2026_open_f_s1_Final1.pbn",
+        "eventUrl": "https://www.usbf.org/2026-usbcs/links-to-complete-bidding-and-play-records",
+        "sha256": "8418b7aa4433d56994f0c2b6a3f9cc4b2f6cabaaccfcafbf4d6b7f2a52c80a77",
+        "retrievedOn": "2026-09-05",
+        "attribution": "United States Bridge Federation (USBF); bidding and play captured by LoveBridge.",
+        "rightsNote": "Official publicly downloadable tournament record. No explicit redistribution licence was located; retain attribution and review permission before commercial publication.",
+        "recordCount": 30,
+        "rooms": [
+          "Open",
+          "Closed"
+        ],
+        "correctionNote": "The source PBN labels these Final Segment 1 records 2026.04.13; the official USBF daily schedule places Final Segment 1 on 2026.04.20."
+      },
+      "coachPolicy": {
+        "mode": "authenticated-entitlement",
+        "coachAllowed": true,
+        "anonymousTrialAllowed": false,
+        "reason": "Competition replay is free; AI Coach nudges require an authenticated owner or subscriber entitlement.",
+        "fingerprintAlgorithm": "SHA-256 of the Player Coach v1 canonical JSON containing dealer, vulnerability and sorted N/E/S/W hands."
+      }
+    },
+    {
+      "id": "usbf-2019-open-quarterfinal-segment-4",
+      "title": "2019 Open USBC Quarterfinal — Match 3, Segment 4",
+      "shortTitle": "Compare Two Expert Tables",
+      "event": "Open United States Bridge Championship Quarterfinal",
+      "date": "2019-05-15",
+      "organizer": "United States Bridge Federation",
+      "format": "teams",
+      "scoring": "IMP",
+      "boardCount": 15,
+      "boardNumbers": [
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
+      ],
+      "pbnPath": "/competitions/usbf-2019-open-quarterfinal-segment-4.pbn",
+      "metadataPath": "/competitions/usbf-2019-open-quarterfinal-segment-4.json",
+      "pbnSha256": "19f76f1eb8d609201f26ed7b2bb823b9d755e3d6904913d4b87b0cb1d0e4558d",
+      "source": {
+        "url": "https://usbf.org/docs/vugraphs/USBC2019/pbns/USBC2019_QF_3_s4.pbn",
+        "resolvedUrl": "https://usbf.org/docs/vugraphs/USBC2019/pbns/USBC2019_QF_3_s4.pbn",
+        "eventUrl": "https://usbf.org/docs/vugraphs/USBC2019/USBC2019_QF_3_s4_scores.html",
+        "sha256": "9f45ba98ee581d1edbee97befe7161d8a8a1855dcb23de68951e5ea6cf76c707",
+        "retrievedOn": "2026-09-05",
+        "attribution": "United States Bridge Federation (USBF); tournament record published through the USBF vugraph archive.",
+        "rightsNote": "Official publicly downloadable tournament record. No explicit redistribution licence was located; retain attribution and review permission before commercial publication.",
+        "recordCount": 30,
+        "rooms": [
+          "Open",
+          "Closed"
+        ]
+      },
+      "coachPolicy": {
+        "mode": "authenticated-entitlement",
+        "coachAllowed": true,
+        "anonymousTrialAllowed": false,
+        "reason": "Competition replay is free; AI Coach nudges require an authenticated owner or subscriber entitlement.",
+        "fingerprintAlgorithm": "SHA-256 of the Player Coach v1 canonical JSON containing dealer, vulnerability and sorted N/E/S/W hands."
+      }
+    }
+  ]
+}

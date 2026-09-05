@@ -8,6 +8,7 @@ import React, {
 	useState,
 } from 'react'
 import { Link } from 'react-router-dom'
+import PlayerCoachNudge from '../components/PlayerCoachNudge'
 import { parsePBN, sanitizePBN } from '../lib/pbn'
 import { BoardZ } from '../schemas/board'
 import { exportBoardPBN } from '../pbn/export'
@@ -33,6 +34,7 @@ import {
 	playerV2Reducer,
 } from '../player-v2/playerV2Reducer'
 import { choosePracticeAutoCall } from '../player-v2/acolPracticeBidder'
+import { usePlayerCoach } from '../player-v2/coach/usePlayerCoach'
 import {
 	exitPlayerFullscreen,
 	playerAcquiredFullscreen,
@@ -235,8 +237,32 @@ function FilePrompt({ onPick }) {
 				className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
 				Choose PBN
 			</button>
+			<Link
+				to="/competitions"
+				className="ml-2 mt-4 inline-flex rounded-md bg-amber-300 px-4 py-2 text-sm font-black text-slate-950 hover:bg-amber-200">
+				Play a famous final
+			</Link>
 		</div>
 	)
+}
+
+function competitionReferencesFor(content, boardNumber) {
+	if (content?.kind !== 'competition') return []
+	const key = String(boardNumber || '')
+	const references =
+		content.boardComparisons?.[key] ||
+		content.comparisons?.[key] ||
+		content.boards?.find?.((board) => String(board.board) === key)?.references ||
+		[]
+	return (Array.isArray(references) ? references : [])
+		.map((reference) => ({
+			room: String(reference.room || reference.label || 'Published table'),
+			contract: String(reference.contract || ''),
+			declarer: String(reference.declarer || ''),
+			result: String(reference.result || ''),
+			nsScore: Number(reference.nsScore),
+		}))
+		.filter((reference) => Number.isFinite(reference.nsScore))
 }
 
 function SeatVisibilityToggles({ visibleSeats, dispatch, presentationMode = false }) {
@@ -1186,7 +1212,14 @@ function RecordedAuctionControls({ derived, dispatch, presentationMode = false }
 	)
 }
 
-function AuctionWorkspace({ state, derived, dispatch, presentationMode = false, onNextBoard }) {
+function AuctionWorkspace({
+	state,
+	derived,
+	dispatch,
+	coach,
+	presentationMode = false,
+	onNextBoard,
+}) {
 	const recordedView = derived.auctionView === 'recorded'
 	const shownAuction = derived.displayedAuction
 	const shownCalls = derived.displayedAuctionCalls
@@ -1235,6 +1268,7 @@ function AuctionWorkspace({ state, derived, dispatch, presentationMode = false, 
 						}
 						presentationMode={presentationMode}
 					/>
+					<PlayerCoachNudge coach={coach} presentationMode={presentationMode} />
 				</div>
 				{recordedView ? (
 					<RecordedAuctionControls
@@ -1770,6 +1804,7 @@ function Controls({
 	onPick,
 	onSavePbn,
 	returnPath,
+	returnLabel = 'Back',
 	onPreviousBoard,
 	onNextBoard,
 	onAdvanceHidden,
@@ -1803,7 +1838,7 @@ function Controls({
 				</Link>
 				{returnPath && (
 					<Link to={returnPath} className="rounded-md bg-white px-2 py-1.5 text-xs font-bold shadow-sm">
-						Back
+						{returnLabel}
 					</Link>
 				)}
 				<button onClick={onPick} className="rounded-md bg-white px-2 py-1.5 text-xs font-bold shadow-sm">
@@ -1826,9 +1861,11 @@ function Controls({
 						‹
 					</button>
 					<div className="min-w-0 flex-1 text-center">
-						<div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Board</div>
+						<div className="text-[10px] font-black uppercase tracking-wide text-slate-500">
+							Board {state.board?.board || state.index + 1}
+						</div>
 						<div className="text-base font-black text-slate-950">
-							{state.board?.board || state.index + 1} / {state.deals.length || 0}
+							{state.index + 1} of {state.deals.length || 0}
 						</div>
 					</div>
 					<button
@@ -1915,10 +1952,20 @@ function PresentationRestore({ onRestore, notice, buttonRef, restoring = false }
 	)
 }
 
-function EndResultModal({ result, onBack, onPick, onReplay, replayButtonRef }) {
+function EndResultModal({
+	result,
+	onBack,
+	onNext,
+	onPick,
+	onReplay,
+	hasNextBoard,
+	dialogRef,
+}) {
 	if (!result) return null
 	const positive = result.score >= 0
 	const signedScore = result.score > 0 ? `+${result.score}` : String(result.score)
+	const signed = (score) => (score > 0 ? `+${score}` : String(score))
+	const competitionReferences = result.competitionReferences || []
 	const keepFocusInDialog = (event) => {
 		if (event.key !== 'Tab') return
 		const controls = [...event.currentTarget.querySelectorAll('button:not([disabled])')]
@@ -1936,26 +1983,30 @@ function EndResultModal({ result, onBack, onPick, onReplay, replayButtonRef }) {
 	return (
 		<div
 			onKeyDown={keepFocusInDialog}
-			className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/72 p-6">
+			className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/72 p-3 sm:items-center sm:p-6">
 			<div
+				ref={dialogRef}
+				tabIndex={-1}
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="player-hand-complete-title"
-				className="w-full max-w-2xl rounded-3xl border-4 border-amber-300 bg-emerald-950 p-7 text-center text-white shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
+				className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto rounded-3xl border-4 border-amber-300 bg-emerald-950 p-4 text-center text-white shadow-[0_30px_80px_rgba(0,0,0,0.5)] outline-none sm:max-h-[calc(100dvh-3rem)] sm:p-7">
 				<div className="text-sm font-black uppercase tracking-[0.24em] text-amber-200">
 					Hand Complete
 				</div>
-				<h2 id="player-hand-complete-title" className="mt-2 text-5xl font-black leading-tight">
+				<h2
+					id="player-hand-complete-title"
+					className="mt-2 text-3xl font-black leading-tight sm:text-5xl">
 					{positive ? 'Congratulations' : 'Commiserations'}
 				</h2>
 				<div
-					className={`mx-auto mt-5 w-fit rounded-2xl px-8 py-4 text-6xl font-black shadow-inner ${
+					className={`mx-auto mt-4 w-fit rounded-2xl px-8 py-3 text-4xl font-black shadow-inner sm:mt-5 sm:py-4 sm:text-6xl ${
 						positive ? 'bg-emerald-300 text-emerald-950' : 'bg-rose-200 text-rose-950'
 					}`}>
 					{signedScore}
 				</div>
 				<p className="mt-4 text-lg font-bold text-emerald-50">
-					{positive ? 'Declarer side scores' : 'Declarer side is deducted'}{' '}
+					{positive ? 'Your North–South side scores' : 'Your North–South side is deducted'}{' '}
 					{Math.abs(result.score)} points.
 				</p>
 				<div className="mx-auto mt-4 grid max-w-lg grid-cols-3 gap-2 text-sm font-black">
@@ -1972,10 +2023,56 @@ function EndResultModal({ result, onBack, onPick, onReplay, replayButtonRef }) {
 						<div className="text-xl">{result.resultText}</div>
 					</div>
 				</div>
-				<div className="mt-7 flex flex-wrap justify-center gap-3">
+				{competitionReferences.length > 0 && (
+					<section className="mx-auto mt-5 max-w-xl rounded-2xl border border-sky-300/50 bg-sky-950/70 p-4 text-left">
+						<div className="flex items-center justify-between gap-3">
+							<div>
+								<div className="text-xs font-black uppercase tracking-[0.16em] text-sky-200">
+									Published expert comparison
+								</div>
+								<div className="mt-1 text-sm font-semibold text-sky-50">
+									All scores are shown from North–South’s point of view.
+								</div>
+							</div>
+							<div className="shrink-0 rounded-xl bg-amber-300 px-3 py-2 text-center text-slate-950">
+								<div className="text-[10px] font-black uppercase tracking-wide">You</div>
+								<div className="text-2xl font-black">{signed(result.nsScore)}</div>
+							</div>
+						</div>
+						<div className="mt-3 grid gap-2 sm:grid-cols-2">
+							{competitionReferences.map((reference, index) => {
+								const difference = result.nsScore - reference.nsScore
+								return (
+									<div key={`${reference.room}-${index}`} className="rounded-xl bg-white/10 p-3">
+										<div className="flex items-center justify-between gap-2">
+											<strong className="text-sm text-white">{reference.room}</strong>
+											<span className="text-xl font-black text-sky-100">{signed(reference.nsScore)}</span>
+										</div>
+										<div className="mt-1 text-xs font-semibold text-sky-100">
+											{[reference.contract, reference.declarer, reference.result]
+												.filter(Boolean)
+												.join(' · ') || 'Published table result'}
+										</div>
+										<div className="mt-1 text-xs font-black text-amber-200">
+											{difference === 0
+												? 'Same N–S score'
+												: `${Math.abs(difference)} ${difference > 0 ? 'better' : 'lower'} for N–S`}
+										</div>
+									</div>
+								)
+							})}
+						</div>
+					</section>
+				)}
+				<div className="mt-5 flex flex-wrap justify-center gap-3 sm:mt-7">
+					{hasNextBoard && (
+						<button
+							onClick={onNext}
+							className="rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-amber-200">
+							Next Board
+						</button>
+					)}
 					<button
-						ref={replayButtonRef}
-						autoFocus
 						onClick={onReplay}
 						className="rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-amber-200">
 						Replay Hand
@@ -2003,6 +2100,7 @@ function TableSurface({
 	state,
 	derived,
 	dummy,
+	coach,
 	seatIsVisible,
 	onPlay,
 	dispatch,
@@ -2016,6 +2114,7 @@ function TableSurface({
 				state={state}
 				derived={derived}
 				dispatch={dispatch}
+				coach={coach}
 				presentationMode={presentationMode}
 				onNextBoard={onNextBoard}
 			/>
@@ -2096,6 +2195,13 @@ function TableSurface({
 				<div className="col-start-2 row-start-3 z-40 flex flex-col items-center gap-1 self-end justify-self-center">
 					<HandPanel {...common(visualSeats.bottom, 'S')} />
 				</div>
+				<div className="col-start-1 row-start-3 z-40 self-end justify-self-start pb-2">
+					<PlayerCoachNudge
+						coach={coach}
+						presentationMode={presentationMode}
+						className="player-v3-table-coach"
+					/>
+				</div>
 				<div className="col-start-2 row-start-2 z-10 self-center justify-self-center">
 					<StagePanel
 						state={state}
@@ -2137,6 +2243,7 @@ export default function PlayerV2() {
 	const [dismissedEndKey, setDismissedEndKey] = useState('')
 	const [visibleEndKey, setVisibleEndKey] = useState('')
 	const [returnPath, setReturnPath] = useState('')
+	const [returnLabel, setReturnLabel] = useState('Back')
 	const [presentationMode, setPresentationMode] = useState(false)
 	const [presentationNotice, setPresentationNotice] = useState('')
 	const [presentationRestoring, setPresentationRestoring] = useState(false)
@@ -2149,8 +2256,9 @@ export default function PlayerV2() {
 	})
 	const fileRef = useRef(null)
 	const presentButtonRef = useRef(null)
+	const presentationSurfaceRef = useRef(null)
 	const restorePresentationButtonRef = useRef(null)
-	const endResultReplayButtonRef = useRef(null)
+	const endResultDialogRef = useRef(null)
 	const playerMountedRef = useRef(true)
 	const presentationSessionRef = useRef(0)
 	const presentationOwnsFullscreenRef = useRef(false)
@@ -2162,17 +2270,32 @@ export default function PlayerV2() {
 		() => learnerControlledSeats(state.phase, derived.declarer),
 		[state.phase, derived.declarer],
 	)
+	const coach = usePlayerCoach({
+		state,
+		derived,
+		controlledSeats,
+		enabled: !!state.board,
+	})
 	const dummy = derived.declarer ? partnerOf(derived.declarer) : ''
+	const competitionReferences = competitionReferencesFor(state.content, state.board?.board)
+	const completedNsScore = derived.score
+		? ['N', 'S'].includes(derived.declarer)
+			? derived.score.score
+			: -derived.score.score
+		: null
 	const endResult =
 		state.phase === 'play' &&
 		state.completedTricks.length >= 13 &&
 		derived.score &&
 		!derived.score.partial
 			? {
-					score: derived.score.score,
+					score: completedNsScore,
+					nsScore: completedNsScore,
+					declarerScore: derived.score.score,
 					resultText: derived.score.resultText,
 					contract: derived.contract,
 					declarer: derived.declarer,
+					competitionReferences,
 				}
 			: null
 	const endResultKey = endResult
@@ -2201,10 +2324,11 @@ export default function PlayerV2() {
 		const reader = new FileReader()
 		reader.onload = () => {
 			const parsed = parsePBN(sanitizePBN(String(reader.result)))
-			dispatch({ type: 'LOAD_DEALS', deals: parsed, name: file.name })
+			dispatch({ type: 'LOAD_DEALS', deals: parsed, name: file.name, content: null })
 			setRaiseLegalChoices(true)
 			setTeacherToolsOpen(false)
 			setReturnPath('')
+			setReturnLabel('Back')
 			if (fileRef.current) fileRef.current.value = ''
 		}
 		reader.readAsText(file)
@@ -2308,7 +2432,7 @@ export default function PlayerV2() {
 				'Fullscreen was already active. Restore changes the table layout; use Escape to leave browser fullscreen.',
 			)
 		}
-		window.setTimeout(() => restorePresentationButtonRef.current?.focus(), 0)
+		window.setTimeout(() => presentationSurfaceRef.current?.focus({ preventScroll: true }), 0)
 	}, [state.board])
 
 	const seatIsVisible = useCallback(
@@ -2386,6 +2510,7 @@ export default function PlayerV2() {
 		setTeacherToolsOpen(false)
 		void exitPresentation({ restoreFocus: false })
 		setReturnPath('')
+		setReturnLabel('Back')
 	}, [state.board, exitPresentation])
 
 	useEffect(() => {
@@ -2442,10 +2567,17 @@ export default function PlayerV2() {
 			const payload = JSON.parse(raw)
 			const parsed = parsePBN(sanitizePBN(payload.pbn || ''))
 			if (parsed.length) {
-				dispatch({ type: 'LOAD_DEALS', deals: parsed, name: payload.name || 'Generator handoff' })
+				dispatch({
+					type: 'LOAD_DEALS',
+					deals: parsed,
+					name: payload.name || 'Generator handoff',
+					startIndex: payload.startIndex,
+					content: payload.content || null,
+				})
 				setRaiseLegalChoices(true)
 				setTeacherToolsOpen(false)
 				setReturnPath(payload.sourcePath || '')
+				setReturnLabel(payload.returnLabel || 'Back')
 			}
 		} catch (error) {
 			console.error('Player handoff failed', error)
@@ -2504,7 +2636,10 @@ export default function PlayerV2() {
 
 	useEffect(() => {
 		if (!showEndResult) return undefined
-		const timer = window.setTimeout(() => endResultReplayButtonRef.current?.focus(), 0)
+		const timer = window.setTimeout(() => {
+			endResultDialogRef.current?.focus({ preventScroll: true })
+			endResultDialogRef.current?.scrollTo({ top: 0 })
+		}, 0)
 		return () => window.clearTimeout(timer)
 	}, [showEndResult])
 
@@ -2719,16 +2854,23 @@ export default function PlayerV2() {
 
 	return (
 		<div
+			ref={presentationSurfaceRef}
+			tabIndex={-1}
 			style={{ backgroundColor: selectedFelt.canvas, backgroundImage: selectedFelt.background }}
-			className={`${presentationMode ? 'h-[100vh]' : 'h-[100dvh]'} overflow-hidden text-slate-900 ${
+			className={`${presentationMode ? 'h-[100vh]' : 'h-[100dvh]'} overflow-hidden text-slate-900 outline-none ${
 				presentationMode ? 'player-v3-present' : ''
 			}`}>
 			<EndResultModal
 				result={showEndResult ? endResult : null}
 				onBack={() => setDismissedEndKey(endResultKey)}
+				onNext={() => {
+					setDismissedEndKey(endResultKey)
+					goToBoard(state.index + 1)
+				}}
 				onPick={() => fileRef.current?.click()}
 				onReplay={() => replayCurrentHand({ confirm: false })}
-				replayButtonRef={endResultReplayButtonRef}
+				hasNextBoard={state.index < state.deals.length - 1}
+				dialogRef={endResultDialogRef}
 			/>
 			<NoAuctionIntro
 				state={state}
@@ -2757,14 +2899,29 @@ export default function PlayerV2() {
 									V3 preview
 								</span>
 							</div>
-							<div className="text-xs font-medium text-slate-500">
-								{state.selectedName || 'No file loaded'}
+							<div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+								<span>{state.selectedName || 'No file loaded'}</span>
+								{state.content?.kind === 'competition' && (
+									<>
+										<span aria-hidden="true">·</span>
+										<span className="font-black text-sky-800">Free competition replay</span>
+										{state.content.sourcePageUrl && (
+											<a
+												href={state.content.sourcePageUrl}
+												target="_blank"
+												rel="noreferrer"
+												className="text-sky-700 underline underline-offset-2">
+												Source
+											</a>
+										)}
+									</>
+								)}
 							</div>
 						</div>
 						<div className="flex items-center gap-2">
 							{returnPath && (
 								<Link to={returnPath} className="text-sm font-semibold text-sky-700 hover:underline">
-									Back to Generator
+									{returnLabel}
 								</Link>
 							)}
 							<Link to="/" className="text-sm font-semibold text-sky-700 hover:underline">
@@ -2809,6 +2966,7 @@ export default function PlayerV2() {
 								onPick={() => fileRef.current?.click()}
 								onSavePbn={saveCurrentBoardPbn}
 								returnPath={returnPath}
+								returnLabel={returnLabel}
 								onPreviousBoard={() => goToBoard(state.index - 1)}
 								onNextBoard={() => goToBoard(state.index + 1)}
 								onAdvanceHidden={advanceHiddenHand}
@@ -2822,6 +2980,7 @@ export default function PlayerV2() {
 						state={state}
 						derived={derived}
 						dummy={dummy}
+						coach={coach}
 						seatIsVisible={seatIsVisible}
 						onPlay={onPlay}
 						dispatch={dispatch}

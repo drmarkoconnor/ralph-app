@@ -2,39 +2,41 @@ import { getUser } from '@netlify/identity'
 import type { Config, Context } from '@netlify/functions'
 
 import { isCoachOwner } from './_shared/coach-core.mts'
-import { coachJson } from './_shared/coach-http.mts'
 import {
-	COACH_TRIAL_COOKIE,
-	createBlobsCoachTrialStore,
-	getAnonymousTrialStatus,
-	parseTrialDailyCap,
-	readCookieValue,
-	trialSubjectHash,
-	validTrialSecret,
-	verifyTrialToken,
-	type CoachTrialStore,
-} from './_shared/coach-trial-ledger.mts'
+	createBlobsCoachAccessStore,
+	getActiveCoachEntitlement,
+	getCoachUsageSummary,
+	isCoachSubscriber,
+	type CoachAccessStore,
+	type CoachIdentityUser,
+} from './_shared/coach-entitlements.mts'
+import { coachJson } from './_shared/coach-http.mts'
 
 declare const Netlify: {
 	env: { get(name: string): string | undefined }
 }
 
-type IdentityUser = Awaited<ReturnType<typeof getUser>>
-
 type AccessHandlerDependencies = {
 	env?: (name: string) => string | undefined
-	store?: CoachTrialStore
-	identityUser?: () => Promise<IdentityUser>
+	accessStore?: CoachAccessStore
+	identityUser?: () => Promise<CoachIdentityUser | null>
+	now?: () => Date
 }
 
 function netlifyEnv(name: string) {
 	return Netlify.env.get(name)
 }
 
+function publicContactEmail(env: (name: string) => string | undefined) {
+	const email = env('COACH_CONTACT_EMAIL')?.trim()
+	return email && email.length <= 254 ? email : undefined
+}
+
 export function createCoachAccessHandler(dependencies: AccessHandlerDependencies = {}) {
 	const env = dependencies.env || netlifyEnv
 	const identityUser = dependencies.identityUser || getUser
-	let trialStore = dependencies.store
+	const currentTime = dependencies.now || (() => new Date())
+	let accessStore = dependencies.accessStore
 
 	return async function coachAccess(request: Request, _context: Context) {
 		if (request.method !== 'GET') {
@@ -44,51 +46,51 @@ export function createCoachAccessHandler(dependencies: AccessHandlerDependencies
 		}
 
 		const user = await identityUser()
+		const signedIn = !!user
+		const coachEnabled = env('COACH_ENABLED')?.trim().toLowerCase() === 'true'
+		const configured = coachEnabled && !!env('OPENAI_API_KEY')
+		const contactEmail = publicContactEmail(env)
 		const ownerEmail = env('COACH_OWNER_EMAIL')?.trim()
 		const owner = !!ownerEmail && isCoachOwner(user, ownerEmail)
-		const authenticated = !!user
-		const trialEnabled = env('COACH_TRIAL_ENABLED')?.trim().toLowerCase() === 'true'
-		const secret = env('COACH_TRIAL_SECRET')
-		const dailyCap = parseTrialDailyCap(env('COACH_TRIAL_DAILY_CAP'))
+		let access: 'owner' | 'subscriber' | 'none' = 'none'
+		let entitlementSummary: Awaited<ReturnType<typeof getCoachUsageSummary>> | undefined
 
-		if (!trialEnabled || !validTrialSecret(secret) || dailyCap === null) {
-			return coachJson({
-				authenticated,
-				owner,
-				access: owner ? 'owner' : 'access-required',
-				trial: { enabled: false, available: false, status: 'unavailable' },
-			})
-		}
-		if (owner) {
-			return coachJson({
-				authenticated: true,
-				owner: true,
-				access: 'owner',
-				trial: { enabled: true, available: false, status: 'not-needed' },
-			})
-		}
-
-		const token = readCookieValue(request.headers.get('cookie'), COACH_TRIAL_COOKIE)
-		const trialId = verifyTrialToken(token, secret)
-		let trialStatus: 'available' | 'in-progress' | 'used' = 'available'
-		if (trialId) {
+		if (configured && owner) {
+			access = 'owner'
+		} else if (configured && user && isCoachSubscriber(user)) {
 			try {
-				trialStore ||= createBlobsCoachTrialStore()
-				trialStatus = await getAnonymousTrialStatus(trialStore, trialSubjectHash(trialId))
+				accessStore ||= createBlobsCoachAccessStore()
+				const entitlement = await getActiveCoachEntitlement(accessStore, user.id, currentTime())
+				if (entitlement) {
+					access = 'subscriber'
+					entitlementSummary = await getCoachUsageSummary(accessStore, entitlement)
+				}
 			} catch {
 				return coachJson(
-					{ code: 'access_unavailable', error: 'Coach access status is temporarily unavailable.' },
+					{
+						code: 'access_unavailable',
+						error: 'Coach access status is temporarily unavailable.',
+						enabled: coachEnabled,
+						configured,
+						signedIn,
+						access: 'none',
+						authorized: false,
+						...(contactEmail ? { contactEmail } : {}),
+					},
 					503,
 				)
 			}
 		}
 
-		const trialAvailable = trialStatus === 'available'
 		return coachJson({
-			authenticated,
-			owner,
-			access: owner ? 'owner' : trialAvailable ? 'trial' : 'access-required',
-			trial: { enabled: true, available: trialAvailable, status: trialStatus },
+			enabled: coachEnabled,
+			configured,
+			signedIn,
+			access,
+			authorized: access !== 'none',
+			...(entitlementSummary ? { entitlement: entitlementSummary } : {}),
+			...(contactEmail ? { contactEmail } : {}),
+			trial: { enabled: false, available: false, status: 'retired' },
 		})
 	}
 }

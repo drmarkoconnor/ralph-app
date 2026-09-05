@@ -1,0 +1,1807 @@
+{
+  "schemaVersion": 1,
+  "id": "usbf-2026-open-final-segment-1",
+  "title": "2026 Open USBC Final — Segment 1",
+  "shortTitle": "Play the 2026 US Final",
+  "event": "Open United States Bridge Championship Final",
+  "date": "2026-04-20",
+  "organizer": "United States Bridge Federation",
+  "format": "teams",
+  "scoring": "IMP",
+  "boardCount": 15,
+  "boardNumbers": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "pbnPath": "/competitions/usbf-2026-open-final-segment-1.pbn",
+  "metadataPath": "/competitions/usbf-2026-open-final-segment-1.json",
+  "asset": {
+    "sha256": "310f255e5e690f632f9a84db242515962c51ff6cb4686617dfac120efc3360a1",
+    "recordCount": 15
+  },
+  "anonymization": {
+    "playerNameTagsRemoved": true,
+    "teamNameTagsRemoved": true,
+    "playerNamesStoredInMetadata": false,
+    "teamNamesStoredInMetadata": false
+  },
+  "source": {
+    "url": "https://www.usbf.org/docs/2026usbc/lb_files/2026_open_f/2026_open_f_s1_Final1.pbn",
+    "resolvedUrl": "https://www.usbf.org/docs/2026usbc/lb_files/2026_open_f/2026_open_f_s1_Final1.pbn",
+    "eventUrl": "https://www.usbf.org/2026-usbcs/links-to-complete-bidding-and-play-records",
+    "sha256": "8418b7aa4433d56994f0c2b6a3f9cc4b2f6cabaaccfcafbf4d6b7f2a52c80a77",
+    "retrievedOn": "2026-09-05",
+    "attribution": "United States Bridge Federation (USBF); bidding and play captured by LoveBridge.",
+    "rightsNote": "Official publicly downloadable tournament record. No explicit redistribution licence was located; retain attribution and review permission before commercial publication.",
+    "recordCount": 30,
+    "rooms": [
+      "Open",
+      "Closed"
+    ],
+    "correctionNote": "The source PBN labels these Final Segment 1 records 2026.04.13; the official USBF daily schedule places Final Segment 1 on 2026.04.20."
+  },
+  "coachPolicy": {
+    "mode": "authenticated-entitlement",
+    "coachAllowed": true,
+    "anonymousTrialAllowed": false,
+    "reason": "Competition replay is free; AI Coach nudges require an authenticated owner or subscriber entitlement.",
+    "fingerprintAlgorithm": "SHA-256 of the Player Coach v1 canonical JSON containing dealer, vulnerability and sorted N/E/S/W hands."
+  },
+  "boards": [
+    {
+      "boardNumber": 1,
+      "dealer": "N",
+      "vulnerability": "None",
+      "dealFingerprint": "d41157e3f30f07067847564421be4622087ecee29041ef756dd5eae35091109e",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "3H",
+        "declarer": "W",
+        "tricksTaken": 9,
+        "contractOutcome": "=",
+        "score": {
+          "raw": "NS -140",
+          "ns": -140
+        },
+        "auctionCallCount": 13,
+        "recordedPlayCardCount": 28,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "CK",
+        "playLeader": "N"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "1S",
+          "declarer": "S",
+          "tricksTaken": 6,
+          "contractOutcome": "-1",
+          "score": {
+            "raw": "NS -50",
+            "ns": -50
+          },
+          "auctionCallCount": 6,
+          "recordedPlayCardCount": 52,
+          "recordedPlayComplete": true,
+          "recordedPlayEndedByClaim": false,
+          "openingLead": "C5",
+          "playLeader": "W"
+        },
+        {
+          "room": "Open",
+          "contract": "3H",
+          "declarer": "W",
+          "tricksTaken": 9,
+          "contractOutcome": "=",
+          "score": {
+            "raw": "NS -140",
+            "ns": -140
+          },
+          "auctionCallCount": 13,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "CK",
+          "playLeader": "N"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": -90
+      }
+    },
+    {
+      "boardNumber": 2,
+      "dealer": "E",
+      "vulnerability": "NS",
+      "dealFingerprint": "bf52b63cba99a9849f2817cdc3d5fbec1c2e598b7052e2d4283370fe1eda97ba",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4S",
+        "declarer": "E",
+        "tricksTaken": 11,
+        "contractOutcome": "+1",
+        "score": {
+          "raw": "NS -450",
+          "ns": -450
+        },
+        "auctionCallCount": 6,
+        "recordedPlayCardCount": 33,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "DJ",
+        "playLeader": "S"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "4S",
+          "declarer": "E",
+          "tricksTaken": 11,
+          "contractOutcome": "+1",
+          "score": {
+            "raw": "NS -450",
+            "ns": -450
+          },
+          "auctionCallCount": 14,
+          "recordedPlayCardCount": 34,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "DJ",
+          "playLeader": "S"
+        },
+        {
+          "room": "Open",
+          "contract": "4S",
+          "declarer": "E",
+          "tricksTaken": 11,
+          "contractOutcome": "+1",
+          "score": {
+            "raw": "NS -450",
+            "ns": -450
+          },
+          "auctionCallCount": 6,
+          "recordedPlayCardCount": 33,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "DJ",
+          "playLeader": "S"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 3,
+      "dealer": "S",
+      "vulnerability": "EW",
+      "dealFingerprint": "9b058130c8202a50d9d909e730ed400b2aa4ece2a37e8a00d4628570f9a2cd6e",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "2H",
+        "declarer": "N",
+        "tricksTaken": 7,
+        "contractOutcome": "-1",
+        "score": {
+          "raw": "NS -50",
+          "ns": -50
+        },
+        "auctionCallCount": 12,
+        "recordedPlayCardCount": 24,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "CA",
+        "playLeader": "E"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "2H",
+          "declarer": "N",
+          "tricksTaken": 7,
+          "contractOutcome": "-1",
+          "score": {
+            "raw": "NS -50",
+            "ns": -50
+          },
+          "auctionCallCount": 8,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "CA",
+          "playLeader": "E"
+        },
+        {
+          "room": "Open",
+          "contract": "2H",
+          "declarer": "N",
+          "tricksTaken": 7,
+          "contractOutcome": "-1",
+          "score": {
+            "raw": "NS -50",
+            "ns": -50
+          },
+          "auctionCallCount": 12,
+          "recordedPlayCardCount": 24,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "CA",
+          "playLeader": "E"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 4,
+      "dealer": "W",
+      "vulnerability": "All",
+      "dealFingerprint": "a05e239e172f46f5c2dac7873793ff73637d2ac2276e86f9127e7aca40374316",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "5C",
+        "declarer": "N",
+        "tricksTaken": 9,
+        "contractOutcome": "-2",
+        "score": {
+          "raw": "NS -200",
+          "ns": -200
+        },
+        "auctionCallCount": 15,
+        "recordedPlayCardCount": 12,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "S3",
+        "playLeader": "E"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "3NT",
+          "declarer": "S",
+          "tricksTaken": 11,
+          "contractOutcome": "+2",
+          "score": {
+            "raw": "NS 660",
+            "ns": 660
+          },
+          "auctionCallCount": 7,
+          "recordedPlayCardCount": 3,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "SJ",
+          "playLeader": "W"
+        },
+        {
+          "room": "Open",
+          "contract": "5C",
+          "declarer": "N",
+          "tricksTaken": 9,
+          "contractOutcome": "-2",
+          "score": {
+            "raw": "NS -200",
+            "ns": -200
+          },
+          "auctionCallCount": 15,
+          "recordedPlayCardCount": 12,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "S3",
+          "playLeader": "E"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": -860
+      }
+    },
+    {
+      "boardNumber": 5,
+      "dealer": "N",
+      "vulnerability": "NS",
+      "dealFingerprint": "8ff5b38da52927eea5ea8989fbf3899be0ad8e8cda4975c68bc95dba5da734fe",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4S",
+        "declarer": "N",
+        "tricksTaken": 10,
+        "contractOutcome": "=",
+        "score": {
+          "raw": "NS 620",
+          "ns": 620
+        },
+        "auctionCallCount": 14,
+        "recordedPlayCardCount": 30,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "S5",
+        "playLeader": "E"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "3NT",
+          "declarer": "S",
+          "tricksTaken": 11,
+          "contractOutcome": "+2",
+          "score": {
+            "raw": "NS 660",
+            "ns": 660
+          },
+          "auctionCallCount": 10,
+          "recordedPlayCardCount": 21,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "H4",
+          "playLeader": "W"
+        },
+        {
+          "room": "Open",
+          "contract": "4S",
+          "declarer": "N",
+          "tricksTaken": 10,
+          "contractOutcome": "=",
+          "score": {
+            "raw": "NS 620",
+            "ns": 620
+          },
+          "auctionCallCount": 14,
+          "recordedPlayCardCount": 30,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "S5",
+          "playLeader": "E"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": -40
+      }
+    },
+    {
+      "boardNumber": 6,
+      "dealer": "E",
+      "vulnerability": "EW",
+      "dealFingerprint": "e79698df41127b72644888e50511aec36da3455b7f8510f137556ad1443a5b46",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "1NT",
+        "declarer": "E",
+        "tricksTaken": 9,
+        "contractOutcome": "+2",
+        "score": {
+          "raw": "NS -150",
+          "ns": -150
+        },
+        "auctionCallCount": 4,
+        "recordedPlayCardCount": 28,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "H4",
+        "playLeader": "S"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "1NT",
+          "declarer": "E",
+          "tricksTaken": 9,
+          "contractOutcome": "+2",
+          "score": {
+            "raw": "NS -150",
+            "ns": -150
+          },
+          "auctionCallCount": 4,
+          "recordedPlayCardCount": 36,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "H4",
+          "playLeader": "S"
+        },
+        {
+          "room": "Open",
+          "contract": "1NT",
+          "declarer": "E",
+          "tricksTaken": 9,
+          "contractOutcome": "+2",
+          "score": {
+            "raw": "NS -150",
+            "ns": -150
+          },
+          "auctionCallCount": 4,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "H4",
+          "playLeader": "S"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 7,
+      "dealer": "S",
+      "vulnerability": "All",
+      "dealFingerprint": "8c180b9c02ee3fa14cb7acf4e6b20f833a21ff1ba08912502aafca1952adcd15",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "2S",
+        "declarer": "S",
+        "tricksTaken": 10,
+        "contractOutcome": "+2",
+        "score": {
+          "raw": "NS 170",
+          "ns": 170
+        },
+        "auctionCallCount": 10,
+        "recordedPlayCardCount": 37,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "D6",
+        "playLeader": "W"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "3S",
+          "declarer": "N",
+          "tricksTaken": 10,
+          "contractOutcome": "+1",
+          "score": {
+            "raw": "NS 170",
+            "ns": 170
+          },
+          "auctionCallCount": 14,
+          "recordedPlayCardCount": 32,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "DK",
+          "playLeader": "E"
+        },
+        {
+          "room": "Open",
+          "contract": "2S",
+          "declarer": "S",
+          "tricksTaken": 10,
+          "contractOutcome": "+2",
+          "score": {
+            "raw": "NS 170",
+            "ns": 170
+          },
+          "auctionCallCount": 10,
+          "recordedPlayCardCount": 37,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "D6",
+          "playLeader": "W"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 8,
+      "dealer": "W",
+      "vulnerability": "None",
+      "dealFingerprint": "afa4e92660f249de9e74457f2ce584bf5ec57cf290b3a4b5b098431e5afa44f4",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4H",
+        "declarer": "S",
+        "tricksTaken": 9,
+        "contractOutcome": "-1",
+        "score": {
+          "raw": "NS -50",
+          "ns": -50
+        },
+        "auctionCallCount": 9,
+        "recordedPlayCardCount": 36,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "C4",
+        "playLeader": "W"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "4H",
+          "declarer": "S",
+          "tricksTaken": 9,
+          "contractOutcome": "-1",
+          "score": {
+            "raw": "NS -50",
+            "ns": -50
+          },
+          "auctionCallCount": 11,
+          "recordedPlayCardCount": 52,
+          "recordedPlayComplete": true,
+          "recordedPlayEndedByClaim": false,
+          "openingLead": "C4",
+          "playLeader": "W"
+        },
+        {
+          "room": "Open",
+          "contract": "4H",
+          "declarer": "S",
+          "tricksTaken": 9,
+          "contractOutcome": "-1",
+          "score": {
+            "raw": "NS -50",
+            "ns": -50
+          },
+          "auctionCallCount": 9,
+          "recordedPlayCardCount": 36,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "C4",
+          "playLeader": "W"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 9,
+      "dealer": "N",
+      "vulnerability": "EW",
+      "dealFingerprint": "4953f9d9c847213fd349daadc27e98bd617344526dec58a96c003805faa2ecf6",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "1NT",
+        "declarer": "E",
+        "tricksTaken": 9,
+        "contractOutcome": "+2",
+        "score": {
+          "raw": "NS -150",
+          "ns": -150
+        },
+        "auctionCallCount": 9,
+        "recordedPlayCardCount": 27,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "D9",
+        "playLeader": "S"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "2S",
+          "declarer": "S",
+          "tricksTaken": 8,
+          "contractOutcome": "=",
+          "score": {
+            "raw": "NS 110",
+            "ns": 110
+          },
+          "auctionCallCount": 8,
+          "recordedPlayCardCount": 44,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "CJ",
+          "playLeader": "W"
+        },
+        {
+          "room": "Open",
+          "contract": "1NT",
+          "declarer": "E",
+          "tricksTaken": 9,
+          "contractOutcome": "+2",
+          "score": {
+            "raw": "NS -150",
+            "ns": -150
+          },
+          "auctionCallCount": 9,
+          "recordedPlayCardCount": 27,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "D9",
+          "playLeader": "S"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": -260
+      }
+    },
+    {
+      "boardNumber": 10,
+      "dealer": "E",
+      "vulnerability": "All",
+      "dealFingerprint": "6f96b22d714f080af9d0c32882078868c7894b3a556e0bddf471ceb8561ce95c",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4NT",
+        "declarer": "S",
+        "tricksTaken": 12,
+        "contractOutcome": "+2",
+        "score": {
+          "raw": "NS 690",
+          "ns": 690
+        },
+        "auctionCallCount": 19,
+        "recordedPlayCardCount": 25,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "ST",
+        "playLeader": "W"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "6NT",
+          "declarer": "N",
+          "tricksTaken": 12,
+          "contractOutcome": "=",
+          "score": {
+            "raw": "NS 1440",
+            "ns": 1440
+          },
+          "auctionCallCount": 19,
+          "recordedPlayCardCount": 52,
+          "recordedPlayComplete": true,
+          "recordedPlayEndedByClaim": false,
+          "openingLead": "S3",
+          "playLeader": "E"
+        },
+        {
+          "room": "Open",
+          "contract": "4NT",
+          "declarer": "S",
+          "tricksTaken": 12,
+          "contractOutcome": "+2",
+          "score": {
+            "raw": "NS 690",
+            "ns": 690
+          },
+          "auctionCallCount": 19,
+          "recordedPlayCardCount": 25,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "ST",
+          "playLeader": "W"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": -750
+      }
+    },
+    {
+      "boardNumber": 11,
+      "dealer": "S",
+      "vulnerability": "None",
+      "dealFingerprint": "5cb2b5b34aa8e2498480c17af956d4ae45ce3b3391e886cd759693146415b763",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4HX",
+        "declarer": "W",
+        "tricksTaken": 8,
+        "contractOutcome": "-2",
+        "score": {
+          "raw": "NS 300",
+          "ns": 300
+        },
+        "auctionCallCount": 12,
+        "recordedPlayCardCount": 28,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "S5",
+        "playLeader": "N"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "6CX",
+          "declarer": "S",
+          "tricksTaken": 10,
+          "contractOutcome": "-2",
+          "score": {
+            "raw": "NS -300",
+            "ns": -300
+          },
+          "auctionCallCount": 15,
+          "recordedPlayCardCount": 26,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "HT",
+          "playLeader": "W"
+        },
+        {
+          "room": "Open",
+          "contract": "4HX",
+          "declarer": "W",
+          "tricksTaken": 8,
+          "contractOutcome": "-2",
+          "score": {
+            "raw": "NS 300",
+            "ns": 300
+          },
+          "auctionCallCount": 12,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "S5",
+          "playLeader": "N"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 600
+      }
+    },
+    {
+      "boardNumber": 12,
+      "dealer": "W",
+      "vulnerability": "NS",
+      "dealFingerprint": "2ded971ce07525fdcbb08c65457cabbd3a9aa539f69bf801a3c136d52529dccc",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "2H",
+        "declarer": "S",
+        "tricksTaken": 8,
+        "contractOutcome": "=",
+        "score": {
+          "raw": "NS 110",
+          "ns": 110
+        },
+        "auctionCallCount": 11,
+        "recordedPlayCardCount": 16,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "D9",
+        "playLeader": "W"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "4H",
+          "declarer": "S",
+          "tricksTaken": 9,
+          "contractOutcome": "-1",
+          "score": {
+            "raw": "NS -100",
+            "ns": -100
+          },
+          "auctionCallCount": 15,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "D9",
+          "playLeader": "W"
+        },
+        {
+          "room": "Open",
+          "contract": "2H",
+          "declarer": "S",
+          "tricksTaken": 8,
+          "contractOutcome": "=",
+          "score": {
+            "raw": "NS 110",
+            "ns": 110
+          },
+          "auctionCallCount": 11,
+          "recordedPlayCardCount": 16,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "D9",
+          "playLeader": "W"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 210
+      }
+    },
+    {
+      "boardNumber": 13,
+      "dealer": "N",
+      "vulnerability": "All",
+      "dealFingerprint": "bdd9c31554483d2aff481c007cf1ce2eee4a093ef1d64fed689dcfc234252096",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4NT",
+        "declarer": "N",
+        "tricksTaken": 13,
+        "contractOutcome": "+3",
+        "score": {
+          "raw": "NS 720",
+          "ns": 720
+        },
+        "auctionCallCount": 10,
+        "recordedPlayCardCount": 28,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "D6",
+        "playLeader": "E"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "4NT",
+          "declarer": "N",
+          "tricksTaken": 12,
+          "contractOutcome": "+2",
+          "score": {
+            "raw": "NS 690",
+            "ns": 690
+          },
+          "auctionCallCount": 16,
+          "recordedPlayCardCount": 20,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "S4",
+          "playLeader": "E"
+        },
+        {
+          "room": "Open",
+          "contract": "4NT",
+          "declarer": "N",
+          "tricksTaken": 13,
+          "contractOutcome": "+3",
+          "score": {
+            "raw": "NS 720",
+            "ns": 720
+          },
+          "auctionCallCount": 10,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "D6",
+          "playLeader": "E"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 30
+      }
+    },
+    {
+      "boardNumber": 14,
+      "dealer": "E",
+      "vulnerability": "None",
+      "dealFingerprint": "b6beef253ce8dfbeac3b17ffaf178f50c0f472a40418c9ca41c2e55ffcbebee1",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "3NT",
+        "declarer": "S",
+        "tricksTaken": 9,
+        "contractOutcome": "=",
+        "score": {
+          "raw": "NS 400",
+          "ns": 400
+        },
+        "auctionCallCount": 11,
+        "recordedPlayCardCount": 45,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "S8",
+        "playLeader": "W"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "3NT",
+          "declarer": "N",
+          "tricksTaken": 9,
+          "contractOutcome": "=",
+          "score": {
+            "raw": "NS 400",
+            "ns": 400
+          },
+          "auctionCallCount": 13,
+          "recordedPlayCardCount": 17,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "DQ",
+          "playLeader": "E"
+        },
+        {
+          "room": "Open",
+          "contract": "3NT",
+          "declarer": "S",
+          "tricksTaken": 9,
+          "contractOutcome": "=",
+          "score": {
+            "raw": "NS 400",
+            "ns": 400
+          },
+          "auctionCallCount": 11,
+          "recordedPlayCardCount": 45,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "S8",
+          "playLeader": "W"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 15,
+      "dealer": "S",
+      "vulnerability": "NS",
+      "dealFingerprint": "02ad088b3208956f24c50221e61346d67d89929e05d00a515fdaf049115d57dd",
+      "coachPolicy": "authenticated-entitlement",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectionRule": "Open room preferred; recorded-play length is the fallback",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4S",
+        "declarer": "E",
+        "tricksTaken": 10,
+        "contractOutcome": "=",
+        "score": {
+          "raw": "NS -420",
+          "ns": -420
+        },
+        "auctionCallCount": 11,
+        "recordedPlayCardCount": 24,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true,
+        "openingLead": "S5",
+        "playLeader": "S"
+      },
+      "roomResults": [
+        {
+          "room": "Closed",
+          "contract": "4S",
+          "declarer": "E",
+          "tricksTaken": 10,
+          "contractOutcome": "=",
+          "score": {
+            "raw": "NS -420",
+            "ns": -420
+          },
+          "auctionCallCount": 7,
+          "recordedPlayCardCount": 27,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "CA",
+          "playLeader": "S"
+        },
+        {
+          "room": "Open",
+          "contract": "4S",
+          "declarer": "E",
+          "tricksTaken": 10,
+          "contractOutcome": "=",
+          "score": {
+            "raw": "NS -420",
+            "ns": -420
+          },
+          "auctionCallCount": 11,
+          "recordedPlayCardCount": 24,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true,
+          "openingLead": "S5",
+          "playLeader": "S"
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    }
+  ],
+  "boardComparisons": [
+    {
+      "boardNumber": 1,
+      "dealFingerprint": "d41157e3f30f07067847564421be4622087ecee29041ef756dd5eae35091109e",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "3H",
+        "declarer": "W",
+        "result": 9,
+        "outcome": "=",
+        "scoreNS": -140,
+        "openingLead": "CK",
+        "auctionCallCount": 13,
+        "recordedPlayCardCount": 28,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "1S",
+          "declarer": "S",
+          "result": 6,
+          "outcome": "-1",
+          "scoreNS": -50,
+          "openingLead": "C5",
+          "auctionCallCount": 6,
+          "recordedPlayCardCount": 52,
+          "recordedPlayComplete": true,
+          "recordedPlayEndedByClaim": false
+        },
+        {
+          "room": "Open",
+          "contract": "3H",
+          "declarer": "W",
+          "result": 9,
+          "outcome": "=",
+          "scoreNS": -140,
+          "openingLead": "CK",
+          "auctionCallCount": 13,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": -90
+      }
+    },
+    {
+      "boardNumber": 2,
+      "dealFingerprint": "bf52b63cba99a9849f2817cdc3d5fbec1c2e598b7052e2d4283370fe1eda97ba",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4S",
+        "declarer": "E",
+        "result": 11,
+        "outcome": "+1",
+        "scoreNS": -450,
+        "openingLead": "DJ",
+        "auctionCallCount": 6,
+        "recordedPlayCardCount": 33,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "4S",
+          "declarer": "E",
+          "result": 11,
+          "outcome": "+1",
+          "scoreNS": -450,
+          "openingLead": "DJ",
+          "auctionCallCount": 14,
+          "recordedPlayCardCount": 34,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "4S",
+          "declarer": "E",
+          "result": 11,
+          "outcome": "+1",
+          "scoreNS": -450,
+          "openingLead": "DJ",
+          "auctionCallCount": 6,
+          "recordedPlayCardCount": 33,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 3,
+      "dealFingerprint": "9b058130c8202a50d9d909e730ed400b2aa4ece2a37e8a00d4628570f9a2cd6e",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "2H",
+        "declarer": "N",
+        "result": 7,
+        "outcome": "-1",
+        "scoreNS": -50,
+        "openingLead": "CA",
+        "auctionCallCount": 12,
+        "recordedPlayCardCount": 24,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "2H",
+          "declarer": "N",
+          "result": 7,
+          "outcome": "-1",
+          "scoreNS": -50,
+          "openingLead": "CA",
+          "auctionCallCount": 8,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "2H",
+          "declarer": "N",
+          "result": 7,
+          "outcome": "-1",
+          "scoreNS": -50,
+          "openingLead": "CA",
+          "auctionCallCount": 12,
+          "recordedPlayCardCount": 24,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 4,
+      "dealFingerprint": "a05e239e172f46f5c2dac7873793ff73637d2ac2276e86f9127e7aca40374316",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "5C",
+        "declarer": "N",
+        "result": 9,
+        "outcome": "-2",
+        "scoreNS": -200,
+        "openingLead": "S3",
+        "auctionCallCount": 15,
+        "recordedPlayCardCount": 12,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "3NT",
+          "declarer": "S",
+          "result": 11,
+          "outcome": "+2",
+          "scoreNS": 660,
+          "openingLead": "SJ",
+          "auctionCallCount": 7,
+          "recordedPlayCardCount": 3,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "5C",
+          "declarer": "N",
+          "result": 9,
+          "outcome": "-2",
+          "scoreNS": -200,
+          "openingLead": "S3",
+          "auctionCallCount": 15,
+          "recordedPlayCardCount": 12,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": -860
+      }
+    },
+    {
+      "boardNumber": 5,
+      "dealFingerprint": "8ff5b38da52927eea5ea8989fbf3899be0ad8e8cda4975c68bc95dba5da734fe",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4S",
+        "declarer": "N",
+        "result": 10,
+        "outcome": "=",
+        "scoreNS": 620,
+        "openingLead": "S5",
+        "auctionCallCount": 14,
+        "recordedPlayCardCount": 30,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "3NT",
+          "declarer": "S",
+          "result": 11,
+          "outcome": "+2",
+          "scoreNS": 660,
+          "openingLead": "H4",
+          "auctionCallCount": 10,
+          "recordedPlayCardCount": 21,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "4S",
+          "declarer": "N",
+          "result": 10,
+          "outcome": "=",
+          "scoreNS": 620,
+          "openingLead": "S5",
+          "auctionCallCount": 14,
+          "recordedPlayCardCount": 30,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": -40
+      }
+    },
+    {
+      "boardNumber": 6,
+      "dealFingerprint": "e79698df41127b72644888e50511aec36da3455b7f8510f137556ad1443a5b46",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "1NT",
+        "declarer": "E",
+        "result": 9,
+        "outcome": "+2",
+        "scoreNS": -150,
+        "openingLead": "H4",
+        "auctionCallCount": 4,
+        "recordedPlayCardCount": 28,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "1NT",
+          "declarer": "E",
+          "result": 9,
+          "outcome": "+2",
+          "scoreNS": -150,
+          "openingLead": "H4",
+          "auctionCallCount": 4,
+          "recordedPlayCardCount": 36,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "1NT",
+          "declarer": "E",
+          "result": 9,
+          "outcome": "+2",
+          "scoreNS": -150,
+          "openingLead": "H4",
+          "auctionCallCount": 4,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 7,
+      "dealFingerprint": "8c180b9c02ee3fa14cb7acf4e6b20f833a21ff1ba08912502aafca1952adcd15",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "2S",
+        "declarer": "S",
+        "result": 10,
+        "outcome": "+2",
+        "scoreNS": 170,
+        "openingLead": "D6",
+        "auctionCallCount": 10,
+        "recordedPlayCardCount": 37,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "3S",
+          "declarer": "N",
+          "result": 10,
+          "outcome": "+1",
+          "scoreNS": 170,
+          "openingLead": "DK",
+          "auctionCallCount": 14,
+          "recordedPlayCardCount": 32,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "2S",
+          "declarer": "S",
+          "result": 10,
+          "outcome": "+2",
+          "scoreNS": 170,
+          "openingLead": "D6",
+          "auctionCallCount": 10,
+          "recordedPlayCardCount": 37,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 8,
+      "dealFingerprint": "afa4e92660f249de9e74457f2ce584bf5ec57cf290b3a4b5b098431e5afa44f4",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4H",
+        "declarer": "S",
+        "result": 9,
+        "outcome": "-1",
+        "scoreNS": -50,
+        "openingLead": "C4",
+        "auctionCallCount": 9,
+        "recordedPlayCardCount": 36,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "4H",
+          "declarer": "S",
+          "result": 9,
+          "outcome": "-1",
+          "scoreNS": -50,
+          "openingLead": "C4",
+          "auctionCallCount": 11,
+          "recordedPlayCardCount": 52,
+          "recordedPlayComplete": true,
+          "recordedPlayEndedByClaim": false
+        },
+        {
+          "room": "Open",
+          "contract": "4H",
+          "declarer": "S",
+          "result": 9,
+          "outcome": "-1",
+          "scoreNS": -50,
+          "openingLead": "C4",
+          "auctionCallCount": 9,
+          "recordedPlayCardCount": 36,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 9,
+      "dealFingerprint": "4953f9d9c847213fd349daadc27e98bd617344526dec58a96c003805faa2ecf6",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "1NT",
+        "declarer": "E",
+        "result": 9,
+        "outcome": "+2",
+        "scoreNS": -150,
+        "openingLead": "D9",
+        "auctionCallCount": 9,
+        "recordedPlayCardCount": 27,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "2S",
+          "declarer": "S",
+          "result": 8,
+          "outcome": "=",
+          "scoreNS": 110,
+          "openingLead": "CJ",
+          "auctionCallCount": 8,
+          "recordedPlayCardCount": 44,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "1NT",
+          "declarer": "E",
+          "result": 9,
+          "outcome": "+2",
+          "scoreNS": -150,
+          "openingLead": "D9",
+          "auctionCallCount": 9,
+          "recordedPlayCardCount": 27,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": -260
+      }
+    },
+    {
+      "boardNumber": 10,
+      "dealFingerprint": "6f96b22d714f080af9d0c32882078868c7894b3a556e0bddf471ceb8561ce95c",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4NT",
+        "declarer": "S",
+        "result": 12,
+        "outcome": "+2",
+        "scoreNS": 690,
+        "openingLead": "ST",
+        "auctionCallCount": 19,
+        "recordedPlayCardCount": 25,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "6NT",
+          "declarer": "N",
+          "result": 12,
+          "outcome": "=",
+          "scoreNS": 1440,
+          "openingLead": "S3",
+          "auctionCallCount": 19,
+          "recordedPlayCardCount": 52,
+          "recordedPlayComplete": true,
+          "recordedPlayEndedByClaim": false
+        },
+        {
+          "room": "Open",
+          "contract": "4NT",
+          "declarer": "S",
+          "result": 12,
+          "outcome": "+2",
+          "scoreNS": 690,
+          "openingLead": "ST",
+          "auctionCallCount": 19,
+          "recordedPlayCardCount": 25,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": -750
+      }
+    },
+    {
+      "boardNumber": 11,
+      "dealFingerprint": "5cb2b5b34aa8e2498480c17af956d4ae45ce3b3391e886cd759693146415b763",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4HX",
+        "declarer": "W",
+        "result": 8,
+        "outcome": "-2",
+        "scoreNS": 300,
+        "openingLead": "S5",
+        "auctionCallCount": 12,
+        "recordedPlayCardCount": 28,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "6CX",
+          "declarer": "S",
+          "result": 10,
+          "outcome": "-2",
+          "scoreNS": -300,
+          "openingLead": "HT",
+          "auctionCallCount": 15,
+          "recordedPlayCardCount": 26,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "4HX",
+          "declarer": "W",
+          "result": 8,
+          "outcome": "-2",
+          "scoreNS": 300,
+          "openingLead": "S5",
+          "auctionCallCount": 12,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 600
+      }
+    },
+    {
+      "boardNumber": 12,
+      "dealFingerprint": "2ded971ce07525fdcbb08c65457cabbd3a9aa539f69bf801a3c136d52529dccc",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "2H",
+        "declarer": "S",
+        "result": 8,
+        "outcome": "=",
+        "scoreNS": 110,
+        "openingLead": "D9",
+        "auctionCallCount": 11,
+        "recordedPlayCardCount": 16,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "4H",
+          "declarer": "S",
+          "result": 9,
+          "outcome": "-1",
+          "scoreNS": -100,
+          "openingLead": "D9",
+          "auctionCallCount": 15,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "2H",
+          "declarer": "S",
+          "result": 8,
+          "outcome": "=",
+          "scoreNS": 110,
+          "openingLead": "D9",
+          "auctionCallCount": 11,
+          "recordedPlayCardCount": 16,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 210
+      }
+    },
+    {
+      "boardNumber": 13,
+      "dealFingerprint": "bdd9c31554483d2aff481c007cf1ce2eee4a093ef1d64fed689dcfc234252096",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4NT",
+        "declarer": "N",
+        "result": 13,
+        "outcome": "+3",
+        "scoreNS": 720,
+        "openingLead": "D6",
+        "auctionCallCount": 10,
+        "recordedPlayCardCount": 28,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "4NT",
+          "declarer": "N",
+          "result": 12,
+          "outcome": "+2",
+          "scoreNS": 690,
+          "openingLead": "S4",
+          "auctionCallCount": 16,
+          "recordedPlayCardCount": 20,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "4NT",
+          "declarer": "N",
+          "result": 13,
+          "outcome": "+3",
+          "scoreNS": 720,
+          "openingLead": "D6",
+          "auctionCallCount": 10,
+          "recordedPlayCardCount": 28,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 30
+      }
+    },
+    {
+      "boardNumber": 14,
+      "dealFingerprint": "b6beef253ce8dfbeac3b17ffaf178f50c0f472a40418c9ca41c2e55ffcbebee1",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "3NT",
+        "declarer": "S",
+        "result": 9,
+        "outcome": "=",
+        "scoreNS": 400,
+        "openingLead": "S8",
+        "auctionCallCount": 11,
+        "recordedPlayCardCount": 45,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "3NT",
+          "declarer": "N",
+          "result": 9,
+          "outcome": "=",
+          "scoreNS": 400,
+          "openingLead": "DQ",
+          "auctionCallCount": 13,
+          "recordedPlayCardCount": 17,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "3NT",
+          "declarer": "S",
+          "result": 9,
+          "outcome": "=",
+          "scoreNS": 400,
+          "openingLead": "S8",
+          "auctionCallCount": 11,
+          "recordedPlayCardCount": 45,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    },
+    {
+      "boardNumber": 15,
+      "dealFingerprint": "02ad088b3208956f24c50221e61346d67d89929e05d00a515fdaf049115d57dd",
+      "coachAllowed": true,
+      "selectedRoom": "Open",
+      "selectedResult": {
+        "room": "Open",
+        "contract": "4S",
+        "declarer": "E",
+        "result": 10,
+        "outcome": "=",
+        "scoreNS": -420,
+        "openingLead": "S5",
+        "auctionCallCount": 11,
+        "recordedPlayCardCount": 24,
+        "recordedPlayComplete": false,
+        "recordedPlayEndedByClaim": true
+      },
+      "referenceResults": [
+        {
+          "room": "Closed",
+          "contract": "4S",
+          "declarer": "E",
+          "result": 10,
+          "outcome": "=",
+          "scoreNS": -420,
+          "openingLead": "CA",
+          "auctionCallCount": 7,
+          "recordedPlayCardCount": 27,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        },
+        {
+          "room": "Open",
+          "contract": "4S",
+          "declarer": "E",
+          "result": 10,
+          "outcome": "=",
+          "scoreNS": -420,
+          "openingLead": "S5",
+          "auctionCallCount": 11,
+          "recordedPlayCardCount": 24,
+          "recordedPlayComplete": false,
+          "recordedPlayEndedByClaim": true
+        }
+      ],
+      "comparison": {
+        "openMinusClosedNsPoints": 0
+      }
+    }
+  ]
+}

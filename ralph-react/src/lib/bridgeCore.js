@@ -189,9 +189,7 @@ export function computeDuplicateScore(contract, declarer, vul, declTricks) {
 			level === 6 ? (vul ? 750 : 500) : level === 7 ? (vul ? 1500 : 1000) : 0
 		const gamePartScore = game ? (vul ? 500 : 300) : 50
 		score = trickScore + over + insult + slamBonus + gamePartScore
-		resultText = `${level}${strain}${dbl ? dbl : ''}=${
-			made === 0 ? '' : `+${made}`
-		}`
+		resultText = `${level}${strain}${dbl ? dbl : ''}${made === 0 ? '=' : `+${made}`}`
 	} else {
 		const down = -made
 		const penalty = underPenalty(down)
@@ -427,4 +425,3 @@ export function parsePlayScript(text) {
 	}
 	return out
 }
-

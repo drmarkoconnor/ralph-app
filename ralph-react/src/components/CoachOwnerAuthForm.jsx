@@ -17,22 +17,22 @@ export default function CoachOwnerAuthForm({
 
 	if (!identityAvailable) {
 		return (
-		<div className="coach-owner-auth-note" role="status">
-			Owner authentication is available on a Netlify preview or the live site. The local
-			Vite screen can still be used to review the Coach layout.
-		</div>
+			<div className="coach-owner-auth-note" role="status">
+				Coach authentication is available on a Netlify preview or the live site. The local
+				Vite screen can still be used to review the Coach layout.
+			</div>
 		)
 	}
 
 	const passwordFlow = flow?.type === 'invite' || flow?.type === 'recovery'
 	const title =
 		flow?.type === 'invite'
-			? 'Set the password for your invited owner account'
+			? 'Set the password for your invited Coach account'
 			: flow?.type === 'recovery'
-				? 'Choose a new owner password'
+				? 'Choose a new Coach password'
 				: forgotPassword
 					? 'Request a password reset'
-					: 'Owner sign in'
+					: 'Coach sign in'
 
 	const submit = async (event) => {
 		event.preventDefault()

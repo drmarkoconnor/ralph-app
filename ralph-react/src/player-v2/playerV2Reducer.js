@@ -15,6 +15,7 @@ export const initialPlayerV2State = {
 	deals: [],
 	index: 0,
 	selectedName: '',
+	content: null,
 	board: null,
 	hands: null,
 	practiceAuction: null,
@@ -436,15 +437,20 @@ export function playerV2Reducer(state, action) {
 	switch (action.type) {
 		case 'LOAD_DEALS': {
 			const deals = action.deals.map(normalizeBoard).filter((board) => board.deal)
+			const requestedIndex = Number(action.startIndex)
+			const index = Number.isInteger(requestedIndex)
+				? Math.max(0, Math.min(deals.length - 1, requestedIndex))
+				: 0
 			return {
 				...state,
 				deals,
-				index: 0,
+				index,
 				selectedName: action.name || '',
+				content: action.content || null,
 				boardSessions: {},
 				manualContract: emptyManualContract(),
 				contractNotice: '',
-				...hydrateBoard(deals, 0),
+				...hydrateBoard(deals, index),
 			}
 		}
 		case 'RESET':

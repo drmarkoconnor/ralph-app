@@ -15,9 +15,9 @@ export default function Sources() {
 				</div>
 
 				<p className="text-sm text-gray-700 leading-6 mb-4">
-					The links below are public, open sources of PBN files. They are
-					provided for learning, analysis, and practice. Please respect the
-					terms of each site.
+					The links below lead to publicly available PBN files. Availability
+					does not necessarily grant permission to republish them, and reuse
+					terms vary. Please check and respect each site's terms.
 				</p>
 
 				<ul className="space-y-2 mb-6">
@@ -37,11 +37,16 @@ export default function Sources() {
 				</ul>
 
 				<div className="text-sm text-gray-700 leading-6">
-					Version 2 note: this app will add importing PBNs so you can reproduce
-					previously played tournaments directly inside the tool.
+					The Bridge Hand Player can load a PBN you have downloaded legitimately.
+					The current{' '}
+					<Link to="/competitions" className="font-bold text-sky-700 hover:underline">
+						competition replay library
+					</Link>{' '}
+					uses a small reviewed set of official USBF records with visible attribution,
+					source checksums and a documented reuse caution. Replay and expert comparison
+					remain free; optional AI nudges require normal Coach authorisation.
 				</div>
 			</div>
 		</div>
 	)
 }
-

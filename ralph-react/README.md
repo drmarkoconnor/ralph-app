@@ -11,7 +11,11 @@ Key features:
 - PDF handout export (2 boards per page)
 - Word handout export (.docx, one board per page with hard page breaks)
 - Pages handout export (.rtf, one board per page, optimized for Apple Pages)
-- Player view to step through auction & play for teaching
+- Classroom Player V3 with South practice bidding, contract check, card play,
+  replay and clean presentation mode
+- Compact, authenticated manual AI Coach for eligible bidding and play decisions
+- Free, attributed competition replay library with published table-score
+  comparison; optional Coach nudges retain the normal owner/subscriber access rules
 
 Full non-technical user documentation: see <a href="./HELP.md">HELP.md</a>
 
@@ -24,7 +28,9 @@ Developer quick start:
 Structure overview:
 
 - `src/DragDropCards.jsx` – Deal builder UI
-- `src/pages/Player.jsx` – Teaching / play interface
+- `src/pages/PlayerV2.jsx` – Current classroom teaching / play interface
+- `src/pages/Competitions.jsx` – Curated competition replay catalogue
+- `scripts/competition-pbns/` – Allowlisted static competition pack importer
 - `src/lib/acolAdvisor.js` – Deterministic ACOL auction advice engine
 - `src/lib/handoutPdf.js` – PDF generator (jsPDF)
 - `src/lib/handoutDocx.js` – Native DOCX generator with hard PageBreaks
@@ -34,4 +40,3 @@ License: Internal teaching aid (add a LICENSE file if distributing externally).
 
 For feature requests or issues, open a ticket or annotate in HELP.md “Future
 Ideas” section.
-

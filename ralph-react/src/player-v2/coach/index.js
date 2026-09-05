@@ -1,4 +1,5 @@
 export { buildLearnerCoachContext, buildSouthCoachContext } from './buildCoachContext.js'
+export { buildCoachDealFingerprint, canonicalCoachDeal } from './coachDealFingerprint.js'
 export {
 	COACH_CARD_CONSTANTS,
 	buildOutstandingCardFacts,

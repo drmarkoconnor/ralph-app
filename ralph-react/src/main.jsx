@@ -9,6 +9,7 @@ import PlayerV2 from './pages/PlayerV2.jsx'
 import PlayerHelp from './pages/PlayerHelp.jsx'
 import GeneratorV2 from './pages/GeneratorV2.jsx'
 import HomeConcepts from './pages/HomeConcepts.jsx'
+import Competitions from './pages/Competitions.jsx'
 import PlayerDisplayBoundary from './components/PlayerDisplayBoundary.jsx'
 
 const COACH_AUTH_HASH_PATTERN =
@@ -29,6 +30,7 @@ const router = createBrowserRouter([
 	{ path: '/', element: <Home /> },
 	{ path: '/home-concepts', element: <HomeConcepts /> },
 	{ path: '/home-concepts/:id', element: <HomeConcepts /> },
+	{ path: '/competitions', element: <Competitions /> },
 	{ path: '/generator-v2', element: <GeneratorV2 /> },
 	{ path: '/generator2', element: <GeneratorV2 /> },
 	{ path: '/picker', element: <GeneratorV2 /> },

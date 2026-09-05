@@ -1,77 +1,89 @@
 # AI Coach server
 
-The ordinary bridge player remains public. AI access is isolated behind these server routes:
+The bridge player remains public and free. AI generation is an optional,
+account-only service implemented by Netlify Functions:
 
-- `POST /api/coach` — existing private owner endpoint.
-- `POST /api/coach/trial` — one anonymous, real AI nudge per signed browser cookie.
-- `GET /api/coach/access` — safe client-facing owner/trial availability summary.
+- `POST /api/coach` — generate an authenticated Coach response.
+- `GET /api/coach/access` — return safe client-facing availability and allowance state.
+- `GET /api/coach/entitlements` — owner-only list or lookup of manual entitlements.
+- `POST /api/coach/entitlements` — owner-only grant or revoke operation.
+- `POST /api/coach/trial` — retired endpoint; always returns `410 trial_retired` after
+  its method and same-origin checks.
 
-The owner endpoint does not call OpenAI unless all of the following pass first:
-
-1. Netlify Identity has authenticated the request.
-2. The Identity user has the server-controlled `coach-owner` role.
-3. `COACH_OWNER_EMAIL` is configured and the signed-in email matches it.
-4. The submitted learner context passes the strict allowlist.
-
-The schema supports learner seat North or South for rotated declarer control. The legacy `south-acol-12-14-safe-v1` profile remains South-only; new dynamic contexts use `learner-acol-12-14-safe-v2`. Profile seat, perspective seat, first known hand, auction turn marker, and visible-contract role must agree.
-
-Both generation routes use `gpt-5.6-luna` through the OpenAI Responses API with no reasoning effort, low verbosity, structured output, a short output cap, and `store: false`.
+No route calls OpenAI unless `COACH_ENABLED` is exactly `true`. Omitting the
+variable, setting it to any other value, or removing the API key fails closed.
+This server layer may therefore remain deployed while Coach controls are absent
+from the Player UI.
 
 ## Netlify setup
 
-- In **Project configuration > Identity**, enable Identity.
-- In **Identity > Registration > Registration preferences**, select **Invite only**.
-- In **Identity > Users**, invite the owner's email address.
-- Open that Identity user, choose **Edit settings**, and add the role `coach-owner`. Roles belong in server-controlled `app_metadata.roles`, never `user_metadata`.
-- Store `OPENAI_API_KEY` in the project's environment variables. Do not use a `VITE_` prefix; the browser must never receive this key.
-  - On Pro, prefer a write-only secret limited to the **Functions** scope.
-  - On Personal/Free, Netlify does not permit that Functions-only secret scope. The no-upgrade option is a standard site environment variable, ideally with a **Production** value only. It remains outside the source and browser bundle, but Netlify team owners can read it, so use this option only after accepting that trade-off.
-- Add `COACH_OWNER_EMAIL` with the same owner email as a required second check. The endpoint remains disabled if this is missing. Although the parser supports a list, use one address to keep this feature owner-only.
-- Anonymous trial settings are separate and fail closed:
-  - `COACH_TRIAL_ENABLED=true` explicitly enables real anonymous calls. Set it to `false` for the immediate kill switch.
-  - `COACH_TRIAL_SECRET` must be a random secret of at least 32 characters. Store it as a Functions-scoped secret when the plan allows. Rotating it invalidates existing trial cookies and therefore resets their browser identity.
-  - `COACH_TRIAL_DAILY_CAP` is optional and defaults to `20`. Accepted values are 1–250. This is a durable UTC-day cap across all anonymous browsers.
-- After changing a role, sign out and sign back in so the refreshed Identity token includes it.
-- In the OpenAI project that owns this key, set a small monthly spend limit/alert and restrict model usage to the Coach model where available. This is the provider-level backstop if the owner account or key is ever compromised.
+Set these environment variables in **Project configuration > Environment
+variables**:
 
-The repository-root `.env` is for local development only and is ignored by Git. Netlify does not receive that file: production values must be entered separately in the Netlify project environment. Verify the complete invitation and role flow on a Netlify preview before promoting it to production.
+- `COACH_ENABLED=true` — explicit paid-generation switch. Set it to `false` for
+  the immediate kill switch.
+- `OPENAI_API_KEY` — server-side API key. Never add a `VITE_` prefix or expose it
+  to browser code. Prefer a write-only, Functions-scoped secret when the Netlify
+  plan supports that scope.
+- `COACH_OWNER_EMAIL` — the exact confirmed Identity email allowed to administer
+  entitlements and use owner access.
+- `COACH_CONTACT_EMAIL` — optional public contact address returned by the access
+  route.
 
-For a local UI review without authentication or paid calls, run Vite and open:
+The retired endpoint ignores `COACH_TRIAL_ENABLED`, `COACH_TRIAL_SECRET`, and
+`COACH_TRIAL_DAILY_CAP`. They can be removed from Netlify. In particular, a stale
+`COACH_TRIAL_ENABLED=true` value cannot reactivate anonymous calls.
 
-```text
-http://127.0.0.1:5173/player?coach-preview=1
-```
+In Netlify Identity:
 
-This development-only preview enables free local facts but deliberately disables every paid button. The query parameter cannot bypass production authentication or the server endpoint.
+1. Enable Identity and use invite-only registration.
+2. Invite the owner, wait for email confirmation, and assign the server-managed
+   `coach-owner` role in `app_metadata.roles`.
+3. Invite a subscriber and wait for email confirmation before granting an
+   entitlement. The owner endpoint adds and removes the `coach-subscriber` role.
+4. Sign out and back in after a role change so the Identity token refreshes.
 
-## Private owner request and response
+Owner access requires all three checks: a confirmed Identity account, the
+`coach-owner` role, and an exact `COACH_OWNER_EMAIL` match. Subscriber access
+requires a confirmed account, the `coach-subscriber` role, and a separate active
+durable entitlement keyed by the immutable Identity user ID. Neither a role nor
+an email address alone grants subscriber access.
 
-The request is:
+Also set a small OpenAI project spend limit and alert. Application limits reduce
+accidental use; the provider limit is the final cost backstop.
+
+## Coach request
+
+The authenticated request shape is strict:
 
 ```json
 {
   "intent": "nudge",
   "question": "What should I be thinking about?",
+  "dealFingerprint": "64-lowercase-hex-characters-from-sha-256",
   "context": {}
 }
 ```
 
-Accepted owner intents are `nudge`, `explain`, `compare`, and `remember`. `context` must be produced by the coach context builder; unknown properties, mismatched learner seats, and altered safety/profile values are rejected rather than passed to the model.
+`dealFingerprint` is the SHA-256 fingerprint of the canonical deal, dealer and
+vulnerability. It is used only by the allowance ledger and is explicitly
+stripped before the model request is built. `context` must pass the strict
+learner-perspective allowlist; hidden hands, future auction calls and unknown
+properties are rejected rather than forwarded.
 
-The response is:
+Subscribers may request `nudge` and `explain`. The broader `compare` and
+`remember` intents remain owner-only. A nudge is prompted to use about 35–45
+words: one public observation followed by one bridge principle or thinking
+question, without naming the final bid or card.
+
+The response includes the safe Coach object plus:
 
 ```json
 {
-  "coach": {
-    "message": "…",
-    "concept": "…",
-    "certainty": "known",
-    "factsUsed": [],
-    "suggestedChecks": []
-  },
   "meta": {
     "model": "gpt-5.6-luna",
     "cached": false,
+    "access": "subscriber",
     "usage": {
       "inputTokens": 0,
       "outputTokens": 0,
@@ -81,43 +93,88 @@ The response is:
 }
 ```
 
-Repeated identical requests are coalesced and cached briefly. Netlify also limits the route to 12 requests per minute for each IP/domain combination. A warm-instance limit of 12 new calls per minute and 80 per hour protects against double-clicks and accidental loops. These are cost backstops; the Identity owner role and exact-email check are the primary protection.
+The displayed estimate uses $0.20 per million uncached input tokens, $0.02 per
+million cached input tokens, $0.25 per million cache-write tokens, and $1.20 per
+million output tokens. The OpenAI Usage dashboard remains authoritative.
 
-The player counts every AI request it dispatches and shows the cost estimate returned by completed responses. A cancelled browser request can still have started upstream, so the OpenAI Usage dashboard remains the authoritative spending record.
+## Subscriber allowance
 
-## Anonymous one-nudge trial
+Each manual entitlement has a start, end, fixed 100 client-identified-deal
+allowance, fixed 20-paid-call-attempts-per-deal allowance, a hard 2,000 paid-call
+ceiling for the whole period, and audit fields. A grant may cover at most 35
+days.
 
-The trial accepts only this shape:
+Usage is stored in the strongly consistent `ralph-coach-access` Netlify Blobs
+store. Conditional writes reserve capacity before generation, so concurrent
+requests cannot admit deal 101, paid attempt 21 for one deal, or paid attempt
+2,001 for one period. Immediately before provider dispatch, the reservation is
+durably changed to a paid attempt. Provider errors, client aborts and response
+receipt failures therefore cannot erase potential provider cost; they do not
+increase the separate successful-response counter. Only an unused pre-dispatch
+reservation can be released. Stale dispatched requests are marked failed after
+five minutes but remain counted. An identical completed request returns its
+saved response without another paid call or allowance increment.
+
+Replaying the same canonical deal uses the same deal fingerprint and therefore
+still counts as one deal during that entitlement period. The browser-derived
+fingerprint is suitable for a small invited cohort, but is not fraud-resistant:
+a determined client could fabricate it. A larger commercial service should use
+server-issued play sessions. Regardless of fabricated deal labels, the durable
+2,000-attempt period ceiling bounds application-level subscriber exposure.
+
+Owner calls use the same Blobs store for a durable ceiling of 80 paid attempts
+in a rolling hour and 2,000 in a UTC calendar month. The warm-instance duplicate
+guard and Netlify request limiter remain additional protections. Keep a strict
+OpenAI project budget because provider-side spend control is the final backstop.
+
+## Curated competition deals
+
+Curated competition deals follow the same Coach access rules as every other
+deal. A confirmed owner or a subscriber with an active entitlement may request
+AI nudges; anonymous, unconfirmed and unentitled users cannot make paid calls.
+The canonical deal fingerprint remains required and participates in the normal
+per-deal allowance, so replaying a competition board does not consume a second
+deal from the same entitlement period.
+
+## Owner entitlement operations
+
+These routes rely on the owner's existing Netlify Identity session and must be
+called from the same site origin.
+
+Grant a confirmed Identity user:
 
 ```json
 {
-  "intent": "nudge",
-  "context": {}
+  "action": "grant",
+  "userId": "immutable-netlify-identity-user-id",
+  "periodStart": "2026-09-01T00:00:00.000Z",
+  "periodEnd": "2026-10-01T00:00:00.000Z",
+  "note": "Manual subscription"
 }
 ```
 
-Free-form `question`, `explain`, `compare`, and `remember` requests are rejected. Automatic coaching must not call the trial route. It uses the same strict learner-perspective and spoiler-safety validation as the owner route, with a smaller output cap.
+Revoke access:
 
-On first use, a valid cookie-less POST only issues a HMAC-signed `__Host-ralph-coach-trial` cookie and returns `428 trial_cookie_required`; it does not reserve a trial or call OpenAI. The client helper transparently repeats the same request once after the browser has stored the cookie, so this remains one click in the UI. The cookie uses `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, and no `Domain`. Only a hash of its random identifier becomes a ledger key; neither the OpenAI key nor the signing secret reaches the browser.
+```json
+{
+  "action": "revoke",
+  "userId": "immutable-netlify-identity-user-id",
+  "note": "Subscription ended"
+}
+```
 
-After that handshake, the site-scoped `ralph-coach-trials` Netlify Blobs store uses strong consistency and conditional writes. It atomically reserves the shared signed-cookie identity before calling OpenAI, so concurrent requests carrying that cookie can start at most one generation. Parallel cookie-less handshakes themselves perform no paid work. A completed identical retry can return its saved spoiler-safe response without another paid call. A failed upstream attempt remains consumed because a timeout may already have incurred provider cost. Completion writes also retry conditional conflicts; if the one-use receipt still cannot be saved, the route reports `trial_completion_failed` instead of silently returning success and reconciles the reservation to a consumed state where possible.
+Use `GET /api/coach/entitlements` to list records, or append an encoded
+`?userId=...` to read one record and its current usage. Revocation changes the
+durable record first, so access is denied even if Identity role cleanup must be
+retried.
 
-Cost backstops are layered:
-
-- Four trial-endpoint requests per minute for each Netlify IP/domain bucket, allowing the no-cost handshake plus one generation while still bounding retries.
-- One atomic reservation for each valid browser cookie.
-- Durable `COACH_TRIAL_DAILY_CAP` across all trial visitors.
-- `COACH_TRIAL_ENABLED=false` immediately disables new trial calls after the environment change is deployed.
-- The OpenAI project model/rate/spend limits remain the final provider-level backstop.
-
-Response errors are machine-distinguishable. `trial_cookie_required` is the no-cost handshake response normally absorbed by the client helper. `trial_used` returns `409` with `accessRequired: true`; `trial_in_progress`, `trial_daily_cap`, `trial_disabled`, `trial_completion_failed`, and configuration/provider failures use separate codes. A successful trial response also returns `meta.trialUsed: true` and `meta.accessRequired: true`, allowing the UI to show sign-in immediately after the free response.
-
-This is one free nudge per retained browser cookie, not a provable one per human. Clearing cookies, using a different browser/device, or rotating `COACH_TRIAL_SECRET` can produce a new anonymous identity. The daily cap bounds that unavoidable anonymous risk. A future paid rollout should require verified Identity login and store entitlements/credits against immutable Identity user IDs; access codes should be one-use server-side redemption tokens, not permanent browser secrets.
-
-`GET /api/coach/access` returns only safe state such as `owner`, `access`, and trial availability. It never grants access: both POST routes repeat their full authorization or reservation checks.
+`GET /api/coach/access` returns only safe fields: `enabled`, `configured`,
+`signedIn`, `access` (`owner`, `subscriber`, or `none`), `authorized`, optional
+subscriber allowance data, optional `contactEmail`, and a retired-trial marker.
+Every paid POST independently repeats authentication and entitlement checks.
 
 Run focused tests with:
 
 ```sh
-npm run test:coach
+npm run test:coach-server
 ```

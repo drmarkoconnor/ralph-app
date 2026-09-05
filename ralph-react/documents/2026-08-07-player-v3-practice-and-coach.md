@@ -85,55 +85,123 @@ Dummy is exposed after the opening lead according to normal play. The full 180-d
 - Restoring normal view returns the ordinary Player chrome and controls without
   changing the board, trick, visibility choices, or play history.
 
-## AI Coach status
+## Compact AI Coach
 
-- AI Coach, Coach notebook, near-hand nudge, sign-in prompts, and trial controls
-  are temporarily removed from the Player interface.
-- The immediate product priority is dependable bidding, contract confirmation,
-  card play, and replay with maximum classroom clarity.
-- Ordinary Player use therefore exposes no control that can start a paid AI
-  request.
-- Keep `COACH_TRIAL_ENABLED=false` in the deployed Netlify environment while
-  the trial interface is retired; this also closes the anonymous trial endpoint
-  against direct calls.
-- The existing server-side access and cost-control groundwork may remain dormant
-  for a later redesign. Any reintroduction must fit the phase-based classroom
-  layout and must not cover the learner's hand, bidding controls, or play table.
-- Possible future forms include a very small decision-time nudge and a separate
-  end-of-hand post-mortem workspace. Neither is part of the current Player.
+- AI Coach has returned only as a small, manual **Nudge me** aid. The former
+  large Coach modal and notebook remain retired from live bidding and play.
+- During bidding the Coach sits below the auction, beside South's hand and the
+  bidding controls. During play it occupies the free lower-left table rail. Its
+  answer scrolls inside a bounded card and never expands over the learner's
+  cards or the central trick.
+- The control appears only when the learner has a real decision. It is hidden
+  while North, East or West bids automatically, during the recorded-auction
+  comparison, while a computer plays, at the contract checkpoint, and while a
+  completed trick is settling.
+- When North is declarer and the table rotates, the Coach follows the
+  learner-facing North perspective. It can still discuss a decision made from
+  exposed dummy without treating dummy as hidden information.
+- Every paid request requires a button press. There is no automatic polling or
+  background AI coaching.
+- Live nudges target about 35–45 words: one public observation and one bridge
+  principle or thinking question. They must not name the final bid or card.
+  **Explain principle** is an optional second, separately metered request.
+- An unsigned visitor sees one compact offer per browser: **£10 per month, up
+  to 100 AI-assisted deals**, with Contact Mark and Sign in actions. After it is
+  dismissed, only a small locked Coach pill remains. Sales prompts are hidden
+  from clean presentation mode.
+- The bridge player itself remains public and free. A failed Coach access check
+  must not block bidding, card play, replay or presentation.
 
-## Dormant AI access groundwork
+## AI access and spending policy
 
-If AI coaching returns, spending must remain isolated behind server-side
-functions. Provider keys must never use a `VITE_` environment variable or be
-sent to the browser. The earlier browser-trial and invite-only Identity work is
-retained only as groundwork, not as an active Player access model.
+- `OPENAI_API_KEY` remains server-side in Netlify Functions and must never use a
+  `VITE_` prefix or enter the browser bundle.
+- `COACH_ENABLED=true` is the explicit, fail-closed kill switch. Omitting it or
+  setting it to another value disables paid generation.
+- Keep `COACH_TRIAL_ENABLED=false`. The old anonymous signed-cookie trial route
+  remains closed and is not used by the compact Player.
+- Owner access requires a confirmed Netlify Identity user, the server-managed
+  `coach-owner` role, and an exact match with `COACH_OWNER_EMAIL`.
+- Subscriber access requires a confirmed Identity user, the server-managed
+  `coach-subscriber` role, and a separate active entitlement keyed by the
+  immutable Identity user ID. A role or email address alone is insufficient.
+- Subscriber entitlements are initially granted manually after payment. Each
+  entitlement stores its own start and end time, plan, limits and audit fields.
+  Payment-provider automation is deliberately deferred.
+- The subscriber allowance is 100 client-identified AI-assisted deals per
+  entitlement period, at most 20 paid generation attempts per deal, and no more
+  than 2,000 paid attempts across the whole period. A deal begins on its first
+  provider-dispatched attempt, not when a PBN is loaded. Replaying the same deal
+  in the same period does not consume another deal.
+- The browser derives a SHA-256 fingerprint from the canonical 52-card deal,
+  dealer and vulnerability. The fingerprint is used only for metering and is
+  stripped before model input is built. The model continues to receive only
+  the learner-visible/public context.
+- Durable entitlement and usage records use a strong-consistency Netlify Blobs
+  store with conditional writes. Concurrent requests cannot admit deal 101,
+  paid attempt 21 on one deal, or paid attempt 2,001 in one period. The ledger
+  records dispatch before calling the provider, so errors, aborts and receipt
+  failures cannot silently erase potential cost. They do not increase the
+  separate successful-response count.
+- Owner calls also use durable Blobs metering: at most 80 paid attempts in a
+  rolling hour and 2,000 per UTC calendar month. Warm-instance request
+  throttles, the immediate kill switch and OpenAI project spend limits remain
+  additional backstops. The app's usage estimate is helpful; the OpenAI Usage
+  dashboard remains authoritative for provider billing.
+- Client-generated deal identity is suitable for the current invited and
+  manually trusted cohort. A determined technical user could falsify local deal
+  input, so a larger commercial service should move to server-issued play
+  sessions before claiming fraud-resistant deal accounting.
 
-### Required next access milestone
+### Competition replay and Coach access
 
-Before a public paid launch, replace browser-only trial identity with verified email/account identity:
+- The `/competitions` catalogue, complete replay flow and published expert-score
+  comparison are free. They do not require Coach access.
+- At eligible bidding and card-play decisions, competition boards use the same
+  compact, manual Coach control as other PBNs. There is no large Coach modal and
+  no automatic AI generation.
+- An unauthorised visitor sees the normal small contact/sign-in offer. Only a
+  signed-in owner or subscriber with active Coach access can make a model call;
+  the ordinary usage limits and metering apply.
+- Source attribution remains visible independently of Coach access. Keeping the
+  replay free is not a substitute for checking redistribution permission.
 
-- require email verification before issuing further complimentary or paid credits;
-- store entitlements and remaining credits against the immutable Identity user ID;
-- make any emailed access code a one-use, expiring server-side redemption token;
-- add payment only after that entitlement layer exists (for example, a hosted payment checkout plus a verified webhook);
-- retain a global daily cap, an immediate kill switch, and provider-level spend limits.
+### Cost envelope at the September 2026 launch price
 
-Any future complimentary trial must not treat a browser cookie as proof of one
-use per person: clearing cookies or changing devices creates another browser
-identity. A global daily cap, immediate kill switch, and provider-level spend
-limits remain necessary even after verified accounts are introduced.
+- The selected model is `gpt-5.6-luna`, using the Responses API with reasoning
+  disabled for quick, economical nudges. Current text pricing is $0.20 per
+  million input tokens, $0.02 cached input, $0.25 cache writes and $1.20 output.
+- The absolute product allowance is 2,000 paid generation attempts per
+  subscriber period: 100 client-identified deals multiplied by 20 attempts.
+  Provider failures remain inside this ceiling, so retries cannot increase the
+  worst-case model-call count.
+- At an intentionally cautious 4,000 input and 240 output tokens for every
+  response, provider cost is about $2.18, or £1.81 at $1.20/£1. Adding a 15%
+  contingency gives an AI budget of about £2.09 per fully used subscription.
+- If the £10 customer price includes 20% VAT, net revenue is £8.33. After the
+  cautious £2.09 AI budget and an illustrative £0.50 payment-processing reserve,
+  the contribution is about £5.74 per subscriber period before Netlify usage,
+  support, tax and other overhead. This supports a positive model-cost margin,
+  but it is a planning estimate rather than accounting or tax advice.
+- Set an OpenAI project budget of roughly $3 per fully used subscriber-month,
+  plus a separate small allowance for owner testing, and review real token use
+  before automating sales.
 
 ## Deferred work
 
 - Expand the guided bidder progressively with tested ACOL competitive auctions, rebids, opener continuations, doubles, and convention choices.
 - Continue simplifying restart and replay for both the auction and the hand.
-- Reconsider AI coaching only after the core workflow is classroom-tested. A
-  future post-game workspace may use the full screen, complete public play
+- A future post-game Coach workspace may use the full screen, complete public play
   history, trick-by-trick navigation, and separate perspectives for declarer
   and defence.
-- Add teacher-managed learner accounts, entitlement/credit administration, and verified-email access.
-- Consider payments only after the entitlement and audit trail are in place.
+- Add a simple owner UI for inviting accounts and granting or revoking the
+  already-supported durable entitlements.
+- Add a hosted payment flow and verified webhook only after the manually managed
+  £10 service has proved useful. Do not grant access from an unverified browser
+  payment return alone.
+- If a complimentary trial returns, move it to verified email before launch.
+  A browser cookie is not proof of one use per person because it can be cleared
+  or replaced on another device.
 
 ## Verification commands
 

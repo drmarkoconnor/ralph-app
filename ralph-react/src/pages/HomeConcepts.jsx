@@ -84,7 +84,7 @@ export function ConceptHome({ concept, showConceptNav = true }) {
 
 	return (
 		<div
-			className="relative min-h-screen overflow-hidden bg-slate-950"
+			className="relative min-h-screen overflow-x-hidden bg-slate-950"
 			style={{
 				backgroundImage: `url(${concept.image})`,
 				backgroundPosition: concept.position,
@@ -116,6 +116,28 @@ export function ConceptHome({ concept, showConceptNav = true }) {
 						Create teaching hands, export PBN files, and guide students through bidding and play on a clear classroom display.
 					</p>
 					<PrimaryActions light={concept.light} />
+					<Link
+						to="/competitions"
+						className={`group mt-7 flex max-w-2xl items-center justify-between gap-5 rounded-2xl border-2 p-4 text-left shadow-xl transition hover:-translate-y-0.5 focus:outline-none focus:ring-4 ${
+							concept.light
+								? 'border-amber-300 bg-white/88 text-slate-950 hover:bg-white focus:ring-amber-300/40'
+								: 'border-amber-300/75 bg-slate-950/72 text-white backdrop-blur hover:bg-slate-950/88 focus:ring-amber-300/40'
+						}`}>
+						<div>
+							<div className="text-xs font-black uppercase tracking-[0.18em] text-amber-500">
+								Free competition replays
+							</div>
+							<div className="mt-1 text-xl font-black">Play a famous final</div>
+							<div className={`mt-1 text-sm font-semibold ${concept.light ? 'text-slate-600' : 'text-slate-200'}`}>
+								Bid as South, play the deal, then compare with the published expert tables.
+							</div>
+						</div>
+						<span
+							aria-hidden="true"
+							className="shrink-0 rounded-full bg-amber-300 px-4 py-2 text-xl font-black text-slate-950 transition group-hover:translate-x-1">
+							→
+						</span>
+					</Link>
 					<p className={`mt-7 max-w-xl text-sm font-semibold leading-6 ${concept.light ? 'text-slate-600' : 'text-white/64'}`}>
 						Generator and Player are the primary workflow. Instructions and the walkthrough remain available when you need support.
 					</p>

@@ -21,6 +21,12 @@ export function parsePBN(text) {
 	let current = null
 	let inAuction = false
 	let inPlay = false
+	const finishCurrent = () => {
+		if (current) deals.push(current)
+		current = null
+		inAuction = false
+		inPlay = false
+	}
 	const normDealer = (val) => {
 		const v = String(val || '').trim()
 		const up = v.toUpperCase()
@@ -43,21 +49,26 @@ export function parsePBN(text) {
 	}
 	for (const raw of lines) {
 		const line = String(raw || '').trim()
-		if (!line && inAuction) inAuction = false
-		if (!line && inPlay) inPlay = false
-		if (!line) {
-			if (current) {
-				deals.push(current)
-				current = null
-			}
-			continue
-		}
+		// Blank lines are legal between tags and may also be left behind when a
+		// multi-line PBN comment is removed. A new Event or Board tag below is a
+		// more reliable record boundary than whitespace.
+		if (!line) continue
 		if (/^\([A-Z]+\)/.test(line)) continue
 		const m = line.match(/^\[([^\s]+)\s+"([^"]*)"\]/)
 		if (m) {
 			const key = m[1]
 			const val = m[2]
+			if (
+				current?.deal &&
+				(key === 'Event' || key === 'Board' || key === 'Deal')
+			) {
+				finishCurrent()
+			}
 			current = current || { ext: {} }
+			// A tag always ends the preceding data section. Auction and Play opt
+			// back into their own section explicitly below.
+			inAuction = false
+			inPlay = false
 			switch (key) {
 				case 'Board':
 					current.board = val
@@ -148,12 +159,11 @@ export function parsePBN(text) {
 			if (line) current.play.push(line)
 			continue
 		}
-		if (current) {
-			deals.push(current)
-			current = null
-		}
+		// Ignore rows belonging to PBN sections that this compact parser does
+		// not consume (for example ScoreTable). The next record is delimited by
+		// its Event, Board or Deal tag rather than by free-form section content.
 	}
-	if (current) deals.push(current)
+	finishCurrent()
 	// Normalize auctions: if the final bid is not followed by three passes, append passes
 	const bidRe = /^([1-7])(C|D|H|S|NT)$/i
 	const isPass = (c) => /^P(ASS)?$/i.test(String(c))
@@ -186,4 +196,3 @@ export function parsePBN(text) {
 	}
 	return deals
 }
-
