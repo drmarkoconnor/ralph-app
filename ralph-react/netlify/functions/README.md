@@ -30,6 +30,9 @@ variables**:
 - `COACH_CONTACT_EMAIL` — optional public contact address returned by the access
   route.
 
+After changing production environment variables, trigger a new production
+deploy so every Function instance receives the reviewed configuration.
+
 The retired endpoint ignores `COACH_TRIAL_ENABLED`, `COACH_TRIAL_SECRET`, and
 `COACH_TRIAL_DAILY_CAP`. They can be removed from Netlify. In particular, a stale
 `COACH_TRIAL_ENABLED=true` value cannot reactivate anonymous calls.
