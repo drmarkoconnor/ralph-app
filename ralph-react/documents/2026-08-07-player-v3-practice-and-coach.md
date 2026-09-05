@@ -120,11 +120,16 @@ Dummy is exposed after the opening lead according to normal play. The full 180-d
   setting it to another value disables paid generation.
 - Keep `COACH_TRIAL_ENABLED=false`. The old anonymous signed-cookie trial route
   remains closed and is not used by the compact Player.
-- Owner access requires a confirmed Netlify Identity user, the server-managed
-  `coach-owner` role, and an exact match with `COACH_OWNER_EMAIL`.
-- Subscriber access requires a confirmed Identity user, the server-managed
-  `coach-subscriber` role, and a separate active entitlement keyed by the
-  immutable Identity user ID. A role or email address alone is insufficient.
+- Owner access requires an authenticated Netlify Identity subject, the
+  server-managed `coach-owner` role, and an exact match with
+  `COACH_OWNER_EMAIL`. Request-time checks use the authenticated subject rather
+  than the optional `confirmedAt` profile field, which is absent from Netlify's
+  verified JWT fallback shape.
+- Subscriber access requires an authenticated Identity subject, the
+  server-managed `coach-subscriber` role, and a separate active entitlement
+  keyed by the immutable Identity user ID. The complete admin record must show
+  a confirmed email before that entitlement is granted. A role or email address
+  alone is insufficient.
 - Subscriber entitlements are initially granted manually after payment. Each
   entitlement stores its own start and end time, plan, limits and audit fields.
   Payment-provider automation is deliberately deferred.

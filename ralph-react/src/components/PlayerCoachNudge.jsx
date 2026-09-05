@@ -24,7 +24,7 @@ function CoachAccessCard({ coach, presentationMode = false, className = '' }) {
 			) : signedIn && !coach.authorized ? (
 				<>
 					<p className="player-coach-access__notice">
-						This signed-in account does not yet have an active Coach subscription.
+						This signed-in account is not currently authorised for AI Coach.
 					</p>
 					<div className="player-coach-access__actions">
 						<a className="player-coach-access__primary" href={`mailto:${coach.contactEmail}?subject=AI%20Coach%20access`}>

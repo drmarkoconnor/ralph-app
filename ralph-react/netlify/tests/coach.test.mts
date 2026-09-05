@@ -299,7 +299,6 @@ test('competition deal fingerprints use normal owner rate metering and generatio
 	const owner = {
 		id: 'owner-competition-test',
 		email: 'owner@example.com',
-		confirmedAt: CONFIRMED_AT,
 		roles: ['coach-owner'],
 	}
 	let meteringCalls = 0
@@ -545,27 +544,27 @@ test('rejects a changed profile or an additional pre-play hand', () => {
 	assert.equal(coachRequestSchema.safeParse(leakedHand).success, false)
 })
 
-test('requires the server-controlled coach-owner role and exact email match', () => {
+test('requires an authenticated subject, server-controlled coach-owner role, and exact email match', () => {
 	assert.equal(isCoachOwner(null), false)
-	assert.equal(isCoachOwner({ email: 'owner@example.com', confirmedAt: CONFIRMED_AT, roles: ['member'] }), false)
+	assert.equal(isCoachOwner({ id: 'owner-1', email: 'owner@example.com', roles: ['member'] }), false)
 	assert.equal(isCoachOwner({ email: 'owner@example.com', roles: ['coach-owner'] }, 'owner@example.com'), false)
 	assert.equal(
 		isCoachOwner(
-			{ email: 'owner@example.com', confirmedAt: CONFIRMED_AT, roles: ['coach-owner'] },
+			{ id: 'owner-1', email: 'owner@example.com', roles: ['coach-owner'] },
 			'owner@example.com',
 		),
 		true,
 	)
 	assert.equal(
 		isCoachOwner(
-			{ email: 'owner@example.com', confirmedAt: CONFIRMED_AT, appMetadata: { roles: ['coach-owner'] } },
+			{ id: 'owner-1', email: 'owner@example.com', appMetadata: { roles: ['coach-owner'] } },
 			'OWNER@example.com',
 		),
 		true,
 	)
 	assert.equal(
 		isCoachOwner(
-			{ email: 'someone@example.com', confirmedAt: CONFIRMED_AT, roles: ['coach-owner'] },
+			{ id: 'owner-1', email: 'someone@example.com', roles: ['coach-owner'] },
 			'owner@example.com',
 		),
 		false,
@@ -894,13 +893,12 @@ test('subscriber provider success remains metered when completion storage fails'
 	assert.equal(generationCalls, 2)
 })
 
-test('subscriber access requires confirmation, role, active entitlement, and an enabled Coach', async () => {
+test('subscriber JWT fallback requires a stable subject, role, active entitlement, and an enabled Coach', async () => {
 	const store = new MemoryCoachAccessStore()
 	const entitlement = await activeEntitlement(store)
 	const baseUser = {
 		id: entitlement.userId,
 		email: entitlement.email,
-		confirmedAt: CONFIRMED_AT,
 		roles: ['coach-subscriber'],
 	}
 	let calls = 0
@@ -917,8 +915,10 @@ test('subscriber access requires confirmation, role, active entitlement, and an 
 			},
 		})
 
-	const unconfirmed = await handlerFor({ ...baseUser, confirmedAt: undefined as unknown as string })(coachPost(validApiRequest()), {})
-	assert.equal(unconfirmed.status, 403)
+	const claimsFallback = await handlerFor(baseUser)(coachPost(validApiRequest()), {})
+	assert.equal(claimsFallback.status, 200)
+	const missingSubject = await handlerFor({ ...baseUser, id: '' })(coachPost(validApiRequest()), {})
+	assert.equal(missingSubject.status, 403)
 	const wrongRole = await handlerFor({ ...baseUser, roles: ['member'] })(coachPost(validApiRequest()), {})
 	assert.equal(wrongRole.status, 403)
 	const disabled = await handlerFor(baseUser, coachEnv({ COACH_ENABLED: 'false' }))(coachPost(validApiRequest()), {})
@@ -932,7 +932,7 @@ test('subscriber access requires confirmation, role, active entitlement, and an 
 		generate: async () => generatedCoach(),
 	})(coachPost(validApiRequest()), {})
 	assert.equal(expired.status, 403)
-	assert.equal(calls, 0)
+	assert.equal(calls, 1)
 })
 
 test('subscriber plan allows nudge and explain but keeps broader owner intents private', async () => {
@@ -962,12 +962,11 @@ test('subscriber plan allows nudge and explain but keeps broader owner intents p
 	)
 })
 
-test('confirmed owner uses durable paid-attempt accounting and COACH_ENABLED fails closed', async () => {
+test('owner JWT fallback uses durable paid-attempt accounting and COACH_ENABLED fails closed', async () => {
 	const store = new MemoryCoachAccessStore()
 	const owner = {
 		id: 'owner-1',
 		email: 'owner@example.com',
-		confirmedAt: CONFIRMED_AT,
 		roles: ['coach-owner'],
 	}
 	let calls = 0
@@ -1014,7 +1013,6 @@ test('access endpoint reports only enabled, authorization, contact, and subscrib
 		identityUser: async () => ({
 			id: entitlement.userId,
 			email: entitlement.email,
-			confirmedAt: CONFIRMED_AT,
 			roles: ['coach-subscriber'],
 		}),
 		now: () => NOW,
@@ -1036,12 +1034,30 @@ test('access endpoint reports only enabled, authorization, contact, and subscrib
 	assert.equal(JSON.stringify(payload).includes('test-key-never-sent'), false)
 })
 
+test('access endpoint recognizes an owner from verified JWT fallback claims', async () => {
+	const access = createCoachAccessHandler({
+		env: coachEnv(),
+		identityUser: async () => ({
+			id: 'owner-claims-1',
+			email: 'owner@example.com',
+			roles: ['coach-owner'],
+			appMetadata: { provider: 'email', roles: ['coach-owner'] },
+		}),
+		now: () => NOW,
+	})
+	const payload = await (await access(new Request('https://ralph.example/api/coach/access'), {})).json()
+	assert.equal(payload.signedIn, true)
+	assert.equal(payload.configured, true)
+	assert.equal(payload.access, 'owner')
+	assert.equal(payload.authorized, true)
+	assert.equal('entitlement' in payload, false)
+})
+
 test('owner entitlement endpoint grants, reads, lists, and revokes a confirmed Identity user', async () => {
 	const store = new MemoryCoachAccessStore()
 	const owner = {
 		id: 'owner-1',
 		email: 'owner@example.com',
-		confirmedAt: CONFIRMED_AT,
 		roles: ['coach-owner'],
 	}
 	let target = {
@@ -1111,7 +1127,7 @@ test('owner entitlement endpoint grants, reads, lists, and revokes a confirmed I
 	assert.equal((await getCoachEntitlement(store, target.id))?.status, 'revoked')
 })
 
-test('entitlement administration rejects an unconfirmed owner before touching Identity or storage', async () => {
+test('entitlement administration rejects a user without the owner role before touching Identity or storage', async () => {
 	const store = new MemoryCoachAccessStore()
 	let adminCalls = 0
 	const entitlements = createCoachEntitlementsHandler({
@@ -1119,7 +1135,7 @@ test('entitlement administration rejects an unconfirmed owner before touching Id
 		identityUser: async () => ({
 			id: 'owner-1',
 			email: 'owner@example.com',
-			roles: ['coach-owner'],
+			roles: ['member'],
 		}),
 		identityAdmin: {
 			async getUser() {

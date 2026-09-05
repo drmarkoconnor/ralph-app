@@ -46,11 +46,15 @@ In Netlify Identity:
    entitlement. The owner endpoint adds and removes the `coach-subscriber` role.
 4. Sign out and back in after a role change so the Identity token refreshes.
 
-Owner access requires all three checks: a confirmed Identity account, the
-`coach-owner` role, and an exact `COACH_OWNER_EMAIL` match. Subscriber access
-requires a confirmed account, the `coach-subscriber` role, and a separate active
-durable entitlement keyed by the immutable Identity user ID. Neither a role nor
-an email address alone grants subscriber access.
+Owner access requires an authenticated Identity subject, the `coach-owner` role,
+and an exact `COACH_OWNER_EMAIL` match. Subscriber access requires an
+authenticated subject, the `coach-subscriber` role, and a separate active durable
+entitlement keyed by the immutable Identity user ID. Confirmation is checked
+from the complete admin record before a subscriber entitlement is granted.
+Request-time authorization intentionally does not require the optional
+`confirmedAt` profile field: `@netlify/identity` omits it when it safely falls
+back to verified JWT claims. Neither a role nor an email address alone grants
+subscriber access.
 
 Also set a small OpenAI project spend limit and alert. Application limits reduce
 accidental use; the provider limit is the final cost backstop.
@@ -133,8 +137,8 @@ OpenAI project budget because provider-side spend control is the final backstop.
 ## Curated competition deals
 
 Curated competition deals follow the same Coach access rules as every other
-deal. A confirmed owner or a subscriber with an active entitlement may request
-AI nudges; anonymous, unconfirmed and unentitled users cannot make paid calls.
+deal. An authenticated owner or a subscriber with an active entitlement may
+request AI nudges; anonymous and unentitled users cannot make paid calls.
 The canonical deal fingerprint remains required and participates in the normal
 per-deal allowance, so replaying a competition board does not consume a second
 deal from the same entitlement period.

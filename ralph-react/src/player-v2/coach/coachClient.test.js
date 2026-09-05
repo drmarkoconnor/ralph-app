@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
 	CoachRequestError,
+	getBridgeCoachAccess,
 	requestBridgeCoach,
 	requestBridgeCoachTrial,
 } from './coachClient.js'
@@ -52,6 +53,28 @@ test('authenticated coach request refuses a missing deal fingerprint before fetc
 		/identify this deal/i,
 	)
 	assert.equal(fetched, false)
+})
+
+test('access check preserves an authorized owner response from the server', async (context) => {
+	const originalFetch = globalThis.fetch
+	context.after(() => {
+		globalThis.fetch = originalFetch
+	})
+	let request
+	globalThis.fetch = async (path, options) => {
+		request = { path, options }
+		return jsonResponse(
+			{ signedIn: true, configured: true, access: 'owner', authorized: true },
+			200,
+		)
+	}
+
+	const access = await getBridgeCoachAccess()
+	assert.equal(access.access, 'owner')
+	assert.equal(access.authorized, true)
+	assert.equal(request.path, '/api/coach/access')
+	assert.equal(request.options.method, 'GET')
+	assert.equal(request.options.credentials, 'include')
 })
 
 test('anonymous trial transparently retries exactly once after the cookie handshake', async (context) => {

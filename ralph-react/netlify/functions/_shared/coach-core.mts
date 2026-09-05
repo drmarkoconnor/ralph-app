@@ -537,16 +537,19 @@ export function parseCoachModelOutput(outputText: string): CoachOutput {
 
 export function isCoachOwner(
 	user: {
+		id?: string
 		email?: string
-		confirmedAt?: string
 		roles?: string[]
 		appMetadata?: Record<string, unknown>
 	} | null,
 	ownerEmailSetting = '',
 ) {
-	if (!user || typeof user.confirmedAt !== 'string' || Number.isNaN(Date.parse(user.confirmedAt))) {
-		return false
-	}
+	// getUser() can return a verified JWT-claims fallback when the Identity
+	// profile endpoint is unavailable. That authenticated shape deliberately
+	// omits confirmedAt, so request authorization must not depend on optional
+	// profile enrichment. A stable subject, exact configured email and the
+	// server-controlled owner role remain mandatory.
+	if (!user || typeof user.id !== 'string' || !user.id.trim()) return false
 	const appMetadataRoles = Array.isArray(user.appMetadata?.roles)
 		? user.appMetadata.roles.filter((role): role is string => typeof role === 'string')
 		: []

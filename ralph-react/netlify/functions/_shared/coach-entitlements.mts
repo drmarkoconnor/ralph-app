@@ -184,12 +184,16 @@ function identityRoles(user: CoachIdentityUser | null) {
 	return new Set([...(user?.roles || []), ...appMetadataRoles])
 }
 
-export function isConfirmedCoachUser(user: CoachIdentityUser | null): user is CoachIdentityUser {
-	return !!user?.id && typeof user.confirmedAt === 'string' && !Number.isNaN(Date.parse(user.confirmedAt))
+export function hasCoachIdentitySubject(user: CoachIdentityUser | null): user is CoachIdentityUser {
+	return typeof user?.id === 'string' && !!user.id.trim()
 }
 
 export function isCoachSubscriber(user: CoachIdentityUser | null) {
-	return isConfirmedCoachUser(user) && identityRoles(user).has(COACH_SUBSCRIBER_ROLE)
+	// Subscriber confirmation is checked against the full admin user before an
+	// entitlement is granted. At request time getUser() may return a verified
+	// JWT fallback without confirmedAt, so use the stable subject plus the
+	// server-managed role and let the caller require the durable entitlement.
+	return hasCoachIdentitySubject(user) && identityRoles(user).has(COACH_SUBSCRIBER_ROLE)
 }
 
 export function coachUserSubjectHash(userId: string) {
