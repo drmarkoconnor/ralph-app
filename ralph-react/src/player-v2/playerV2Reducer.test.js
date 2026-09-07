@@ -198,7 +198,9 @@ test('replay hand restores the original deal and opening leader', () => {
 	const replayed = playerV2Reducer(progressed, { type: 'START_PLAY' })
 
 	assert.equal(progressed.history.length, 1)
+	assert.equal(started.playSession, 1)
 	assert.equal(replayed.phase, 'play')
+	assert.equal(replayed.playSession, 2)
 	assert.equal(replayed.history.length, 0)
 	assert.equal(replayed.completedTricks.length, 0)
 	assert.equal(replayed.play.turnSeat, 'N')

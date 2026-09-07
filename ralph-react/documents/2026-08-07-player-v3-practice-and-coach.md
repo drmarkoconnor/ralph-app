@@ -208,12 +208,53 @@ Dummy is exposed after the opening lead according to normal play. The full 180-d
   A browser cookie is not proof of one use per person because it can be cleared
   or replaced on another device.
 
+## Human-style local computer play (September 2026)
+
+- Player V3 no longer uses the original lowest-legal-card autoplay. Every
+  computer-controlled seat, including exposed dummy and the **Computer card**
+  teacher control, uses one shared local engine.
+- The engine builds a strict knowledge view for the acting player. It contains
+  that player's hand, exposed dummy where appropriate, public auction and play,
+  inferred voids, contract and vulnerability. Card ids are removed because the
+  ids encode original ownership. The real concealed hands never cross the DDS
+  worker boundary.
+- Deterministically sampled deals fill the unknown hands consistently with card
+  counts and publicly demonstrated voids. Only calls made by the app's local
+  ACOL bidder influence sampling; imported competition auctions are not assumed
+  to use ACOL.
+- DDS `SolveBoardPBN` scores the legal cards across a deterministic 8–24
+  plausible deals: eight while uncertainty is greatest, rising toward the
+  sixteen-sample target and then 24 late in the hand. The normal computation
+  target is 900 ms, with a separate hard safety ceiling so a full opening-lead
+  position can finish the minimum eight samples instead of throwing away useful
+  analysis. Decisions are cached by the spoiler-safe
+  knowledge fingerprint, and replays are deterministic within the session.
+- Undo, pause, replay and board navigation invalidate outstanding decisions.
+  A failed or unavailable solver switches the rest of that play-through to a
+  deterministic bridge-aware fallback that recognises partner-winning cards,
+  cheapest winners, economical ruffs, safe discards, suit returns and natural
+  opening leads.
+- The table shows only **Computer thinking…** while analysis is pending.
+  Teacher tools reports **Human-style local analysis** or **Fallback play**.
+  No OpenAI call, internet connection or paid service is involved.
+- At the end of a competition deal, the result modal gives a prominent
+  plain-language verdict: better than, matched, below, or mixed against the
+  published expert tables. Exact North–South scores remain underneath.
+- `npm run benchmark:computer-play` judges opening leads on the 30 bundled
+  competition deals against the complete deal after each choice. The live
+  engine remains concealed-hand safe. The acceptance threshold is a 40%
+  reduction in avoidable trick losses versus the former lowest-card selector.
+- Exact omniscient double-dummy advice remains reserved for a future post-hand
+  comparison rather than live opponents.
+
 ## Verification commands
 
 Run from `ralph-react`:
 
 ```bash
 node --test src/player-v2/playerV2Reducer.test.js src/player-v2/acolPracticeBidder.test.js
+npm run test:player
+npm run benchmark:computer-play
 npm run test:coach
 npm run test:generator2
 npm run build

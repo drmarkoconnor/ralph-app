@@ -24,16 +24,23 @@ import {
 	orderHandForDisplay,
 	partnerOf,
 	legalNextAuctionCall,
-	selectSimpleDefenderCard,
 	seatName,
 	suitSymbol,
 } from '../player-v2/bridgeV2'
+import { requestComputerPlayDecision } from '../lib/computerPlayWorker'
+import {
+	buildComputerKnowledge,
+	computerCardKey,
+	selectHumanFallbackCard,
+} from '../player-v2/humanComputerPlay'
+import { createComputerDecisionGate } from '../player-v2/computerDecisionGate'
 import {
 	getPlayerV2Derived,
 	initialPlayerV2State,
 	playerV2Reducer,
 } from '../player-v2/playerV2Reducer'
 import { choosePracticeAutoCall } from '../player-v2/acolPracticeBidder'
+import { summarizeCompetitionComparison } from '../player-v2/competitionComparison'
 import { usePlayerCoach } from '../player-v2/coach/usePlayerCoach'
 import {
 	exitPlayerFullscreen,
@@ -1740,6 +1747,7 @@ function TeacherToolsDrawer({
 	onFeltThemeChange,
 	raiseLegalChoices,
 	onToggleLegalChoices,
+	computerEngineLabel,
 	presentationMode = false,
 }) {
 	if (!open) return null
@@ -1768,6 +1776,14 @@ function TeacherToolsDrawer({
 				</div>
 				{state.phase === 'play' && (
 					<>
+						<div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+							<div className="text-[10px] font-black uppercase tracking-wide text-emerald-700">
+								Computer play
+							</div>
+							<div className="mt-0.5 text-sm font-black text-emerald-950">
+								{computerEngineLabel}
+							</div>
+						</div>
 						<div>
 							<div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Show hands</div>
 							<SeatVisibilityToggles visibleSeats={state.visibleSeats} dispatch={dispatch} />
@@ -1811,10 +1827,13 @@ function Controls({
 	canAdvanceHidden,
 	onReplayHand,
 	onToggleTeacherTools,
+	computerThinking = false,
 }) {
 	const status =
 		state.phase === 'play'
-			? `${seatName(state.play?.turnSeat)} to play · ${derived.contract} by ${derived.declarer}`
+			? computerThinking
+				? 'Computer thinking…'
+				: `${seatName(state.play?.turnSeat)} to play · ${derived.contract} by ${derived.declarer}`
 			: state.auctionIntroPending
 				? 'First task: start the bidding exercise'
 				: state.manualContractMode
@@ -1966,6 +1985,17 @@ function EndResultModal({
 	const signedScore = result.score > 0 ? `+${result.score}` : String(result.score)
 	const signed = (score) => (score > 0 ? `+${score}` : String(score))
 	const competitionReferences = result.competitionReferences || []
+	const competitionSummary = summarizeCompetitionComparison(result.nsScore, competitionReferences)
+	const scoreStyle = competitionSummary
+		? {
+				better: 'bg-emerald-300 text-emerald-950',
+				matched: 'bg-amber-200 text-amber-950',
+				mixed: 'bg-sky-200 text-sky-950',
+				worse: 'bg-rose-200 text-rose-950',
+			}[competitionSummary.outcome]
+		: positive
+			? 'bg-emerald-300 text-emerald-950'
+			: 'bg-rose-200 text-rose-950'
 	const keepFocusInDialog = (event) => {
 		if (event.key !== 'Tab') return
 		const controls = [...event.currentTarget.querySelectorAll('button:not([disabled])')]
@@ -1997,12 +2027,10 @@ function EndResultModal({
 				<h2
 					id="player-hand-complete-title"
 					className="mt-2 text-3xl font-black leading-tight sm:text-5xl">
-					{positive ? 'Congratulations' : 'Commiserations'}
+					{competitionSummary?.headline || (positive ? 'Congratulations' : 'Commiserations')}
 				</h2>
 				<div
-					className={`mx-auto mt-4 w-fit rounded-2xl px-8 py-3 text-4xl font-black shadow-inner sm:mt-5 sm:py-4 sm:text-6xl ${
-						positive ? 'bg-emerald-300 text-emerald-950' : 'bg-rose-200 text-rose-950'
-					}`}>
+					className={`mx-auto mt-4 w-fit rounded-2xl px-8 py-3 text-4xl font-black shadow-inner sm:mt-5 sm:py-4 sm:text-6xl ${scoreStyle}`}>
 					{signedScore}
 				</div>
 				<p className="mt-4 text-lg font-bold text-emerald-50">
@@ -2053,10 +2081,12 @@ function EndResultModal({
 												.filter(Boolean)
 												.join(' · ') || 'Published table result'}
 										</div>
-										<div className="mt-1 text-xs font-black text-amber-200">
+										<div className="mt-1 text-sm font-black text-amber-200">
 											{difference === 0
-												? 'Same N–S score'
-												: `${Math.abs(difference)} ${difference > 0 ? 'better' : 'lower'} for N–S`}
+												? 'You matched this table'
+												: difference > 0
+													? `You did ${Math.abs(difference)} points better`
+													: `You scored ${Math.abs(difference)} points lower`}
 										</div>
 									</div>
 								)
@@ -2107,6 +2137,7 @@ function TableSurface({
 	onNextBoard,
 	presentationMode = false,
 	raiseLegalChoices = true,
+	computerThinking = false,
 }) {
 	if (state.phase !== 'play') {
 		return (
@@ -2183,6 +2214,14 @@ function TableSurface({
 			<div
 				style={{ gridTemplateColumns: stageColumns }}
 				className={`player-v3-stage ${opposingHandsVisible ? 'player-v3-opposing-hands' : ''} relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] items-center gap-x-3`}>
+				{computerThinking && presentationMode && (
+					<div
+						role="status"
+						aria-live="polite"
+						className="pointer-events-none absolute left-1/2 top-1 z-[60] -translate-x-1/2 rounded-full border border-amber-300/70 bg-slate-950/90 px-4 py-1.5 text-sm font-black text-amber-100 shadow-lg">
+						Computer thinking…
+					</div>
+				)}
 				<div className="col-start-2 row-start-1 z-20 self-start justify-self-center">
 					<HandPanel {...common(visualSeats.top, 'N')} />
 				</div>
@@ -2249,6 +2288,8 @@ export default function PlayerV2() {
 	const [presentationRestoring, setPresentationRestoring] = useState(false)
 	const [raiseLegalChoices, setRaiseLegalChoices] = useState(true)
 	const [teacherToolsOpen, setTeacherToolsOpen] = useState(false)
+	const [computerThinking, setComputerThinking] = useState(false)
+	const [computerEngineLabel, setComputerEngineLabel] = useState('Human-style local analysis')
 	const [feltTheme, setFeltTheme] = useState(() => {
 		if (typeof window === 'undefined') return 'green'
 		const saved = window.localStorage.getItem(PLAYER_FELT_KEY)
@@ -2265,6 +2306,8 @@ export default function PlayerV2() {
 	const presentationEnterPendingRef = useRef(false)
 	const presentationExitPendingRef = useRef(false)
 	const audioProgressRef = useRef({ boardIndex: -1, historyLength: 0, completedLength: 0 })
+	const computerDecisionGateRef = useRef(createComputerDecisionGate())
+	const fallbackPlaySessionsRef = useRef(new Set())
 	const derived = getPlayerV2Derived(state)
 	const controlledSeats = useMemo(
 		() => learnerControlledSeats(state.phase, derived.declarer),
@@ -2445,9 +2488,79 @@ export default function PlayerV2() {
 		!!turnSeat &&
 		!!derived.declarer &&
 		!controlledSeats.has(turnSeat) &&
-		(state.play?.remaining?.[turnSeat] || []).length > 0
+		(state.play?.remaining?.[turnSeat] || []).length > 0 &&
+		!computerThinking
 
-	const advanceHiddenHand = useCallback(() => {
+	const buildCurrentComputerKnowledge = useCallback(() => {
+		const currentSeat = state.play?.turnSeat
+		if (!currentSeat || !derived.declarer || !dummy) return null
+		return buildComputerKnowledge({
+			seat: currentSeat,
+			remaining: state.play?.remaining,
+			history: state.history,
+			trick: state.play?.trick,
+			trickComplete: state.play?.trickComplete,
+			declarer: derived.declarer,
+			dummy,
+			trump: derived.trump,
+			vulnerability: state.board?.vul || 'None',
+			auctionDealer: state.practiceAuction?.dealer || state.board?.dealer || 'N',
+			auctionCalls: state.practiceAuction?.calls || [],
+			auctionSources: state.practiceAuction?.callSources || [],
+		})
+	}, [
+		state.play,
+		state.history,
+		state.board,
+		state.practiceAuction,
+		derived.declarer,
+		derived.trump,
+		dummy,
+	])
+
+	const resolveComputerCard = useCallback(async ({ minimumDelayMs = 0 } = {}) => {
+		const knowledge = buildCurrentComputerKnowledge()
+		if (!knowledge) return null
+		const ticket = computerDecisionGateRef.current.issue(knowledge.fingerprint)
+		const startedAt = performance.now()
+		const playSessionKey = `${state.board?.deal || ''}:${state.playSession || 0}`
+		setComputerThinking(true)
+		let decision
+		if (fallbackPlaySessionsRef.current.has(playSessionKey)) {
+			decision = {
+				engine: 'fallback',
+				card: selectHumanFallbackCard(knowledge),
+				reason: 'solver_disabled_for_hand',
+			}
+		} else {
+			decision = await requestComputerPlayDecision(knowledge)
+			if (decision?.solverFailed) {
+				fallbackPlaySessionsRef.current.add(playSessionKey)
+				console.warn('[Computer play] using fallback for this hand', decision.reason)
+			}
+		}
+		const waitMs = Math.max(0, minimumDelayMs - (performance.now() - startedAt))
+		if (waitMs) await new Promise((resolve) => window.setTimeout(resolve, waitMs))
+		if (!computerDecisionGateRef.current.isCurrent(ticket, knowledge.fingerprint)) return null
+		setComputerThinking(false)
+		setComputerEngineLabel(
+			decision?.engine === 'fallback' ? 'Fallback play' : 'Human-style local analysis',
+		)
+		const currentHand = state.play?.remaining?.[knowledge.seat] || []
+		const chosenKey = computerCardKey(decision?.card)
+		const fallbackKey = computerCardKey(selectHumanFallbackCard(knowledge))
+		const card =
+			currentHand.find((candidate) => computerCardKey(candidate) === chosenKey) ||
+			currentHand.find((candidate) => computerCardKey(candidate) === fallbackKey)
+		return card ? { seat: knowledge.seat, card } : null
+	}, [
+		buildCurrentComputerKnowledge,
+		state.board?.deal,
+		state.play,
+		state.playSession,
+	])
+
+	const advanceHiddenHand = useCallback(async () => {
 		const currentSeat = state.play?.turnSeat
 		if (
 			state.phase !== 'play' ||
@@ -2457,17 +2570,11 @@ export default function PlayerV2() {
 		) {
 			return
 		}
-		const trickForChoice = state.play.trickComplete ? [] : state.play.trick
-		const card = selectSimpleDefenderCard(
-			state.play.remaining,
-			trickForChoice,
-			currentSeat,
-			derived.trump,
-		)
-		if (!card) return
 		primeBridgeAudio()
-		dispatch({ type: 'PLAY_CARD', seat: currentSeat, cardId: card.id })
-	}, [state.phase, state.play, derived.declarer, derived.trump, controlledSeats])
+		const choice = await resolveComputerCard()
+		if (!choice) return
+		dispatch({ type: 'PLAY_CARD', seat: choice.seat, cardId: choice.card.id })
+	}, [state.phase, state.play, derived.declarer, controlledSeats, resolveComputerCard])
 
 	const goToBoard = useCallback(
 		(index) => {
@@ -2614,8 +2721,10 @@ export default function PlayerV2() {
 
 	useEffect(() => {
 		playerMountedRef.current = true
+		const decisionGate = computerDecisionGateRef.current
 		return () => {
 			playerMountedRef.current = false
+			decisionGate.cancel()
 			presentationSessionRef.current += 1
 			const ownsDocumentFullscreen = presentationOwnsFullscreenRef.current
 			presentationOwnsFullscreenRef.current = false
@@ -2691,22 +2800,42 @@ export default function PlayerV2() {
 	])
 
 	useEffect(() => {
-		if (state.phase !== 'play') return
-		if (state.autoPlayPaused) return
-		const turnSeat = state.play?.turnSeat
-		if (!turnSeat || !derived.declarer || controlledSeats.has(turnSeat)) return
-		const trickForChoice = state.play.trickComplete ? [] : state.play.trick
-		const card = selectSimpleDefenderCard(
-			state.play.remaining,
-			trickForChoice,
-			turnSeat,
-			derived.trump,
+		computerDecisionGateRef.current.cancel()
+		setComputerThinking(false)
+		const playSessionKey = `${state.board?.deal || ''}:${state.playSession || 0}`
+		setComputerEngineLabel(
+			fallbackPlaySessionsRef.current.has(playSessionKey)
+				? 'Fallback play'
+				: 'Human-style local analysis',
 		)
-		if (!card) return
-		const timer = setTimeout(() => {
-			dispatch({ type: 'PLAY_CARD', seat: turnSeat, cardId: card.id })
-		}, state.play.trickComplete ? 1600 : 700)
-		return () => clearTimeout(timer)
+	}, [state.board?.deal, state.index, state.playSession])
+
+	useEffect(() => {
+		if (state.phase !== 'play') return
+		if (state.autoPlayPaused) {
+			computerDecisionGateRef.current.cancel()
+			setComputerThinking(false)
+			return
+		}
+		const turnSeat = state.play?.turnSeat
+		if (!turnSeat || !derived.declarer || controlledSeats.has(turnSeat)) {
+			computerDecisionGateRef.current.cancel()
+			setComputerThinking(false)
+			return
+		}
+		let active = true
+		const decisionGate = computerDecisionGateRef.current
+		void resolveComputerCard({
+			minimumDelayMs: state.play.trickComplete ? 1600 : 700,
+		}).then((choice) => {
+			if (!active || !choice) return
+			dispatch({ type: 'PLAY_CARD', seat: choice.seat, cardId: choice.card.id })
+		})
+		return () => {
+			active = false
+			decisionGate.cancel()
+			setComputerThinking(false)
+		}
 	}, [
 		state.phase,
 		state.autoPlayPaused,
@@ -2715,8 +2844,8 @@ export default function PlayerV2() {
 		state.play?.remaining,
 		state.play?.trickComplete,
 		derived.declarer,
-		derived.trump,
 		controlledSeats,
+		resolveComputerCard,
 	])
 
 	const onPlay = (seat, cardId) => {
@@ -2886,6 +3015,7 @@ export default function PlayerV2() {
 				onFeltThemeChange={setFeltTheme}
 				raiseLegalChoices={raiseLegalChoices}
 				onToggleLegalChoices={() => setRaiseLegalChoices((current) => !current)}
+				computerEngineLabel={computerEngineLabel}
 				presentationMode={presentationMode}
 			/>
 			<input ref={fileRef} type="file" accept=".pbn,text/plain" onChange={onFile} className="hidden" />
@@ -2973,6 +3103,7 @@ export default function PlayerV2() {
 								canAdvanceHidden={canAdvanceHidden}
 								onReplayHand={() => replayCurrentHand()}
 								onToggleTeacherTools={() => setTeacherToolsOpen((current) => !current)}
+								computerThinking={computerThinking}
 							/>
 						</div>
 					)}
@@ -2987,6 +3118,7 @@ export default function PlayerV2() {
 						onNextBoard={() => goToBoard(state.index + 1)}
 						presentationMode={presentationMode}
 						raiseLegalChoices={raiseLegalChoices}
+						computerThinking={computerThinking}
 					/>
 				</>
 			)}

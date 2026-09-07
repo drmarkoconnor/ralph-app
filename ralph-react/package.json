@@ -8,10 +8,11 @@
 		"build": "vite build",
 		"lint": "eslint .",
 		"test:generator2": "node --test src/generator-v2/generatorV2Engine.test.js",
-		"test:player": "node --test src/lib/bridgeCore.test.js src/lib/pbn.test.js src/player-v2/playerV2Reducer.test.js src/player-v2/acolPracticeBidder.test.js src/player-v2/playerPresentation.test.js",
+		"test:player": "node --test src/lib/bridgeCore.test.js src/lib/pbn.test.js src/player-v2/playerV2Reducer.test.js src/player-v2/acolPracticeBidder.test.js src/player-v2/playerPresentation.test.js src/player-v2/humanComputerPlay.test.js src/player-v2/competitionComparison.test.js",
 		"test:coach": "node --test src/player-v2/coach/coachContext.test.js src/player-v2/coach/coachClient.test.js src/player-v2/coach/coachDealFingerprint.test.js src/player-v2/coach/playerCoachState.test.js netlify/tests/coach.test.mts netlify/tests/coach-trial.test.mts",
 		"test:coach-server": "node --test netlify/tests/coach.test.mts netlify/tests/coach-trial.test.mts",
 		"check:competitions": "node scripts/competition-pbns/import-competition-pbns.mjs --check",
+		"benchmark:computer-play": "esbuild scripts/benchmark-computer-play.mjs --bundle --platform=node --format=esm --loader:.pbn=text --outfile=/tmp/ralph-computer-play-benchmark.mjs && node /tmp/ralph-computer-play-benchmark.mjs",
 		"capture:walkthrough": "node scripts/capture-walkthrough.mjs",
 		"preview": "vite preview",
 		"build:auctions": "node --loader ts-node/esm scripts/build-auctions.ts"

@@ -13,6 +13,8 @@ Key features:
 - Pages handout export (.rtf, one board per page, optimized for Apple Pages)
 - Classroom Player V3 with South practice bidding, contract check, card play,
   replay and clean presentation mode
+- Human-style local computer play using sampled hidden deals and DDS, without
+  revealing concealed hands or making paid API calls
 - Compact, authenticated manual AI Coach for eligible bidding and play decisions
 - Free, attributed competition replay library with published table-score
   comparison; optional Coach nudges retain the normal owner/subscriber access rules
@@ -29,6 +31,7 @@ Structure overview:
 
 - `src/DragDropCards.jsx` – Deal builder UI
 - `src/pages/PlayerV2.jsx` – Current classroom teaching / play interface
+- `src/player-v2/humanComputerPlay.js` – Spoiler-safe sampled computer-play engine
 - `src/pages/Competitions.jsx` – Curated competition replay catalogue
 - `scripts/competition-pbns/` – Allowlisted static competition pack importer
 - `src/lib/acolAdvisor.js` – Deterministic ACOL auction advice engine

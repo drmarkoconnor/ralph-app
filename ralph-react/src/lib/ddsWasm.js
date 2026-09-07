@@ -87,3 +87,10 @@ export async function getDDTable(deal) {
 	}
 }
 
+// Score all legal cards in a part-played position. This is intentionally kept
+// inside the DDS worker by the Player so the synchronous WASM search never
+// blocks classroom animation or fullscreen presentation.
+export async function solveBoardPosition(dealPbn) {
+	const dds = await ensureDds()
+	return dds.SolveBoardPBN(dealPbn, -1, 3, 0)
+}

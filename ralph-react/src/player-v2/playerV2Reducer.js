@@ -36,6 +36,7 @@ export const initialPlayerV2State = {
 	auctionIntroPending: false,
 	manualContractMode: false,
 	autoPlayPaused: false,
+	playSession: 0,
 	visibilityMode: 'mimic',
 	status: '',
 }
@@ -141,6 +142,7 @@ function hydrateBoard(deals, index) {
 			auctionIntroPending: false,
 			manualContractMode: false,
 			autoPlayPaused: false,
+			playSession: 0,
 			status: '',
 		}
 	}
@@ -169,6 +171,7 @@ function hydrateBoard(deals, index) {
 		auctionIntroPending: recordedAuction.calls.length === 0,
 		manualContractMode: false,
 		autoPlayPaused: false,
+		playSession: 0,
 		status: '',
 	}
 }
@@ -192,6 +195,7 @@ function snapshotBoardSession(state) {
 		auctionIntroPending: !!state.auctionIntroPending,
 		manualContractMode: !!state.manualContractMode,
 		autoPlayPaused: state.autoPlayPaused,
+		playSession: state.playSession || 0,
 		status: state.status,
 	}
 }
@@ -643,6 +647,7 @@ export function playerV2Reducer(state, action) {
 				history: [],
 				completedTricks: [],
 				autoPlayPaused: false,
+				playSession: (Number(state.playSession) || 0) + 1,
 				status: `Opening lead: ${derived.openingLeader}. Computer-controlled seats will play automatically.`,
 			}
 		}
