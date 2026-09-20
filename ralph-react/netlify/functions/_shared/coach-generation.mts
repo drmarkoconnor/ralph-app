@@ -45,12 +45,35 @@ export function coachUsageSummary(usage: {
 	)
 	const regularInputTokens = Math.max(0, inputTokens - cachedTokens - cacheWriteTokens)
 
-	// GPT-5.6 Luna estimate: $0.20/M uncached input, $0.02/M cached input,
-	// $0.25/M cache writes, and $1.20/M output.
+	// GPT-6 Astra Standard short-context estimate: $10/M uncached input,
+	// $1/M cached input, $12.50/M cache writes, and $50/M output.
 	const estimatedUsd =
-		(regularInputTokens * 0.2 + cachedTokens * 0.02 + cacheWriteTokens * 0.25 + outputTokens * 1.2) /
+		(regularInputTokens * 10 + cachedTokens * 1 + cacheWriteTokens * 12.5 + outputTokens * 50) /
 		1_000_000
 	return { inputTokens, outputTokens, estimatedUsd: Number(estimatedUsd.toFixed(6)) }
+}
+
+export function coachResponseRequest(request: CoachRequest, subject: string, maxOutputTokens: number) {
+	return {
+		model: COACH_MODEL,
+		instructions: buildCoachInstructions(request.intent),
+		input: buildCoachInput(request),
+		max_output_tokens: maxOutputTokens,
+		reasoning: { effort: 'low' as const, context: 'current_turn' as const },
+		service_tier: 'default' as const,
+		store: false,
+		safety_identifier: safeUserIdentifier(subject),
+		text: {
+			verbosity: 'low' as const,
+			format: {
+				type: 'json_schema' as const,
+				name: 'ralph_bridge_coach',
+				description: 'A brief, non-spoiling bridge teaching prompt for the selected learner.',
+				strict: true,
+				schema: COACH_OUTPUT_JSON_SCHEMA,
+			},
+		},
+	}
 }
 
 export async function generateCoach(
@@ -60,27 +83,9 @@ export async function generateCoach(
 	signal: AbortSignal,
 	{ maxOutputTokens = 320 }: { maxOutputTokens?: number } = {},
 ): Promise<GeneratedCoach> {
-	const client = new OpenAI({ apiKey, maxRetries: 0, timeout: 15_000 })
+	const client = new OpenAI({ apiKey, maxRetries: 0, timeout: 30_000 })
 	const response = await client.responses.create(
-		{
-			model: COACH_MODEL,
-			instructions: buildCoachInstructions(request.intent),
-			input: buildCoachInput(request),
-			max_output_tokens: maxOutputTokens,
-			reasoning: { effort: 'none', context: 'current_turn' },
-			store: false,
-			safety_identifier: safeUserIdentifier(subject),
-			text: {
-				verbosity: 'low',
-				format: {
-					type: 'json_schema',
-					name: 'ralph_bridge_coach',
-					description: 'A brief, non-spoiling bridge teaching prompt for the selected learner.',
-					strict: true,
-					schema: COACH_OUTPUT_JSON_SCHEMA,
-				},
-			},
-		},
+		coachResponseRequest(request, subject, maxOutputTokens),
 		{ signal },
 	)
 

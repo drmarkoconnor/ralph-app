@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+	COACH_MODEL,
 	LEARNER_COACH_PROFILE_ID,
 	buildCoachInstructions,
 	coachApiRequestSchema,
@@ -38,7 +39,10 @@ import {
 	createCoachCostGuard,
 	fingerprintCoachRequest,
 } from '../functions/_shared/coach-cost-guard.mts'
-import { coachUsageSummary } from '../functions/_shared/coach-generation.mts'
+import {
+	coachResponseRequest,
+	coachUsageSummary,
+} from '../functions/_shared/coach-generation.mts'
 import { buildSouthCoachContext } from '../../src/player-v2/coach/buildCoachContext.js'
 import { createCoachAccessHandler } from '../functions/coach-access.mts'
 import { createCoachEntitlementsHandler } from '../functions/coach-entitlements.mts'
@@ -50,14 +54,14 @@ const DEAL_FINGERPRINT = 'a'.repeat(64)
 const COMPETITION_DEAL_FINGERPRINT =
 	'02ad088b3208956f24c50221e61346d67d89929e05d00a515fdaf049115d57dd'
 
-test('usage estimate applies current Luna input, cache-write, cached-input and output prices', () => {
+test('usage estimate applies current Astra Standard input, cache-write, cached-input and output prices', () => {
 	assert.deepEqual(
 		coachUsageSummary({
 			input_tokens: 1_000,
 			output_tokens: 100,
 			input_tokens_details: { cached_tokens: 200, cache_write_tokens: 100 },
 		}),
-		{ inputTokens: 1_000, outputTokens: 100, estimatedUsd: 0.000289 },
+		{ inputTokens: 1_000, outputTokens: 100, estimatedUsd: 0.01345 },
 	)
 })
 
@@ -139,6 +143,25 @@ function validRequest() {
 function validApiRequest(dealFingerprint = DEAL_FINGERPRINT) {
 	return { ...validRequest(), dealFingerprint }
 }
+
+test('Astra request uses Responses low reasoning and Standard processing without sampling controls', () => {
+	const parsed = coachRequestSchema.parse(validRequest())
+	const request = coachResponseRequest(parsed, 'identity-user-123', 320)
+
+	assert.equal(COACH_MODEL, 'gpt-6-astra')
+	assert.equal(request.model, 'gpt-6-astra')
+	assert.deepEqual(request.reasoning, { effort: 'low', context: 'current_turn' })
+	assert.equal(request.service_tier, 'default')
+	assert.equal(request.store, false)
+	assert.equal(request.max_output_tokens, 320)
+	assert.match(request.safety_identifier, /^[a-f0-9]{64}$/)
+	assert.equal(request.text.format.type, 'json_schema')
+	assert.equal('temperature' in request, false)
+	assert.equal('top_p' in request, false)
+	assert.equal('top_logprobs' in request, false)
+	assert.equal('prompt_cache_retention' in request, false)
+	assert.equal('include' in request, false)
+})
 
 function coachEnv(values: Record<string, string> = {}) {
 	const settings = {

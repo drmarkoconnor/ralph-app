@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const COACH_MODEL = 'gpt-5.6-luna'
+export const COACH_MODEL = 'gpt-6-astra'
 export const COACH_OWNER_ROLE = 'coach-owner'
 export const LEGACY_SOUTH_COACH_PROFILE_ID = 'south-acol-12-14-safe-v1'
 export const LEARNER_COACH_PROFILE_ID = 'learner-acol-12-14-safe-v2'

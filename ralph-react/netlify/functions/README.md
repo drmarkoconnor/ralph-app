@@ -88,7 +88,7 @@ The response includes the safe Coach object plus:
 ```json
 {
   "meta": {
-    "model": "gpt-5.6-luna",
+    "model": "gpt-6-astra",
     "cached": false,
     "access": "subscriber",
     "usage": {
@@ -100,9 +100,15 @@ The response includes the safe Coach object plus:
 }
 ```
 
-The displayed estimate uses $0.20 per million uncached input tokens, $0.02 per
-million cached input tokens, $0.25 per million cache-write tokens, and $1.20 per
-million output tokens. The OpenAI Usage dashboard remains authoritative.
+The displayed estimate uses GPT-6 Astra Standard short-context pricing: $10 per
+million uncached input tokens, $1 per million cached input tokens, $12.50 per
+million cache-write tokens, and $50 per million output tokens. Regional
+processing can add 10%; the OpenAI Usage dashboard remains authoritative.
+
+The Coach calls the Responses API with low reasoning, compact strict JSON output
+and `service_tier: "default"` so that Astra uses Standard rather than Fast
+processing. It does not use sampling parameters or retain provider-side
+response state.
 
 ## Subscriber allowance
 

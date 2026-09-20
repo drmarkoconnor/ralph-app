@@ -171,26 +171,28 @@ Dummy is exposed after the opening lead according to normal play. The full 180-d
 - Source attribution remains visible independently of Coach access. Keeping the
   replay free is not a substitute for checking redistribution permission.
 
-### Cost envelope at the September 2026 launch price
+### Cost envelope after the September 2026 Astra migration
 
-- The selected model is `gpt-5.6-luna`, using the Responses API with reasoning
-  disabled for quick, economical nudges. Current text pricing is $0.20 per
-  million input tokens, $0.02 cached input, $0.25 cache writes and $1.20 output.
+- The selected model is `gpt-6-astra`, using the Responses API with low
+  reasoning, compact strict JSON output and explicit Standard processing.
+  Current short-context text pricing is $10 per million input tokens, $1 cached
+  input, $12.50 cache writes and $50 output. Regional processing may add 10%.
 - The absolute product allowance is 2,000 paid generation attempts per
   subscriber period: 100 client-identified deals multiplied by 20 attempts.
   Provider failures remain inside this ceiling, so retries cannot increase the
   worst-case model-call count.
 - At an intentionally cautious 4,000 input and 240 output tokens for every
-  response, provider cost is about $2.18, or £1.81 at $1.20/£1. Adding a 15%
-  contingency gives an AI budget of about £2.09 per fully used subscription.
-- If the £10 customer price includes 20% VAT, net revenue is £8.33. After the
-  cautious £2.09 AI budget and an illustrative £0.50 payment-processing reserve,
-  the contribution is about £5.74 per subscriber period before Netlify usage,
-  support, tax and other overhead. This supports a positive model-cost margin,
-  but it is a planning estimate rather than accounting or tax advice.
-- Set an OpenAI project budget of roughly $3 per fully used subscriber-month,
-  plus a separate small allowance for owner testing, and review real token use
-  before automating sales.
+  response, provider cost is about $104, or £86.67 at $1.20/£1. A 15%
+  contingency raises that to about £99.67; regional processing could be higher.
+- A £10 customer price therefore cannot safely support the full theoretical
+  2,000-call allowance on Astra. If that price includes 20% VAT, net revenue is
+  £8.33 before payment processing, Netlify, support and tax. Treat the present
+  entitlement ceilings as technical backstops, not as a commercially viable
+  promised usage level.
+- Before selling Astra access, measure production input/output tokens, choose a
+  much smaller included-call allowance or a higher price, and set an OpenAI
+  project budget from that measured envelope. Keep a separate owner-testing
+  allowance. The Usage dashboard, not the app estimate, is authoritative.
 
 ## Deferred work
 
