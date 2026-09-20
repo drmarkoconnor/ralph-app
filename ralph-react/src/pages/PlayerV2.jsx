@@ -9,6 +9,12 @@ import React, {
 } from 'react'
 import { Link } from 'react-router-dom'
 import PlayerCoachNudge from '../components/PlayerCoachNudge'
+import {
+	CardBackArtwork,
+	CardFaceArtwork,
+	CardThemePicker,
+} from '../components/PlayerCardThemes'
+import { cardThemeColourClasses } from '../components/playerCardThemeConfig'
 import { parsePBN, sanitizePBN } from '../lib/pbn'
 import { BoardZ } from '../schemas/board'
 import { exportBoardPBN } from '../pbn/export'
@@ -27,6 +33,11 @@ import {
 	seatName,
 	suitSymbol,
 } from '../player-v2/bridgeV2'
+import {
+	buildPartnershipSuitLayout,
+	isRedSuitBoundary,
+	normalizeCardTheme,
+} from '../player-v2/cardDisplay'
 import { requestComputerPlayDecision } from '../lib/computerPlayWorker'
 import {
 	buildComputerKnowledge,
@@ -50,6 +61,7 @@ import {
 
 const PLAYER_HANDOFF_KEY = 'ralph-player-handoff-v1'
 const PLAYER_FELT_KEY = 'ralph-player-felt-v1'
+const PLAYER_CARD_THEME_KEY = 'ralph-player-card-theme-v1'
 
 function learnerControlledSeats(phase, declarer) {
 	if (phase !== 'play') return new Set(['S'])
@@ -315,21 +327,27 @@ function CardButton({
 	presentationMode = false,
 	raisePlayable = true,
 	stackIndex = 0,
+	cardThemeKey = 'broadcast',
+	overlapOffset = null,
 }) {
-	const red = card.suit === 'Hearts' || card.suit === 'Diamonds'
 	return (
 		<button
 			disabled={disabled}
 			onClick={onClick}
 			aria-label={`${card.rank} of ${card.suit}${playable ? ', legal play' : ''}`}
-			style={{ zIndex: stackIndex + 1 }}
+			data-card-theme={cardThemeKey}
+			data-card-suit={card.suit}
+			style={{
+				zIndex: stackIndex + 1,
+				...(stackIndex > 0 && Number.isFinite(overlapOffset)
+					? { marginLeft: `${overlapOffset}px` }
+					: {}),
+			}}
 			className={`player-v3-card relative flex shrink-0 flex-col items-start justify-between overflow-hidden rounded-lg border-2 bg-white font-black shadow-[0_8px_14px_rgba(0,0,0,0.36)] ring-1 ring-slate-100 transition-[transform,box-shadow,background-color] duration-150 ${
 				presentationMode
 					? 'h-[166px] w-[118px] px-3 py-3 text-[40px]'
 					: 'h-[144px] w-[102px] px-2.5 py-2.5 text-[32px]'
-			} ${
-				red ? 'border-rose-400 text-rose-700' : 'border-slate-500 text-slate-950'
-			} ${
+			} ${cardThemeColourClasses(cardThemeKey, card.suit)} ${
 				overlap
 					? presentationMode
 						? `${spreadHand ? '-ml-[42px]' : '-ml-[62px]'} first:ml-0`
@@ -350,16 +368,11 @@ function CardButton({
 						? 'cursor-default'
 						: 'cursor-pointer hover:-translate-y-1 hover:shadow-2xl'
 			}`}>
-			<span className="flex flex-col items-center leading-none">
-				<span>{card.rank}</span>
-				<span className={`${presentationMode ? 'text-[34px]' : 'text-[27px]'} leading-none`}>
-					{suitSymbol(card.suit)}
-				</span>
-			</span>
-			<span
-				className={`${presentationMode ? 'text-[27px]' : 'text-[22px]'} self-end leading-none opacity-90`}>
-				{suitSymbol(card.suit)}
-			</span>
+			<CardFaceArtwork
+				card={card}
+				themeKey={cardThemeKey}
+				presentationMode={presentationMode}
+			/>
 		</button>
 	)
 }
@@ -495,6 +508,7 @@ function ConcealedSeat({
 	isTurn,
 	openingLeader,
 	presentationMode = false,
+	cardThemeKey = 'broadcast',
 }) {
 	const cardLabel = count === 1 ? 'card' : 'cards'
 	return (
@@ -510,10 +524,10 @@ function ConcealedSeat({
 					: 'border-white/25 bg-slate-950/90 text-white shadow-[0_10px_20px_rgba(0,0,0,0.26)]'
 			}`}>
 			<div
-				className={`flex shrink-0 items-center justify-center rounded-xl bg-emerald-600 font-black text-white shadow-inner ${
-					presentationMode ? 'h-12 w-12 text-2xl' : 'h-10 w-10 text-xl'
+				className={`shrink-0 overflow-hidden rounded-md shadow-md ${
+					presentationMode ? 'h-12 w-[34px]' : 'h-10 w-[29px]'
 				}`}>
-				{seat}
+				<CardBackArtwork themeKey={cardThemeKey} className="h-full w-full" />
 			</div>
 			<div className="min-w-0 leading-tight">
 				<div className={`${presentationMode ? 'text-lg' : 'text-sm'} font-black`}>
@@ -565,6 +579,8 @@ function HandPanel({
 	presentationMode = false,
 	trump,
 	raiseLegalChoices = true,
+	cardThemeKey = 'broadcast',
+	suitLayout = null,
 }) {
 	const sortedCards = useMemo(
 		() =>
@@ -580,6 +596,7 @@ function HandPanel({
 	const role = seat === declarer ? 'Declarer' : seat === dummy ? 'Dummy' : 'Defender'
 	const isSideSeat = position === 'E' || position === 'W'
 	const spreadHand = visible && isTurn && !presentationMode
+	const useSuitLanes = !isSideSeat && !!isPartnership && !!play && !!suitLayout
 	const cardRows = isSideSeat
 		? [sortedCards.slice(0, 6), sortedCards.slice(6)]
 		: [sortedCards]
@@ -599,6 +616,7 @@ function HandPanel({
 				isTurn={isTurn}
 				openingLeader={openingLeader === seat}
 				presentationMode={presentationMode}
+				cardThemeKey={cardThemeKey}
 			/>
 		)
 	}
@@ -639,6 +657,58 @@ function HandPanel({
 				)}
 			</div>
 			<div className="flex items-center">
+				{useSuitLanes ? (
+					<div className="player-v3-suit-strip flex items-center justify-center">
+						{suitLayout.order.map((suit, suitIndex) => {
+							const suitCards = sortedCards.filter((card) => card.suit === suit)
+							const previousSuit = suitLayout.order[suitIndex - 1]
+							return (
+								<React.Fragment key={suit}>
+									{suitIndex > 0 && (
+										<div
+											aria-hidden="true"
+											className={`player-v3-suit-divider ${
+												isRedSuitBoundary(previousSuit, suit)
+													? 'player-v3-suit-divider--red-pair'
+													: ''
+											}`}
+										/>
+									)}
+									<div
+										aria-label={`${suitCards.length} ${suit}`}
+										className="player-v3-suit-lane relative flex shrink-0 items-center"
+										style={{ width: `${suitLayout.widths[suit]}px` }}>
+										{suitCards.length ? (
+											suitCards.map((card, cardIndex) => {
+												const legal = !!onPlay && isTurn && legalCardIds.has(card.id)
+												return (
+													<CardButton
+														key={card.id}
+														card={card}
+														disabled={!legal}
+														onClick={() => onPlay(seat, card.id)}
+														playable={legal}
+														playableMotion={playableMotion}
+														spreadHand={spreadHand}
+														presentationMode={presentationMode}
+														raisePlayable={raiseLegalChoices}
+														stackIndex={cardIndex}
+														cardThemeKey={cardThemeKey}
+														overlapOffset={suitLayout.step - suitLayout.cardWidth}
+													/>
+												)
+											})
+										) : (
+											<div className="player-v3-suit-void flex h-14 w-full items-center justify-center rounded-lg border-2 border-dashed border-slate-950/35 bg-slate-950/10 text-lg font-black text-white/85">
+												{suitSymbol(suit)} —
+											</div>
+										)}
+									</div>
+								</React.Fragment>
+							)
+						})}
+					</div>
+				) : (
 				<div className={`flex items-center justify-center ${isSideSeat ? 'flex-col gap-3' : ''}`}>
 					{cardRows.map((row, rowIndex) => (
 						<div key={rowIndex} className="flex justify-center">
@@ -657,12 +727,14 @@ function HandPanel({
 										presentationMode={presentationMode}
 										raisePlayable={raiseLegalChoices}
 										stackIndex={cardIndex}
+										cardThemeKey={cardThemeKey}
 									/>
 								)
 							})}
 						</div>
 					))}
 				</div>
+				)}
 			</div>
 			<footer
 				className={`player-v3-hand-hcp ${presentationMode ? 'text-sm' : 'text-[11px]'} mt-1 rounded bg-slate-950 px-2 py-0.5 font-black text-white`}>
@@ -1362,17 +1434,31 @@ function NoAuctionIntro({ state, dispatch, onOpenManualContract }) {
 	)
 }
 
-function StagePanel({ state, visualPlay, presentationMode = false, rotated = false }) {
+function StagePanel({
+	state,
+	visualPlay,
+	presentationMode = false,
+	rotated = false,
+	cardThemeKey = 'broadcast',
+}) {
 	return (
 		<TrickPanel
 			play={visualPlay || state.play}
 			presentationMode={presentationMode}
 			rotated={rotated}
+			cardThemeKey={cardThemeKey}
 		/>
 	)
 }
 
-function TrickCardSlot({ seat, position = seat, trick, winner, size = 'md' }) {
+function TrickCardSlot({
+	seat,
+	position = seat,
+	trick,
+	winner,
+	size = 'md',
+	cardThemeKey = 'broadcast',
+}) {
 	const item = (trick || []).find((entry) => entry.seat === seat)
 	const dims =
 		size === 'sm'
@@ -1405,38 +1491,21 @@ function TrickCardSlot({ seat, position = seat, trick, winner, size = 'md' }) {
 		)
 	}
 
-	const red = item.card.suit === 'Hearts' || item.card.suit === 'Diamonds'
 	const isWinner = winner === item.seat
 	const isDimmed = winner && !isWinner
-	const suitClass = red ? 'text-rose-600' : 'text-slate-950'
-	const borderClass = red ? 'border-rose-200' : 'border-slate-200'
 	return (
 		<div
 			aria-label={`${seatName(item.seat)} played ${item.card.rank} of ${item.card.suit}${isWinner ? ', trick winner' : ''}`}
-			className={`player-v3-trick-card relative ${dims.card} ${dims.radius} ${rotateClass} ${borderClass} flex items-center justify-center overflow-hidden border-2 bg-white ${suitClass} ${
+			data-card-theme={cardThemeKey}
+			data-card-suit={item.card.suit}
+			className={`player-v3-trick-card relative ${dims.card} ${dims.radius} ${rotateClass} ${cardThemeColourClasses(cardThemeKey, item.card.suit)} flex items-center justify-center overflow-hidden border-2 bg-white ${
 				isWinner ? 'z-20 scale-105 ring-4 ring-amber-300' : ''
 			} ${isDimmed ? 'opacity-55' : ''}`}
 			style={{
 				boxShadow:
 					'0 14px 22px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.96), inset 0 -5px 16px rgba(0,0,0,0.10)',
 			}}>
-			<div
-				className="absolute inset-0 opacity-[0.045]"
-				style={{
-					backgroundImage:
-						'repeating-linear-gradient(135deg, #000 0, #000 1px, transparent 1px, transparent 6px)',
-				}}
-			/>
-			<div className={`player-v3-trick-suit absolute left-1.5 top-1 ${dims.suit} font-black`}>
-				{suitSymbol(item.card.suit)}
-			</div>
-			<div className={`player-v3-trick-suit absolute bottom-1 right-1.5 ${dims.suit} rotate-180 font-black`}>
-				{suitSymbol(item.card.suit)}
-			</div>
-			<div className={`player-v3-trick-rank ${dims.rank} font-black leading-none drop-shadow-sm`}>
-				{item.card.rank}
-				<span className="ml-0.5">{suitSymbol(item.card.suit)}</span>
-			</div>
+			<CardFaceArtwork card={item.card} themeKey={cardThemeKey} presentationMode={size === 'lg'} />
 		</div>
 	)
 }
@@ -1450,6 +1519,7 @@ function CrossTrick({
 	showStatus = true,
 	showContract = true,
 	rotated = false,
+	cardThemeKey = 'broadcast',
 }) {
 	const played = (trick || []).length
 	const large = size === 'lg'
@@ -1476,16 +1546,16 @@ function CrossTrick({
 				</div>
 			)}
 			<div className={`absolute left-1/2 -translate-x-1/2 ${large ? 'top-6' : 'top-5'}`}>
-				<TrickCardSlot seat={visualSeats.top} position="N" trick={trick} winner={winner} size={size} />
+				<TrickCardSlot seat={visualSeats.top} position="N" trick={trick} winner={winner} size={size} cardThemeKey={cardThemeKey} />
 			</div>
 			<div className={`absolute top-1/2 -translate-y-1/2 ${large ? 'right-6' : 'right-5'}`}>
-				<TrickCardSlot seat={visualSeats.right} position="E" trick={trick} winner={winner} size={size} />
+				<TrickCardSlot seat={visualSeats.right} position="E" trick={trick} winner={winner} size={size} cardThemeKey={cardThemeKey} />
 			</div>
 			<div className={`absolute left-1/2 -translate-x-1/2 ${large ? 'bottom-6' : 'bottom-5'}`}>
-				<TrickCardSlot seat={visualSeats.bottom} position="S" trick={trick} winner={winner} size={size} />
+				<TrickCardSlot seat={visualSeats.bottom} position="S" trick={trick} winner={winner} size={size} cardThemeKey={cardThemeKey} />
 			</div>
 			<div className={`absolute top-1/2 -translate-y-1/2 ${large ? 'left-6' : 'left-5'}`}>
-				<TrickCardSlot seat={visualSeats.left} position="W" trick={trick} winner={winner} size={size} />
+				<TrickCardSlot seat={visualSeats.left} position="W" trick={trick} winner={winner} size={size} cardThemeKey={cardThemeKey} />
 			</div>
 			{showStatus && (
 				<div
@@ -1499,7 +1569,7 @@ function CrossTrick({
 	)
 }
 
-function TrickPanel({ play, presentationMode = false, rotated = false }) {
+function TrickPanel({ play, presentationMode = false, rotated = false, cardThemeKey = 'broadcast' }) {
 	const trick = play?.trick || []
 	const winner = play?.visualWinner || null
 	return (
@@ -1523,13 +1593,20 @@ function TrickPanel({ play, presentationMode = false, rotated = false }) {
 					showContract={false}
 					size={presentationMode ? 'lg' : 'md'}
 					rotated={rotated}
+					cardThemeKey={cardThemeKey}
 				/>
 			</div>
 		</section>
 	)
 }
 
-function LastTrickPanel({ trick, presentationMode = false, rotated = false, compact = false }) {
+function LastTrickPanel({
+	trick,
+	presentationMode = false,
+	rotated = false,
+	compact = false,
+	cardThemeKey = 'broadcast',
+}) {
 	return (
 		<aside
 			className={`player-v3-last-trick player-v3-table-info ${compact ? 'player-v3-table-info-compact' : ''} rounded-2xl border-2 border-amber-400 bg-emerald-950 p-2 text-white shadow-2xl ${
@@ -1554,6 +1631,7 @@ function LastTrickPanel({ trick, presentationMode = false, rotated = false, comp
 						size="sm"
 						showStatus={false}
 						rotated={rotated}
+						cardThemeKey={cardThemeKey}
 					/>
 				) : (
 					<div className="flex h-full items-center justify-center rounded-2xl border-2 border-dashed border-white/28 bg-white/8 text-center text-xs font-bold text-emerald-100">
@@ -1748,13 +1826,15 @@ function TeacherToolsDrawer({
 	raiseLegalChoices,
 	onToggleLegalChoices,
 	computerEngineLabel,
+	cardThemeKey,
+	onCardThemeChange,
 	presentationMode = false,
 }) {
 	if (!open) return null
 	return (
 		<aside
 			aria-label="Teacher tools"
-			className={`fixed right-4 z-[65] w-[330px] rounded-2xl border-4 border-amber-300 bg-white p-4 text-slate-950 shadow-[0_24px_70px_rgba(0,0,0,0.45)] ${
+			className={`fixed right-4 z-[65] max-h-[calc(100vh-4rem)] w-[350px] overflow-y-auto rounded-2xl border-4 border-amber-300 bg-white p-4 text-slate-950 shadow-[0_24px_70px_rgba(0,0,0,0.45)] ${
 				presentationMode ? 'top-[82px]' : 'top-12'
 			}`}>
 			<div className="flex items-center justify-between gap-3">
@@ -1773,6 +1853,10 @@ function TeacherToolsDrawer({
 				<div>
 					<div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Table colour</div>
 					<FeltSwatches value={feltTheme} onChange={onFeltThemeChange} />
+				</div>
+				<div>
+					<div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Card face and back</div>
+					<CardThemePicker value={cardThemeKey} onChange={onCardThemeChange} />
 				</div>
 				{state.phase === 'play' && (
 					<>
@@ -2138,6 +2222,7 @@ function TableSurface({
 	presentationMode = false,
 	raiseLegalChoices = true,
 	computerThinking = false,
+	cardThemeKey = 'broadcast',
 }) {
 	if (state.phase !== 'play') {
 		return (
@@ -2169,6 +2254,12 @@ function TableSurface({
 	const rightSeatVisible = seatIsVisible(visualSeats.right)
 	const opposingHandsVisible =
 		seatIsVisible(visualSeats.top) && seatIsVisible(visualSeats.bottom)
+	const partnershipSuitLayout = buildPartnershipSuitLayout({
+		hands: state.play?.remaining || state.hands,
+		seats: [visualSeats.top, visualSeats.bottom],
+		trump: derived.trump,
+		presentationMode,
+	})
 	const centreWidth = presentationMode
 		? 'clamp(460px, 40vw, 580px)'
 		: 'clamp(420px, 36vw, 560px)'
@@ -2202,6 +2293,11 @@ function TableSurface({
 		presentationMode,
 		trump: derived.trump,
 		raiseLegalChoices,
+		cardThemeKey,
+		suitLayout:
+			position === 'N' || position === 'S'
+				? partnershipSuitLayout
+				: null,
 	})
 
 	return (
@@ -2249,6 +2345,7 @@ function TableSurface({
 						visualPlay={visualPlay}
 						presentationMode={presentationMode}
 						rotated={rotated}
+						cardThemeKey={cardThemeKey}
 					/>
 				</div>
 				{state.phase === 'play' && (
@@ -2258,6 +2355,7 @@ function TableSurface({
 							presentationMode={presentationMode}
 							rotated={rotated}
 							compact={leftSeatVisible}
+							cardThemeKey={cardThemeKey}
 						/>
 					</div>
 				)}
@@ -2294,6 +2392,10 @@ export default function PlayerV2() {
 		if (typeof window === 'undefined') return 'green'
 		const saved = window.localStorage.getItem(PLAYER_FELT_KEY)
 		return FELT_THEMES.some((theme) => theme.key === saved) ? saved : 'green'
+	})
+	const [cardThemeKey, setCardThemeKey] = useState(() => {
+		if (typeof window === 'undefined') return 'broadcast'
+		return normalizeCardTheme(window.localStorage.getItem(PLAYER_CARD_THEME_KEY))
 	})
 	const fileRef = useRef(null)
 	const presentButtonRef = useRef(null)
@@ -2623,6 +2725,10 @@ export default function PlayerV2() {
 	useEffect(() => {
 		window.localStorage.setItem(PLAYER_FELT_KEY, feltTheme)
 	}, [feltTheme])
+
+	useEffect(() => {
+		window.localStorage.setItem(PLAYER_CARD_THEME_KEY, cardThemeKey)
+	}, [cardThemeKey])
 
 	useEffect(() => {
 		if (
@@ -3016,6 +3122,8 @@ export default function PlayerV2() {
 				raiseLegalChoices={raiseLegalChoices}
 				onToggleLegalChoices={() => setRaiseLegalChoices((current) => !current)}
 				computerEngineLabel={computerEngineLabel}
+				cardThemeKey={cardThemeKey}
+				onCardThemeChange={(theme) => setCardThemeKey(normalizeCardTheme(theme))}
 				presentationMode={presentationMode}
 			/>
 			<input ref={fileRef} type="file" accept=".pbn,text/plain" onChange={onFile} className="hidden" />
@@ -3119,6 +3227,7 @@ export default function PlayerV2() {
 						presentationMode={presentationMode}
 						raiseLegalChoices={raiseLegalChoices}
 						computerThinking={computerThinking}
+						cardThemeKey={cardThemeKey}
 					/>
 				</>
 			)}

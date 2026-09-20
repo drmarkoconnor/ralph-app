@@ -117,16 +117,19 @@ export default function PlayerHelp() {
 						reference without covering the hands.
 					</li>
 					<li>
-						A concealed seat is a compact marker showing only its seat and number of
-						cards remaining. It shows no card backs and no HCP information.
+						A concealed seat is a compact marker showing its seat, one small card-back
+						swatch and the number of cards remaining. It never shows the hidden fan or
+						HCP information.
 					</li>
 					<li>
 						Only the learner's hand, a hand deliberately revealed by the teacher,
 						and dummy after the opening lead remain as full card displays.
 					</li>
 					<li>
-						Dummy places trumps at the left of the screen. In no-trumps, clubs
-						occupy that position; the remaining suits alternate red and black.
+						The top and bottom partnership hands use the same fixed suit lanes, so
+						each suit lines up vertically for comparison. Dummy places trumps at the
+						left; in no-trumps, clubs occupy that position. Dark rails separate every
+						suit, with a wider divider whenever hearts and diamonds meet.
 					</li>
 					<li>
 						The hand on turn has a filled amber surround and a plain-language
@@ -136,6 +139,11 @@ export default function PlayerHelp() {
 					<li>
 						Replay hand restarts the current deal at the opening lead. The Felt
 						swatches offer four restrained table colours and remember the choice.
+					</li>
+					<li>
+						Teacher tools also offers five paired face-and-back designs: Broadcast
+						clarity, Classic courts, Jumbo bridge, Linen heritage and Four-colour
+						teaching. The selected design is remembered on that browser.
 					</li>
 					<li>
 						Declarer and defence trick counts update from the actual trick

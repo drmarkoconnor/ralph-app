@@ -8,7 +8,7 @@
 		"build": "vite build",
 		"lint": "eslint .",
 		"test:generator2": "node --test src/generator-v2/generatorV2Engine.test.js",
-		"test:player": "node --test src/lib/bridgeCore.test.js src/lib/pbn.test.js src/player-v2/playerV2Reducer.test.js src/player-v2/acolPracticeBidder.test.js src/player-v2/playerPresentation.test.js src/player-v2/humanComputerPlay.test.js src/player-v2/competitionComparison.test.js",
+		"test:player": "node --test src/lib/bridgeCore.test.js src/lib/pbn.test.js src/player-v2/playerV2Reducer.test.js src/player-v2/acolPracticeBidder.test.js src/player-v2/playerPresentation.test.js src/player-v2/humanComputerPlay.test.js src/player-v2/competitionComparison.test.js src/player-v2/cardDisplay.test.js",
 		"test:coach": "node --test src/player-v2/coach/coachContext.test.js src/player-v2/coach/coachClient.test.js src/player-v2/coach/coachDealFingerprint.test.js src/player-v2/coach/playerCoachState.test.js netlify/tests/coach.test.mts netlify/tests/coach-trial.test.mts",
 		"test:coach-server": "node --test netlify/tests/coach.test.mts netlify/tests/coach-trial.test.mts",
 		"check:competitions": "node scripts/competition-pbns/import-competition-pbns.mjs --check",
@@ -18,6 +18,7 @@
 		"build:auctions": "node --loader ts-node/esm scripts/build-auctions.ts"
 	},
 	"dependencies": {
+		"@letele/playing-cards": "^0.1.0",
 		"@netlify/blobs": "^10.7.12",
 		"@netlify/identity": "^1.2.0",
 		"bridge-dds": "^1.4.0",

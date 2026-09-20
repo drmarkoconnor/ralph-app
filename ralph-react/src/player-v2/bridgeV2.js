@@ -117,19 +117,18 @@ export function groupHand(cards) {
 	return grouped
 }
 
+export function partnershipSuitOrder(trump = null) {
+	const leadSuit = SUIT_ORDER.includes(trump) ? trump : 'Clubs'
+	return [leadSuit, ...SUIT_ORDER.filter((suit) => suit !== leadSuit)]
+}
+
 export function orderHandForDisplay(
 	cards,
 	{ isDummy = false, inPlay = false, trump = null } = {},
 ) {
 	const grouped = groupHand(cards)
 	const leadSuit = isDummy && inPlay ? trump || 'Clubs' : null
-	const dummySuitOrder = {
-		Spades: ['Spades', 'Hearts', 'Clubs', 'Diamonds'],
-		Hearts: ['Hearts', 'Spades', 'Diamonds', 'Clubs'],
-		Diamonds: ['Diamonds', 'Spades', 'Hearts', 'Clubs'],
-		Clubs: ['Clubs', 'Hearts', 'Spades', 'Diamonds'],
-	}
-	const suitOrder = leadSuit ? dummySuitOrder[leadSuit] : SUIT_ORDER
+	const suitOrder = leadSuit ? partnershipSuitOrder(trump) : SUIT_ORDER
 	return suitOrder.flatMap((suit) => grouped[suit] || [])
 }
 

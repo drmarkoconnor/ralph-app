@@ -220,11 +220,11 @@ test('dummy display starts with trumps, or clubs in no-trumps', () => {
 		{ id: 'C5', suit: 'Clubs', rank: '5' },
 	]
 	const expected = {
-		Spades: ['Spades', 'Spades', 'Hearts', 'Clubs', 'Diamonds'],
+		Spades: ['Spades', 'Spades', 'Hearts', 'Diamonds', 'Clubs'],
 		Hearts: ['Hearts', 'Spades', 'Spades', 'Diamonds', 'Clubs'],
 		Diamonds: ['Diamonds', 'Spades', 'Spades', 'Hearts', 'Clubs'],
-		Clubs: ['Clubs', 'Hearts', 'Spades', 'Spades', 'Diamonds'],
-		null: ['Clubs', 'Hearts', 'Spades', 'Spades', 'Diamonds'],
+		Clubs: ['Clubs', 'Spades', 'Spades', 'Hearts', 'Diamonds'],
+		null: ['Clubs', 'Spades', 'Spades', 'Hearts', 'Diamonds'],
 	}
 
 	for (const trump of ['Spades', 'Hearts', 'Diamonds', 'Clubs', null]) {

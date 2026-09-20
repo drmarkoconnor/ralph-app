@@ -249,6 +249,33 @@ Dummy is exposed after the opening lead according to normal play. The full 180-d
 - Exact omniscient double-dummy advice remains reserved for a future post-hand
   comparison rather than live opponents.
 
+## Projection card display and themes (September 2026)
+
+- The learner-controlled partnership hands at the top and bottom of the table
+  share one suit order and one set of lane widths. Corresponding suits therefore
+  start on the same vertical guides even when one hand contains more cards in a
+  suit. Trumps lead the order; clubs lead in no-trumps.
+- Dark rails mark every suit boundary. When hearts and diamonds are adjacent,
+  the rail is wider and nearly black so two neighbouring red suits remain
+  distinct from the back of a hall.
+- Teacher tools offers five remembered face-and-back themes. **Broadcast
+  clarity** remains the projection-first default; **Classic courts** uses a
+  CC0 Anglo-American vector deck; **Jumbo bridge** emphasises oversized corner
+  information; **Linen heritage** uses the app's existing full court artwork;
+  and **Four-colour teaching** renders diamonds blue and clubs green.
+- The classic vector theme is loaded only when requested. Its source package,
+  `@letele/playing-cards`, is CC0-1.0 and is based on Adrian Kennard's public
+  domain playing-card artwork. Card backs are lightweight local SVG patterns;
+  no theme fetches artwork from the network at runtime.
+- The choices reflect established functional card design: indexed corners for
+  fanned hands, restrained traditional court figures, large indices for distant
+  reading, and an optional four-colour bridge deck. Decorative detail must not
+  displace rank/suit recognition or reduce contrast in presentation mode.
+- A future visual-rich table mode should remain optional. The safe direction is
+  subtle felt grain, mild paper texture, physically consistent shadows and a
+  low-contrast table edge—not photographic card faces or a detailed room
+  backdrop that competes with the teaching information.
+
 ## Verification commands
 
 Run from `ralph-react`:

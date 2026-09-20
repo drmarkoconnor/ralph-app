@@ -10,6 +10,127 @@ body {
 	margin: 0;
 }
 
+.player-v3-card-art {
+	pointer-events: none;
+}
+
+.player-v3-card[data-card-theme='classic'],
+.player-v3-card[data-card-theme='heritage'],
+.player-v3-trick-card[data-card-theme='classic'],
+.player-v3-trick-card[data-card-theme='heritage'] {
+	padding: 0 !important;
+	border-color: #64748b !important;
+	background: #fff;
+}
+
+.player-v3-card-art--vector,
+.player-v3-card-art--heritage {
+	display: block;
+	border-radius: inherit;
+}
+
+.player-v3-card-art--heritage {
+	filter: sepia(0.11) saturate(0.92) contrast(1.04);
+}
+
+.player-v3-card[data-card-theme='heritage'],
+.player-v3-trick-card[data-card-theme='heritage'] {
+	background-color: #fffaf0;
+	box-shadow:
+		0 9px 16px rgba(15, 23, 42, 0.38),
+		inset 0 0 0 1px rgba(120, 53, 15, 0.18);
+}
+
+.player-v3-card-art--jumbo {
+	font-variant-numeric: tabular-nums;
+}
+
+.player-v3-trick-card > .player-v3-card-art--index,
+.player-v3-trick-card > .player-v3-card-art--jumbo {
+	padding: 0.38rem;
+	font-size: 1.85rem;
+	font-weight: 900;
+}
+
+.player-v3-theme-preview-card {
+	display: flex;
+	height: 54px;
+	width: 38px;
+	flex: none;
+	overflow: hidden;
+	border-width: 2px;
+	border-style: solid;
+	border-radius: 6px;
+	background: #fff;
+	font-size: 14px;
+	font-weight: 900;
+	line-height: 1;
+	box-shadow: 0 3px 7px rgba(15, 23, 42, 0.24);
+}
+
+.player-v3-theme-preview-card .player-v3-card-art--index,
+.player-v3-theme-preview-card .player-v3-card-art--jumbo {
+	padding: 3px;
+}
+
+.player-v3-theme-preview-card .player-v3-card-art--index span span,
+.player-v3-theme-preview-card .player-v3-card-art--jumbo span span {
+	font-size: 11px !important;
+}
+
+.player-v3-card-back {
+	display: block;
+	height: 100%;
+	width: 100%;
+}
+
+.player-v3-card-back--broadcast {
+	filter: invert(18%) sepia(32%) saturate(1850%) hue-rotate(176deg) brightness(77%) contrast(104%);
+}
+
+.player-v3-card-back--classic {
+	filter: saturate(1.15) contrast(1.08);
+}
+
+.player-v3-card-back--jumbo {
+	filter: invert(17%) sepia(70%) saturate(2620%) hue-rotate(338deg) brightness(83%) contrast(103%);
+}
+
+.player-v3-card-back--heritage {
+	filter: sepia(0.72) saturate(0.72) hue-rotate(345deg) brightness(0.83) contrast(1.18);
+}
+
+.player-v3-card-back--four-colour {
+	filter: invert(28%) sepia(41%) saturate(1210%) hue-rotate(103deg) brightness(78%) contrast(101%);
+}
+
+.player-v3-suit-divider {
+	height: 112px;
+	width: 5px;
+	flex: none;
+	margin: 0 8px;
+	border-radius: 999px;
+	background: rgba(15, 23, 42, 0.72);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
+}
+
+.player-v3-suit-divider--red-pair {
+	height: 128px;
+	width: 10px;
+	background: #020617;
+	box-shadow:
+		0 0 0 2px rgba(255, 255, 255, 0.2),
+		0 3px 10px rgba(0, 0, 0, 0.55);
+}
+
+.player-v3-present .player-v3-suit-divider {
+	height: 132px;
+}
+
+.player-v3-present .player-v3-suit-divider--red-pair {
+	height: 148px;
+}
+
 /* Keep a felt-coloured canvas behind the Player while Chromium/Brave swaps
    fullscreen surfaces. Without this, a slow compositor frame exposes the
    browser's default white page between table paints. */
