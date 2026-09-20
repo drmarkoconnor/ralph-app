@@ -121,7 +121,12 @@ function normalizeBoard(raw) {
 	}
 }
 
-function hydrateBoard(deals, index) {
+function tutorialLessonFor(content, board) {
+	if (content?.kind !== 'tutorial') return null
+	return (content.lessons || []).find((lesson) => String(lesson.board) === String(board)) || null
+}
+
+function hydrateBoard(deals, index, content = null) {
 	const board = deals[index] || null
 	if (!board) {
 		return {
@@ -149,7 +154,17 @@ function hydrateBoard(deals, index) {
 
 	const hands = stableDealToHands(board.deal)
 	const recordedAuction = makeRecordedAuction(board)
-	const practiceAuction = makePracticeAuction(recordedAuction.dealer)
+	const lesson = tutorialLessonFor(content, board.board)
+	const startWithContract = lesson?.startMode === 'play' && recordedAuction.status === 'complete'
+	const practiceAuction = startWithContract
+		? {
+				...recordedAuction,
+				calls: [...recordedAuction.calls],
+				callSources: recordedAuction.calls.map(() => 'tutorial'),
+				revision: 0,
+			}
+		: makePracticeAuction(recordedAuction.dealer)
+	const learnerSeat = startWithContract && recordedAuction.declarer === 'N' ? 'N' : 'S'
 	return {
 		board,
 		hands,
@@ -160,19 +175,23 @@ function hydrateBoard(deals, index) {
 		// Compatibility alias for existing coach/export consumers. This is always the
 		// live practice auction, never whichever comparison track is being viewed.
 		auction: practiceAuction,
-		phase: 'auction',
-		visibleSeat: 'S',
-		visibleSeats: ['S'],
-		auctionCursor: 0,
+		phase: startWithContract ? 'confirmed' : 'auction',
+		visibleSeat: learnerSeat,
+		visibleSeats: [learnerSeat],
+		auctionCursor: practiceAuction.calls.length,
 		contractNotice: '',
 		play: null,
 		history: [],
 		completedTricks: [],
-		auctionIntroPending: recordedAuction.calls.length === 0,
+		auctionIntroPending: lesson ? false : recordedAuction.calls.length === 0,
 		manualContractMode: false,
 		autoPlayPaused: false,
 		playSession: 0,
-		status: '',
+		status: startWithContract
+			? `Teaching contract ready: ${recordedAuction.contract} by ${recordedAuction.declarer}. Check it, then start play.`
+			: lesson
+				? 'Teaching auction ready. South is the learner seat.'
+				: '',
 	}
 }
 
@@ -454,7 +473,7 @@ export function playerV2Reducer(state, action) {
 				boardSessions: {},
 				manualContract: emptyManualContract(),
 				contractNotice: '',
-				...hydrateBoard(deals, index),
+				...hydrateBoard(deals, index, action.content || null),
 			}
 		}
 		case 'RESET':
@@ -474,7 +493,7 @@ export function playerV2Reducer(state, action) {
 				index,
 				boardSessions,
 				manualContract: emptyManualContract(),
-				...hydrateBoard(state.deals, index),
+				...hydrateBoard(state.deals, index, state.content),
 				...(savedSession || {}),
 			}
 		}

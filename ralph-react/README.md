@@ -18,6 +18,9 @@ Key features:
 - Compact, authenticated manual AI Coach for eligible bidding and play decisions
 - Free, attributed competition replay library with published table-score
   comparison; optional Coach nudges retain the normal owner/subscriber access rules
+- Free Bridge Play School with 45 original teaching deals, guided
+  ask–commit–reveal prompts, graphical card emphasis and local progress; it makes
+  no AI/API calls
 
 Full non-technical user documentation: see <a href="./HELP.md">HELP.md</a>
 
@@ -33,6 +36,8 @@ Structure overview:
 - `src/pages/PlayerV2.jsx` – Current classroom teaching / play interface
 - `src/player-v2/humanComputerPlay.js` – Spoiler-safe sampled computer-play engine
 - `src/pages/Competitions.jsx` – Curated competition replay catalogue
+- `src/pages/Tutorials.jsx` – Offline guided lesson catalogue
+- `src/tutorials/tutorialLibrary.js` – Original deterministic teaching deals and prose
 - `scripts/competition-pbns/` – Allowlisted static competition pack importer
 - `src/lib/acolAdvisor.js` – Deterministic ACOL auction advice engine
 - `src/lib/handoutPdf.js` – PDF generator (jsPDF)

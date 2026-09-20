@@ -21,6 +21,11 @@ function PrimaryActions({ light }) {
 				Bridge Player
 			</Link>
 			<Link
+				to="/lessons"
+				className={`${primaryBase} bg-amber-300 text-slate-950 shadow-amber-950/20 hover:bg-amber-200 focus:ring-amber-300/50`}>
+				Guided Lessons
+			</Link>
+			<Link
 				to="/instructions"
 				className={
 					light

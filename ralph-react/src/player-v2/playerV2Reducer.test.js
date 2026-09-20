@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createInitialManualState, playCardManual } from '../lib/manualPlayEngine.js'
 import { orderHandForDisplay } from './bridgeV2.js'
+import { parsePBN } from '../lib/pbn.js'
+import { tutorialContent, tutorialLessons } from '../tutorials/tutorialLibrary.js'
 import {
 	getPlayerV2Derived,
 	initialPlayerV2State,
@@ -335,6 +337,29 @@ test('competition handoff starts on the requested board and preserves its attrib
 	})
 	assert.equal(state.index, 0)
 	assert.equal(state.content, null)
+})
+
+test('card-play tutorials open at the contract checkpoint while bidding lessons start live', () => {
+	const playLesson = tutorialLessons.find((lesson) => lesson.kind === 'play')
+	const biddingLesson = tutorialLessons.find((lesson) => lesson.kind === 'bidding')
+	const deals = parsePBN(`${playLesson.pbn}\n\n${biddingLesson.pbn}`)
+	const content = {
+		...tutorialContent(),
+		lessons: [playLesson, { ...biddingLesson, board: deals[1].board }],
+	}
+	let state = playerV2Reducer(initialPlayerV2State, {
+		type: 'LOAD_DEALS',
+		deals,
+		content,
+	})
+	assert.equal(state.phase, 'confirmed')
+	assert.equal(state.practiceAuction.status, 'complete')
+	assert.ok(state.practiceAuction.calls.length > 0)
+
+	state = playerV2Reducer(state, { type: 'GO_BOARD', index: 1 })
+	assert.equal(state.phase, 'auction')
+	assert.equal(state.practiceAuction.calls.length, 0)
+	assert.equal(state.auctionIntroPending, false)
 })
 
 test('auto-play pause can be toggled', () => {

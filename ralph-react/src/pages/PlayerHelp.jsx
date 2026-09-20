@@ -197,7 +197,28 @@ export default function PlayerHelp() {
 			</section>
 
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">7. Competition Replays And Coach</h2>
+				<h2 className="text-lg font-semibold">7. Guided Lessons</h2>
+				<ul className="ml-5 list-disc space-y-1 text-gray-700">
+					<li>Choose Guided Lessons on the Home screen to open Bridge Play School.</li>
+					<li>
+						The course contains original deals from beginner to expert level covering
+						planning, entries, finesses, suit combinations, trump management, defence
+						and ACOL bidding.
+					</li>
+					<li>
+						At the key moment, choose an answer before the principle is revealed. The
+						relevant cards are then outlined directly on the table.
+					</li>
+					<li>
+						Lessons are static and run locally. They make no AI call, need no account and
+						store only simple completion progress in the current browser.
+					</li>
+					<li>Download course PBN exports all lesson deals for separate classroom use.</li>
+				</ul>
+			</section>
+
+			<section className="space-y-2">
+				<h2 className="text-lg font-semibold">8. Competition Replays And Coach</h2>
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>
 						Choose Play a famous final on the Home screen to practise a reviewed
@@ -220,7 +241,7 @@ export default function PlayerHelp() {
 			</section>
 
 			<section className="space-y-2">
-				<h2 className="text-lg font-semibold">8. Current Limits</h2>
+				<h2 className="text-lg font-semibold">9. Current Limits</h2>
 				<ul className="ml-5 list-disc space-y-1 text-gray-700">
 					<li>The Save PBN button exports the current board, not the whole loaded file.</li>
 					<li>

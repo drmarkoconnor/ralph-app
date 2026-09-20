@@ -9,6 +9,7 @@ import React, {
 } from 'react'
 import { Link } from 'react-router-dom'
 import PlayerCoachNudge from '../components/PlayerCoachNudge'
+import TutorialGuide from '../components/TutorialGuide'
 import {
 	CardBackArtwork,
 	CardFaceArtwork,
@@ -58,6 +59,7 @@ import {
 	playerAcquiredFullscreen,
 	requestPlayerFullscreen,
 } from '../player-v2/playerPresentation'
+import { tutorialCardKey, tutorialLessonFor } from '../tutorials/tutorialLibrary.js'
 
 const PLAYER_HANDOFF_KEY = 'ralph-player-handoff-v1'
 const PLAYER_FELT_KEY = 'ralph-player-felt-v1'
@@ -329,6 +331,7 @@ function CardButton({
 	stackIndex = 0,
 	cardThemeKey = 'broadcast',
 	overlapOffset = null,
+	tutorialFocus = false,
 }) {
 	return (
 		<button
@@ -358,6 +361,10 @@ function CardButton({
 					? presentationMode
 						? `${spreadHand ? '-mt-[46px]' : '-mt-[82px]'} first:mt-0`
 						: `${spreadHand ? '-mt-[40px]' : '-mt-[68px]'} first:mt-0`
+					: ''
+			} ${
+				tutorialFocus
+					? 'ring-4 ring-cyan-300 outline outline-4 outline-offset-2 outline-cyan-300 shadow-[0_0_28px_rgba(103,232,249,0.88)]'
 					: ''
 			} ${
 				playable
@@ -581,6 +588,7 @@ function HandPanel({
 	raiseLegalChoices = true,
 	cardThemeKey = 'broadcast',
 	suitLayout = null,
+	tutorialFocusKeys = null,
 }) {
 	const sortedCards = useMemo(
 		() =>
@@ -693,8 +701,9 @@ function HandPanel({
 														presentationMode={presentationMode}
 														raisePlayable={raiseLegalChoices}
 														stackIndex={cardIndex}
-														cardThemeKey={cardThemeKey}
-														overlapOffset={suitLayout.step - suitLayout.cardWidth}
+												cardThemeKey={cardThemeKey}
+												tutorialFocus={tutorialFocusKeys?.has(computerCardKey(card))}
+												overlapOffset={suitLayout.step - suitLayout.cardWidth}
 													/>
 												)
 											})
@@ -728,6 +737,7 @@ function HandPanel({
 										raisePlayable={raiseLegalChoices}
 										stackIndex={cardIndex}
 										cardThemeKey={cardThemeKey}
+										tutorialFocus={tutorialFocusKeys?.has(computerCardKey(card))}
 									/>
 								)
 							})}
@@ -1296,6 +1306,9 @@ function AuctionWorkspace({
 	derived,
 	dispatch,
 	coach,
+	tutorialLesson,
+	tutorialAnswer,
+	onTutorialAnswer,
 	presentationMode = false,
 	onNextBoard,
 }) {
@@ -1347,7 +1360,19 @@ function AuctionWorkspace({
 						}
 						presentationMode={presentationMode}
 					/>
-					<PlayerCoachNudge coach={coach} presentationMode={presentationMode} />
+					{tutorialLesson ? (
+						<TutorialGuide
+							lesson={tutorialLesson}
+							state={state}
+							derived={derived}
+							answer={tutorialAnswer}
+							onAnswer={onTutorialAnswer}
+							dispatch={dispatch}
+							presentationMode={presentationMode}
+						/>
+					) : (
+						<PlayerCoachNudge coach={coach} presentationMode={presentationMode} />
+					)}
 				</div>
 				{recordedView ? (
 					<RecordedAuctionControls
@@ -2215,6 +2240,9 @@ function TableSurface({
 	derived,
 	dummy,
 	coach,
+	tutorialLesson,
+	tutorialAnswer,
+	onTutorialAnswer,
 	seatIsVisible,
 	onPlay,
 	dispatch,
@@ -2231,6 +2259,9 @@ function TableSurface({
 				derived={derived}
 				dispatch={dispatch}
 				coach={coach}
+				tutorialLesson={tutorialLesson}
+				tutorialAnswer={tutorialAnswer}
+				onTutorialAnswer={onTutorialAnswer}
 				presentationMode={presentationMode}
 				onNextBoard={onNextBoard}
 			/>
@@ -2260,6 +2291,11 @@ function TableSurface({
 		trump: derived.trump,
 		presentationMode,
 	})
+	const tutorialFocusKeys = new Set(
+		Number.isInteger(tutorialAnswer)
+			? (tutorialLesson?.focusCards || []).map(tutorialCardKey).filter(Boolean)
+			: [],
+	)
 	const centreWidth = presentationMode
 		? 'clamp(460px, 40vw, 580px)'
 		: 'clamp(420px, 36vw, 560px)'
@@ -2294,6 +2330,7 @@ function TableSurface({
 		trump: derived.trump,
 		raiseLegalChoices,
 		cardThemeKey,
+		tutorialFocusKeys,
 		suitLayout:
 			position === 'N' || position === 'S'
 				? partnershipSuitLayout
@@ -2321,22 +2358,42 @@ function TableSurface({
 				<div className="col-start-2 row-start-1 z-20 self-start justify-self-center">
 					<HandPanel {...common(visualSeats.top, 'N')} />
 				</div>
-				<div className="col-start-1 row-start-2 z-20 self-center justify-self-start">
-					<HandPanel {...common(visualSeats.left, 'W')} />
-				</div>
+				{tutorialLesson ? (
+					<div className="col-start-1 row-start-2 z-40 grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2 self-stretch justify-self-start pb-2">
+						<div className="self-end">
+							<HandPanel {...common(visualSeats.left, 'W')} />
+						</div>
+						<TutorialGuide
+							lesson={tutorialLesson}
+							state={state}
+							derived={derived}
+							answer={tutorialAnswer}
+							onAnswer={onTutorialAnswer}
+							dispatch={dispatch}
+							presentationMode={presentationMode}
+							className="player-v3-table-coach h-full min-h-0 max-h-full"
+						/>
+					</div>
+				) : (
+					<div className="col-start-1 row-start-2 z-20 self-center justify-self-start">
+						<HandPanel {...common(visualSeats.left, 'W')} />
+					</div>
+				)}
 				<div className="col-start-3 row-start-2 z-20 self-center justify-self-end">
 					<HandPanel {...common(visualSeats.right, 'E')} />
 				</div>
 				<div className="col-start-2 row-start-3 z-40 flex flex-col items-center gap-1 self-end justify-self-center">
 					<HandPanel {...common(visualSeats.bottom, 'S')} />
 				</div>
-				<div className="col-start-1 row-start-3 z-40 self-end justify-self-start pb-2">
-					<PlayerCoachNudge
-						coach={coach}
-						presentationMode={presentationMode}
-						className="player-v3-table-coach"
-					/>
-				</div>
+				{!tutorialLesson && (
+					<div className="col-start-1 row-start-3 z-40 self-end justify-self-start pb-2">
+						<PlayerCoachNudge
+							coach={coach}
+							presentationMode={presentationMode}
+							className="player-v3-table-coach"
+						/>
+					</div>
+				)}
 				<div className="col-start-2 row-start-2 z-10 self-center justify-self-center">
 					<StagePanel
 						state={state}
@@ -2377,6 +2434,7 @@ function TableSurface({
 
 export default function PlayerV2() {
 	const [state, dispatch] = useReducer(playerV2Reducer, initialPlayerV2State)
+	const [tutorialAnswers, setTutorialAnswers] = useState({})
 	const [dismissedEndKey, setDismissedEndKey] = useState('')
 	const [visibleEndKey, setVisibleEndKey] = useState('')
 	const [returnPath, setReturnPath] = useState('')
@@ -2411,6 +2469,26 @@ export default function PlayerV2() {
 	const computerDecisionGateRef = useRef(createComputerDecisionGate())
 	const fallbackPlaySessionsRef = useRef(new Set())
 	const derived = getPlayerV2Derived(state)
+	const tutorialLesson = useMemo(
+		() => tutorialLessonFor(state.content, state.board?.board),
+		[state.content, state.board?.board],
+	)
+	const tutorialAnswerKey = tutorialLesson
+		? `${tutorialLesson.id}:${tutorialLesson.kind === 'bidding' ? 'auction' : state.playSession || 0}`
+		: ''
+	const tutorialAnswer = tutorialAnswerKey ? tutorialAnswers[tutorialAnswerKey] : undefined
+	const recordTutorialAnswer = useCallback((choiceIndex) => {
+		if (!tutorialLesson || !tutorialAnswerKey) return
+		setTutorialAnswers((current) => ({ ...current, [tutorialAnswerKey]: choiceIndex }))
+		try {
+			const key = 'ralph-tutorial-progress-v1'
+			const progress = JSON.parse(window.localStorage.getItem(key) || '{}')
+			progress[tutorialLesson.id] = 'completed'
+			window.localStorage.setItem(key, JSON.stringify(progress))
+		} catch {
+			// Local progress is optional; the lesson remains fully usable without storage.
+		}
+	}, [tutorialAnswerKey, tutorialLesson])
 	const controlledSeats = useMemo(
 		() => learnerControlledSeats(state.phase, derived.declarer),
 		[state.phase, derived.declarer],
@@ -2419,7 +2497,7 @@ export default function PlayerV2() {
 		state,
 		derived,
 		controlledSeats,
-		enabled: !!state.board,
+		enabled: !!state.board && state.content?.kind !== 'tutorial',
 	})
 	const dummy = derived.declarer ? partnerOf(derived.declarer) : ''
 	const competitionReferences = competitionReferencesFor(state.content, state.board?.board)
@@ -2627,6 +2705,20 @@ export default function PlayerV2() {
 		const startedAt = performance.now()
 		const playSessionKey = `${state.board?.deal || ''}:${state.playSession || 0}`
 		setComputerThinking(true)
+		const scripted = tutorialLesson?.scriptedCards?.[state.history.length]
+		if (scripted?.seat === knowledge.seat) {
+			const currentHand = state.play?.remaining?.[knowledge.seat] || []
+			const scriptedKey = tutorialCardKey(scripted.card)
+			const scriptedCard = currentHand.find((candidate) => computerCardKey(candidate) === scriptedKey)
+			if (scriptedCard) {
+				const waitMs = Math.max(0, minimumDelayMs - (performance.now() - startedAt))
+				if (waitMs) await new Promise((resolve) => window.setTimeout(resolve, waitMs))
+				if (!computerDecisionGateRef.current.isCurrent(ticket, knowledge.fingerprint)) return null
+				setComputerThinking(false)
+				setComputerEngineLabel('Scripted teaching position')
+				return { seat: knowledge.seat, card: scriptedCard }
+			}
+		}
 		let decision
 		if (fallbackPlaySessionsRef.current.has(playSessionKey)) {
 			decision = {
@@ -2660,6 +2752,8 @@ export default function PlayerV2() {
 		state.board?.deal,
 		state.play,
 		state.playSession,
+		state.history.length,
+		tutorialLesson,
 	])
 
 	const advanceHiddenHand = useCallback(async () => {
@@ -3220,6 +3314,9 @@ export default function PlayerV2() {
 						derived={derived}
 						dummy={dummy}
 						coach={coach}
+						tutorialLesson={tutorialLesson}
+						tutorialAnswer={tutorialAnswer}
+						onTutorialAnswer={recordTutorialAnswer}
 						seatIsVisible={seatIsVisible}
 						onPlay={onPlay}
 						dispatch={dispatch}

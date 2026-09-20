@@ -46,6 +46,22 @@ export default function Sources() {
 					source checksums and a documented reuse caution. Replay and expert comparison
 					remain free; optional AI nudges require normal Coach authorisation.
 				</div>
+
+				<section className="mt-8 border-t border-gray-200 pt-6">
+					<h2 className="text-xl font-bold text-gray-800">Teaching curriculum references</h2>
+					<p className="mt-2 text-sm leading-6 text-gray-700">
+						Bridge Play School uses newly generated deals and original prose. These public
+						teaching indexes informed the breadth and order of topics; their hands and lesson
+						text are not reproduced.
+					</p>
+					<ul className="mt-4 list-disc space-y-2 pl-5 text-sm">
+						<li><a className="text-sky-700 hover:underline" href="https://www.acbl.org/teachers-lounge/" target="_blank" rel="noreferrer">ACBL Teachers’ Lounge curriculum</a></li>
+						<li><a className="text-sky-700 hover:underline" href="https://www.acbl.org/cg-lessons/" target="_blank" rel="noreferrer">ACBL Community Games lesson archive</a></li>
+						<li><a className="text-sky-700 hover:underline" href="https://www.worldbridge.org/world-bridge-academy/teach-beginners/" target="_blank" rel="noreferrer">World Bridge Federation beginner programme</a></li>
+						<li><a className="text-sky-700 hover:underline" href="https://www.vubridge.com/TKit_TOC.php" target="_blank" rel="noreferrer">VuBridge teacher kit topic index</a></li>
+						<li><a className="text-sky-700 hover:underline" href="https://www.60secondbridge.com/public-lessons/card-play-in-bridge/" target="_blank" rel="noreferrer">60 Second Bridge card-play index</a></li>
+					</ul>
+				</section>
 			</div>
 		</div>
 	)
