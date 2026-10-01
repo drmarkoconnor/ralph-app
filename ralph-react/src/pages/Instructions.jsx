@@ -283,18 +283,18 @@ export default function Instructions() {
 							Dealer E → E S W N).
 						</li>
 						<li>
-							Line endings are CRLF. Tags include Event, Site, Date, Board,
-							Dealer, Vulnerable, Deal. Text fields are sanitized to ASCII and
-							suit glyphs are replaced for Dealer4 compatibility.
+							Downloaded PBN uses the strict Dealer4 interchange format: CRLF
+							line endings and only Event, Site, Date, Board, Dealer,
+							Vulnerable and Deal tags. Text is sanitized to ASCII, void suits
+							use empty PBN fields, and incomplete or duplicate deals are blocked.
 						</li>
 						<li>
 							Use "Download PBN (saved boards)" to save a .pbn file; Copy PBN
 							places the text on your clipboard; Email opens an email draft.
 						</li>
 						<li>
-							Extended tags supported: System, Theme, Interf, Lead, DDPar,
-							Scoring, Notes, and optional PlayScript. DealHash is added when a
-							full deal is present.
+							Teaching notes and auctions remain available in the app and teacher
+							documents, but are intentionally omitted from Dealer4 downloads.
 						</li>
 						<li>
 							Preview Template shows a sample Extended PBN using the metadata

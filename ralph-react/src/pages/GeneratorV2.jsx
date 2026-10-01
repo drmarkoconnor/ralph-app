@@ -484,7 +484,9 @@ export default function GeneratorV2() {
 	const [dealerMode, setDealerMode] = useState(restored.dealerMode || 'cycle')
 	const [dealerSeat, setDealerSeat] = useState(restored.dealerSeat || 'N')
 	const [auctionMode, setAuctionMode] = useState(restored.auctionMode || 'suggest')
-	const [dealer4Mode, setDealer4Mode] = useState(restored.dealer4Mode ?? true)
+	// Downloaded PBN is always the strict Dealer4 interchange format. Rich PBN is
+	// retained only for the internal Player hand-off.
+	const dealer4Mode = true
 	const [meta, setMeta] = useState(restored.meta || { ...DEFAULT_META, date: todayPbnDate() })
 	const [acolSettings, setAcolSettings] = useState(() => normalizeAcolSettings(restored.acolSettings || DEFAULT_ACOL_SETTINGS))
 	const [constraints, setConstraints] = useState(restored.constraints || {
@@ -627,7 +629,8 @@ export default function GeneratorV2() {
 	}
 
 	const buildPbnForBoards = async (items, options = {}) => {
-		if (!options.omitAuctions) {
+		const omitAuctions = options.omitAuctions || options.dealer4Mode === true
+		if (!omitAuctions) {
 			const auctionIssues = validateBoardAuctionTokens(items)
 			if (auctionIssues.length) throw createAuctionTokenValidationError(auctionIssues)
 		}
@@ -637,14 +640,14 @@ export default function GeneratorV2() {
 				{
 					...board,
 					number: Number(board.number) || 1,
-					auctionText: options.omitAuctions
+					auctionText: omitAuctions
 						? ''
 						: normalizeAuctionText(board.auctionText).join(' '),
 				},
 				meta,
 			)
 			const parsed = BoardZ.parse(shape)
-			pbnParts.push(await exportBoardPBN(parsed, { dealer4Mode: options.dealer4Mode ?? dealer4Mode }))
+			pbnParts.push(await exportBoardPBN(parsed, { dealer4Mode: options.dealer4Mode === true }))
 		}
 		return pbnParts.join('')
 	}
@@ -652,11 +655,11 @@ export default function GeneratorV2() {
 	const exportPbn = async (options = {}) => {
 		if (!keptBoards.length) return
 		try {
-			const pbn = await buildPbnForBoards(keptBoards, options)
+			const pbn = await buildPbnForBoards(keptBoards, { ...options, dealer4Mode: true })
 			const filenameSuffix = options.omitAuctions ? '-no-auctions' : ''
 			downloadText(pbn, `bbc-generator2-${todayFileDate()}${filenameSuffix}.pbn`)
 			setPbnExportIssues([])
-			setStatus(`Downloaded ${keptBoards.length} boards as PBN${options.omitAuctions ? ' without auctions' : ''}.`)
+			setStatus(`Downloaded ${keptBoards.length} boards as strict Dealer4 PBN.`)
 		} catch (error) {
 			console.error('Generator 2 PBN export failed', error)
 			if (isAuctionTokenValidationError(error)) {
@@ -1021,10 +1024,9 @@ export default function GeneratorV2() {
 							<Field label="System">
 								<TextInput value={meta.system} onChange={(event) => setMeta((current) => ({ ...current, system: event.target.value }))} />
 							</Field>
-							<label className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">
-								<span>Dealer4 compact PBN</span>
-								<input type="checkbox" checked={dealer4Mode} onChange={(event) => setDealer4Mode(event.target.checked)} />
-							</label>
+							<div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
+								PBN download: strict Dealer4 format
+							</div>
 						</div>
 					</section>
 				</aside>
@@ -1054,7 +1056,7 @@ export default function GeneratorV2() {
 									disabled={!keptBoards.length}
 									onClick={() => exportPbn()}
 									className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40">
-									Export PBN
+									Export Dealer4 PBN
 								</button>
 								<button
 									type="button"

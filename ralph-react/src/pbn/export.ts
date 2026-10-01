@@ -1,5 +1,6 @@
 import type { Board, Seat } from '../schemas/board'
 import { ownerStringFromHands, computeDealHashV1 } from './hash'
+import { serializeDealer4Board } from './dealer4.js'
 
 const CRLF = '\r\n'
 
@@ -40,7 +41,8 @@ function suitBlock(h: {
 	D: string[]
 	C: string[]
 }): string {
-	const suit = (arr: string[]) => (arr.length ? arr.join('') : '-')
+	// A PBN void is an empty field between dots, never a hyphen.
+	const suit = (arr: string[]) => arr.join('')
 	return [suit(h.S), suit(h.H), suit(h.D), suit(h.C)].join('.')
 }
 
@@ -49,6 +51,7 @@ export async function exportBoardPBN(
 	opts?: { dealer4Mode?: boolean }
 ): Promise<string> {
 	const dealer4Mode = !!opts?.dealer4Mode
+	if (dealer4Mode) return serializeDealer4Board(board)
 	const order = seatOrderFrom(board.dealPrefix)
 	const handBlocks = order.map((s) => suitBlock(board.hands[s]))
 	const dealLine = `${board.dealPrefix}:${handBlocks.join(' ')}`
@@ -133,4 +136,3 @@ export async function exportBoardPBN(
 
 	return [...core, ...ext, ...notes, ...auction, ''].join(CRLF) + CRLF
 }
-

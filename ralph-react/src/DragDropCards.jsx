@@ -274,7 +274,7 @@ export default function DragDropCards({ meta, setMeta }) {
 	const isIPhone = useIsIPhone()
 	const [activeSeat, setActiveSeat] = useState('N')
 	// Makeable grid is always included in handouts now; no toggle state needed
-	const [dealer4Mode, setDealer4Mode] = useState(true) // Export PBN in Dealer4-compatible mode
+	const dealer4Mode = true // Downloaded PBN is always strict Dealer4 format.
 	// handoutMode deprecated – always full now
 	const handoutMode = 'full'
 
@@ -2892,19 +2892,9 @@ export default function DragDropCards({ meta, setMeta }) {
 											<span>Pages Handout (.rtf)</span>
 										</button>
 									</Tooltip>
-									<Tooltip
-										label={
-											'Export PBN in a legacy-friendly format preferred by Dealer4 (minimal tags, multiline auctions).'
-										}>
-										<label className="flex items-center gap-1 text-[11px] text-gray-700 select-none cursor-pointer">
-											<input
-												type="checkbox"
-												checked={dealer4Mode}
-												onChange={(e) => setDealer4Mode(e.target.checked)}
-											/>
-											<span>Dealer4‑compatible PBN</span>
-										</label>
-									</Tooltip>
+									<span className="rounded bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800">
+										Strict Dealer4 PBN
+									</span>
 									{/* Makeable contracts grid is always included in handouts */}
 									{/* Overtricks toggle removed: always show raw − 6 */}
 									<span className="text-[11px] text-gray-600">
